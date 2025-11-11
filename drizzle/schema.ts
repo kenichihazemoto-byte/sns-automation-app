@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,160 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * SNS account configuration table
+ * Stores API credentials and settings for Instagram, X, and Threads
+ */
+export const snsAccounts = mysqlTable("sns_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "x", "threads"]).notNull(),
+  accountName: varchar("accountName", { length: 255 }).notNull(),
+  apiKey: text("apiKey"),
+  apiSecret: text("apiSecret"),
+  accessToken: text("accessToken"),
+  accessTokenSecret: text("accessTokenSecret"),
+  refreshToken: text("refreshToken"),
+  tokenExpiresAt: timestamp("tokenExpiresAt"),
+  platformUserId: varchar("platformUserId", { length: 255 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SnsAccount = typeof snsAccounts.$inferSelect;
+export type InsertSnsAccount = typeof snsAccounts.$inferInsert;
+
+/**
+ * Cloud storage configuration table
+ * Stores API credentials for Google Drive or Dropbox
+ */
+export const cloudStorageConfigs = mysqlTable("cloud_storage_configs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  provider: mysqlEnum("provider", ["google_drive", "dropbox"]).notNull(),
+  folderPath: text("folderPath").notNull(),
+  accessToken: text("accessToken"),
+  refreshToken: text("refreshToken"),
+  tokenExpiresAt: timestamp("tokenExpiresAt"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CloudStorageConfig = typeof cloudStorageConfigs.$inferSelect;
+export type InsertCloudStorageConfig = typeof cloudStorageConfigs.$inferInsert;
+
+/**
+ * Image management table
+ * Tracks images from cloud storage and their analysis results
+ */
+export const images = mysqlTable("images", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  cloudStorageConfigId: int("cloudStorageConfigId").notNull(),
+  originalUrl: text("originalUrl").notNull(),
+  s3Url: text("s3Url"),
+  s3Key: text("s3Key"),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }),
+  fileSize: int("fileSize"),
+  analysisResult: text("analysisResult"),
+  imageCategory: varchar("imageCategory", { length: 100 }),
+  imageStyle: varchar("imageStyle", { length: 100 }),
+  isUsed: boolean("isUsed").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Image = typeof images.$inferSelect;
+export type InsertImage = typeof images.$inferInsert;
+
+/**
+ * Post schedule table
+ * Stores scheduled posts with AI-generated content
+ */
+export const postSchedules = mysqlTable("post_schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  imageId: int("imageId").notNull(),
+  scheduledAt: timestamp("scheduledAt").notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "published", "failed", "cancelled"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PostSchedule = typeof postSchedules.$inferSelect;
+export type InsertPostSchedule = typeof postSchedules.$inferInsert;
+
+/**
+ * Post content table
+ * Stores platform-specific content for each scheduled post
+ */
+export const postContents = mysqlTable("post_contents", {
+  id: int("id").autoincrement().primaryKey(),
+  postScheduleId: int("postScheduleId").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "x", "threads"]).notNull(),
+  caption: text("caption").notNull(),
+  hashtags: text("hashtags"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PostContent = typeof postContents.$inferSelect;
+export type InsertPostContent = typeof postContents.$inferInsert;
+
+/**
+ * Post history table
+ * Tracks published posts and their results
+ */
+export const postHistory = mysqlTable("post_history", {
+  id: int("id").autoincrement().primaryKey(),
+  postScheduleId: int("postScheduleId").notNull(),
+  snsAccountId: int("snsAccountId").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "x", "threads"]).notNull(),
+  platformPostId: varchar("platformPostId", { length: 255 }),
+  publishedAt: timestamp("publishedAt").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PostHistoryRecord = typeof postHistory.$inferSelect;
+export type InsertPostHistory = typeof postHistory.$inferInsert;
+
+/**
+ * Analytics table
+ * Stores engagement metrics for published posts
+ */
+export const analytics = mysqlTable("analytics", {
+  id: int("id").autoincrement().primaryKey(),
+  postHistoryId: int("postHistoryId").notNull(),
+  likes: int("likes").default(0).notNull(),
+  comments: int("comments").default(0).notNull(),
+  shares: int("shares").default(0).notNull(),
+  views: int("views").default(0).notNull(),
+  fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Analytics = typeof analytics.$inferSelect;
+export type InsertAnalytics = typeof analytics.$inferInsert;
+
+/**
+ * Comment management table
+ * Stores comments from social media posts
+ */
+export const comments = mysqlTable("comments", {
+  id: int("id").autoincrement().primaryKey(),
+  postHistoryId: int("postHistoryId").notNull(),
+  platformCommentId: varchar("platformCommentId", { length: 255 }).notNull(),
+  authorName: varchar("authorName", { length: 255 }),
+  content: text("content").notNull(),
+  replyStatus: mysqlEnum("replyStatus", ["pending", "replied", "ignored"]).default("pending").notNull(),
+  replyContent: text("replyContent"),
+  repliedAt: timestamp("repliedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = typeof comments.$inferInsert;
