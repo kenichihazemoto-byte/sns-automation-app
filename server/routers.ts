@@ -331,6 +331,50 @@ export const appRouter = router({
         return { reply };
       }),
   }),
+
+  // デモ機能
+  demo: router({
+    // ランダムな竣工写真を取得してAI分析
+    getRandomPhotoWithAnalysis: protectedProcedure
+      .mutation(async () => {
+        const googlePhotos = await import("./google-photos-service");
+        const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
+        
+        // デモ用のサンプル画像URLを使用してAI分析
+        // 実際の実装では、photo.urlを使用
+        const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
+        
+        const analysis = await aiService.analyzeImage(sampleImageUrl);
+        
+        return {
+          photo,
+          album,
+          analysis,
+        };
+      }),
+
+    // AI投稿文生成デモ
+    generatePostDemo: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "x", "threads"]),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        imageAnalysis: z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const content = await aiService.generatePostContent({
+          platform: input.platform,
+          imageAnalysis: input.imageAnalysis,
+          companyName: input.companyName,
+        });
+
+        return content;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

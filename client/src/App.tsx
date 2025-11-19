@@ -10,12 +10,14 @@ import SnsAccounts from "./pages/SnsAccounts";
 import CloudStorage from "./pages/CloudStorage";
 import PostCalendar from "./pages/PostCalendar";
 import Analytics from "./pages/Analytics";
+import Demo from "./pages/Demo";
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/dashboard"} component={Dashboard} />
+      <Route path={"/demo"} component={Demo} />
       <Route path={"/sns-accounts"} component={SnsAccounts} />
       <Route path={"/cloud-storage"} component={CloudStorage} />
       <Route path={"/calendar"} component={PostCalendar} />
