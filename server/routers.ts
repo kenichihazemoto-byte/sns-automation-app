@@ -19,6 +19,19 @@ export const appRouter = router({
     }),
   }),
 
+  user: router({
+    updateProfile: protectedProcedure
+      .input(z.object({
+        companyName: z.string().optional(),
+        industry: z.string().optional(),
+        googlePhotoAlbums: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateUser(ctx.user.id, input);
+        return { success: true };
+      }),
+  }),
+
   // SNS Account Management
   snsAccounts: router({
     list: protectedProcedure.query(async ({ ctx }) => {

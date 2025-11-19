@@ -36,6 +36,13 @@
       "when": 1763527432191,
       "tag": "0004_clear_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1763527780683,
+      "tag": "0005_thin_warlock",
+      "breakpoints": true
     }
   ]
 }

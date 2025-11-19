@@ -12,6 +12,8 @@ import PostCalendar from "./pages/PostCalendar";
 import Analytics from "./pages/Analytics";
 import Demo from "./pages/Demo";
 import PostHistory from "./pages/PostHistory";
+import Settings from "./pages/Settings";
+import Help from "./pages/Help";
 
 function Router() {
   return (
@@ -20,6 +22,8 @@ function Router() {
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/demo"} component={Demo} />
       <Route path={"/history"} component={PostHistory} />
+      <Route path={"/settings"} component={Settings} />
+      <Route path={"/help"} component={Help} />
       <Route path={"/sns-accounts"} component={SnsAccounts} />
       <Route path={"/cloud-storage"} component={CloudStorage} />
       <Route path={"/calendar"} component={PostCalendar} />

@@ -1,163 +1,171 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, Image, Sparkles, Calendar } from "lucide-react";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { Calendar, Image, BarChart3, MessageSquare, Sparkles, ArrowRight } from "lucide-react";
-import { useLocation } from "wouter";
 
 export default function Home() {
-  const { user, loading, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    setLocation("/dashboard");
-    return null;
-  }
+  const { isAuthenticated } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Header */}
-      <header className="container py-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-10 w-10" />}
-            <h1 className="text-2xl font-bold">{APP_TITLE}</h1>
+    <div className="min-h-screen flex flex-col">
+      {/* ヘッダー */}
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img src={APP_LOGO} alt="Logo" className="h-8 w-8" />
+            <span className="font-bold text-xl">{APP_TITLE}</span>
           </div>
-          <Button asChild>
-            <a href={getLoginUrl()}>ログイン</a>
-          </Button>
+          <div className="flex items-center gap-4">
+            {isAuthenticated ? (
+              <>
+                <Button variant="ghost" asChild>
+                  <a href="/dashboard">ダッシュボード</a>
+                </Button>
+                <Button asChild>
+                  <a href="/demo">デモを試す</a>
+                </Button>
+              </>
+            ) : (
+              <Button asChild>
+                <a href={getLoginUrl()}>ログイン</a>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="container py-20">
-        <div className="max-w-4xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
-            <Sparkles className="h-4 w-4" />
-            AI駆動型SNS自動投稿プラットフォーム
-          </div>
-          <h2 className="text-5xl font-bold tracking-tight">
-            SNS投稿を<span className="text-primary">完全自動化</span>
-          </h2>
+      {/* ヒーローセクション */}
+      <section className="py-20 px-4 bg-gradient-to-b from-primary/5 to-background">
+        <div className="container max-w-4xl mx-auto text-center space-y-6">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
+            AIがSNS投稿を
+            <br />
+            <span className="text-primary">自動生成</span>
+          </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            クラウドドライブの写真をAIが自動で選定し、Instagram、X、Threadsに最適化された投稿を作成。
-            スケジュール管理から分析まで、すべてを一つのプラットフォームで。
+            Google フォトの写真をAIが分析し、Instagram、X、Threadsに最適化された
+            投稿文とハッシュタグを自動生成します
           </p>
           <div className="flex gap-4 justify-center pt-4">
+            {isAuthenticated ? (
+              <>
+                <Button size="lg" asChild>
+                  <a href="/demo">今すぐ試す</a>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <a href="/help">使い方を見る</a>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button size="lg" asChild>
+                  <a href={getLoginUrl()}>無料で始める</a>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <a href="#features">機能を見る</a>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* 機能紹介 */}
+      <section id="features" className="py-20 px-4">
+        <div className="container max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12">主な機能</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="space-y-3 text-center">
+              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Image className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg">AI画像分析</h3>
+              <p className="text-muted-foreground">
+                OpenAI Vision APIで写真の内容を自動分析。
+                カテゴリー、スタイル、キーワードを抽出します。
+              </p>
+            </div>
+
+            <div className="space-y-3 text-center">
+              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg">プラットフォーム最適化</h3>
+              <p className="text-muted-foreground">
+                Instagram、X、Threadsそれぞれに最適化された
+                投稿文とハッシュタグを自動生成。
+              </p>
+            </div>
+
+            <div className="space-y-3 text-center">
+              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Calendar className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg">投稿管理</h3>
+              <p className="text-muted-foreground">
+                生成した投稿を保存し、スケジュール管理。
+                過去の投稿履歴も確認できます。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 使い方 */}
+      <section className="py-20 px-4 bg-muted/50">
+        <div className="container max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12">3ステップで簡単</h2>
+          <div className="space-y-8">
+            <div className="flex gap-6 items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold">
+                1
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">設定を完了</h3>
+                <p className="text-muted-foreground">
+                  会社名とGoogle フォトアルバムのURLを登録します。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-6 items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold">
+                2
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">写真を取得</h3>
+                <p className="text-muted-foreground">
+                  デモページで写真を取得し、AIが自動で分析します。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-6 items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold">
+                3
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">投稿文を生成</h3>
+                <p className="text-muted-foreground">
+                  全SNSの投稿文を一括生成し、コピーして使用します。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center mt-12">
             <Button size="lg" asChild>
-              <a href={getLoginUrl()}>
-                今すぐ始める
-                <ArrowRight className="ml-2 h-5 w-5" />
+              <a href={isAuthenticated ? "/demo" : getLoginUrl()}>
+                {isAuthenticated ? "デモを試す" : "今すぐ始める"}
               </a>
             </Button>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
-          <h3 className="text-3xl font-bold mb-4">主な機能</h3>
-          <p className="text-muted-foreground">AIとクラウド技術で実現する、次世代のSNS管理</p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          <Card>
-            <CardHeader>
-              <Image className="h-10 w-10 text-primary mb-2" />
-              <CardTitle>AI画像選定</CardTitle>
-              <CardDescription>
-                クラウドドライブから最適な写真を自動で選定。建物の種類やデザインスタイルを自動認識します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Sparkles className="h-10 w-10 text-primary mb-2" />
-              <CardTitle>AIコンテンツ生成</CardTitle>
-              <CardDescription>
-                写真の内容を分析し、魅力的な投稿文とハッシュタグを自動生成。各SNSに最適化された内容を作成します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Calendar className="h-10 w-10 text-primary mb-2" />
-              <CardTitle>投稿カレンダー</CardTitle>
-              <CardDescription>
-                視覚的なカレンダーで投稿スケジュールを管理。予約投稿も簡単に設定できます。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <BarChart3 className="h-10 w-10 text-primary mb-2" />
-              <CardTitle>詳細な分析</CardTitle>
-              <CardDescription>
-                いいね数、コメント数などのエンゲージメントを追跡。どの投稿が効果的かを分析します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <MessageSquare className="h-10 w-10 text-primary mb-2" />
-              <CardTitle>自動コメント返信</CardTitle>
-              <CardDescription>
-                簡単な質問にはAIが自動で返信。重要なコメントは通知でお知らせします。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex gap-2 mb-2">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                  IG
-                </div>
-              </div>
-              <CardTitle>マルチプラットフォーム対応</CardTitle>
-              <CardDescription>
-                Instagram、X (Twitter)、Threadsに同時投稿。各プラットフォームに最適化された内容を配信します。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="container py-20">
-        <Card className="max-w-4xl mx-auto bg-primary text-primary-foreground">
-          <CardContent className="py-12 text-center space-y-6">
-            <h3 className="text-3xl font-bold">今すぐSNS投稿を自動化</h3>
-            <p className="text-lg opacity-90 max-w-2xl mx-auto">
-              ハゼモト建設様、クリニックアーキプロ様向けに最適化されたAI駆動型SNS管理プラットフォーム。
-              まずはログインして、あなたのSNSアカウントを連携してみましょう。
-            </p>
-            <Button size="lg" variant="secondary" asChild>
-              <a href={getLoginUrl()}>
-                無料で始める
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </a>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Footer */}
-      <footer className="container py-8 border-t">
-        <div className="text-center text-sm text-muted-foreground">
+      {/* フッター */}
+      <footer className="border-t py-8 px-4 mt-auto">
+        <div className="container max-w-6xl mx-auto text-center text-muted-foreground">
           <p>&copy; 2025 {APP_TITLE}. All rights reserved.</p>
         </div>
       </footer>

@@ -115,6 +115,16 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function updateUser(userId: number, updates: Partial<InsertUser>): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update user: database not available");
+    return;
+  }
+
+  await db.update(users).set(updates).where(eq(users.id, userId));
+}
+
 // SNS Accounts
 export async function createSnsAccount(account: InsertSnsAccount): Promise<SnsAccount> {
   const db = await getDb();
