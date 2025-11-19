@@ -175,15 +175,14 @@ export async function updateCloudStorageConfig(id: number, updates: Partial<Inse
 }
 
 // Images
-export async function createImage(image: InsertImage): Promise<Image> {
+export async function createImage(image: InsertImage): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const result = await db.insert(images).values(image);
   const insertedId = Number(result[0].insertId);
   
-  const inserted = await db.select().from(images).where(eq(images.id, insertedId)).limit(1);
-  return inserted[0];
+  return insertedId;
 }
 
 export async function getImagesByUserId(userId: number, limit = 50): Promise<Image[]> {
@@ -214,15 +213,14 @@ export async function markImageAsUsed(imageId: number): Promise<void> {
 }
 
 // Post Schedules
-export async function createPostSchedule(schedule: InsertPostSchedule): Promise<PostSchedule> {
+export async function createPostSchedule(schedule: InsertPostSchedule): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const result = await db.insert(postSchedules).values(schedule);
   const insertedId = Number(result[0].insertId);
   
-  const inserted = await db.select().from(postSchedules).where(eq(postSchedules.id, insertedId)).limit(1);
-  return inserted[0];
+  return insertedId;
 }
 
 export async function getPostSchedulesByUserId(userId: number): Promise<PostSchedule[]> {
@@ -242,15 +240,14 @@ export async function updatePostScheduleStatus(id: number, status: "pending" | "
 }
 
 // Post Contents
-export async function createPostContent(content: InsertPostContent): Promise<PostContent> {
+export async function createPostContent(content: InsertPostContent): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const result = await db.insert(postContents).values(content);
   const insertedId = Number(result[0].insertId);
   
-  const inserted = await db.select().from(postContents).where(eq(postContents.id, insertedId)).limit(1);
-  return inserted[0];
+  return insertedId;
 }
 
 export async function getPostContentsByScheduleId(scheduleId: number): Promise<PostContent[]> {

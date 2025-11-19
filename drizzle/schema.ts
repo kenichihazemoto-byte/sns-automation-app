@@ -99,7 +99,7 @@ export const postSchedules = mysqlTable("post_schedules", {
   companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
   scheduledAt: timestamp("scheduledAt").notNull(),
   cronExpression: varchar("cronExpression", { length: 100 }),
-  status: mysqlEnum("status", ["active", "pending", "processing", "completed", "failed", "cancelled"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled"]).default("draft").notNull(),
   lastExecutedAt: timestamp("lastExecutedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

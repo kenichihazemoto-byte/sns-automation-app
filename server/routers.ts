@@ -400,6 +400,101 @@ export const appRouter = router({
 
         return contents;
       }),
+
+    // 生成した投稿を保存
+    saveGeneratedPost: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        imageUrl: z.string(),
+        imageAnalysis: z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        }),
+        contents: z.object({
+          instagram: z.object({
+            caption: z.string(),
+            hashtags: z.array(z.string()),
+          }),
+          x: z.object({
+            caption: z.string(),
+            hashtags: z.array(z.string()),
+          }),
+          threads: z.object({
+            caption: z.string(),
+            hashtags: z.array(z.string()),
+          }),
+        }),
+        scheduledAt: z.date().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // 画像を保存
+        const imageId = await db.createImage({
+          userId: ctx.user.id,
+          url: input.imageUrl,
+          source: "google_photos",
+          aiAnalysis: JSON.stringify(input.imageAnalysis),
+          category: input.imageAnalysis.category,
+          keywords: input.imageAnalysis.keywords.join(","),
+        });
+
+        // 投稿スケジュールを作成
+        const scheduleId = await db.createPostSchedule({
+          userId: ctx.user.id,
+          imageId,
+          scheduledAt: input.scheduledAt || new Date(),
+          status: input.scheduledAt ? "scheduled" : "draft",
+          companyName: input.companyName,
+        });
+
+        // 各プラットフォームの投稿コンテンツを保存
+        const platforms = ["instagram", "x", "threads"] as const;
+        for (const platform of platforms) {
+          await db.createPostContent({
+            scheduleId,
+            platform,
+            caption: input.contents[platform].caption,
+            hashtags: input.contents[platform].hashtags.join(","),
+          });
+        }
+
+        return { scheduleId, imageId };
+      }),
+
+    // 保存した投稿一覧を取得
+    getSavedPosts: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getPostSchedulesByUserId(ctx.user.id);
+      }),
+
+    // 複数写真を取得して分析
+    getMultiplePhotosWithAnalysis: protectedProcedure
+      .input(z.object({
+        count: z.number().min(2).max(10).default(5),
+      }))
+      .mutation(async ({ input }) => {
+        const googlePhotos = await import("./google-photos-service");
+        const photos = [];
+
+        for (let i = 0; i < input.count; i++) {
+          const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
+          const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
+          const analysis = await aiService.analyzeImage(sampleImageUrl);
+          
+          photos.push({
+            photo,
+            album,
+            analysis,
+            score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
+          });
+        }
+
+        // スコアでソート
+        photos.sort((a, b) => b.score - a.score);
+
+        return photos;
+      }),
   }),
 });
 

@@ -29,6 +29,13 @@
       "when": 1763518103312,
       "tag": "0003_chemical_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1763527432191,
+      "tag": "0004_clear_rictor",
+      "breakpoints": true
     }
   ]
 }
