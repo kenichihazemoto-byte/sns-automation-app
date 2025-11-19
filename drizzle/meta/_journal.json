@@ -15,6 +15,20 @@
       "when": 1762853058661,
       "tag": "0001_curious_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763518007177,
+      "tag": "0002_loose_otto_octavius",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1763518103312,
+      "tag": "0003_chemical_echo",
+      "breakpoints": true
     }
   ]
 }

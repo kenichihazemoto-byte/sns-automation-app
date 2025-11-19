@@ -374,6 +374,32 @@ export const appRouter = router({
 
         return content;
       }),
+
+    // 全プラットフォームの投稿文を一括生成
+    generateAllPlatformContents: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        imageAnalysis: z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const platforms = ["instagram", "x", "threads"] as const;
+        const contents: any = {};
+
+        for (const platform of platforms) {
+          contents[platform] = await aiService.generatePostContent({
+            platform,
+            imageAnalysis: input.imageAnalysis,
+            companyName: input.companyName,
+          });
+        }
+
+        return contents;
+      }),
   }),
 });
 
