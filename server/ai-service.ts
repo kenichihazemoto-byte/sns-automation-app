@@ -127,14 +127,36 @@ export async function generatePostContent(
         name: "住宅購入検討者（一般ユーザー）",
         description: "マイホームを夢見る家族、住まいへのこだわりを持つ方、快適な生活空間を求める方",
         tone: "親しみやすく、共感を呼ぶ温かい表現。「家族」「夢」「安心」などのキーワードを使用",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし", "安心", "住まい", "ライフスタイル"]
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし", "安心", "住まい", "ライフスタイル"],
+        lifestylePrompt: "この家でどのような暮らしができるかを具体的に提案してください。例：家族が集まるリビング、子供が遊べる広い空間、趣味を楽しめる部屋など。",
+        hashtagCategories: {
+          location: ["愛知県工務店", "名古屋注文住宅", "東海地方の家づくり"],
+          constructionType: ["新築注文住宅", "注文住宅", "一戸建て", "マイホーム"],
+          designStyle: ["ナチュラルハウス", "モダン住宅", "シンプルな家", "和モダン"],
+          lifestyle: ["家づくり", "マイホーム計画", "理想の暮らし", "住まいづくり", "家族の家"]
+        }
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         description: "クリニック開業を考える医師、施設リニューアルを検討する経営者、患者体験向上を目指す医療プロフェッショナル",
         tone: "専門的で信頼感のある表現。「患者様」「医療環境」「機能性」などのキーワードを使用",
-        keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"]
+        keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"],
+        lifestylePrompt: "この医療空間で患者様がどのような体験ができるかを具体的に提案してください。例：リラックスできる待合室、プライバシーに配慮した診察室、最新設備による快適な治療環境など。",
+        hashtagCategories: {
+          location: ["愛知県クリニック設計", "名古屋医療施設", "東海地方クリニック"],
+          constructionType: ["クリニック設計", "医療施設デザイン", "クリニック開業", "医院建築"],
+          designStyle: ["モダンクリニック", "清潔感のある空間", "機能的デザイン", "患者様に優しい空間"],
+          lifestyle: ["患者様体験", "医療環境", "クリニック経営", "開業医", "医療空間"]
+        }
       };
+
+  // ハッシュタグ推奨リストを生成
+  const recommendedHashtags = [
+    ...targetAudience.hashtagCategories.location.slice(0, 2),
+    ...targetAudience.hashtagCategories.constructionType.slice(0, 3),
+    ...targetAudience.hashtagCategories.designStyle.slice(0, 3),
+    ...targetAudience.hashtagCategories.lifestyle.slice(0, 3)
+  ];
 
   const response = await invokeLLM({
     messages: [
@@ -147,7 +169,9 @@ export async function generatePostContent(
 トーン: ${targetAudience.tone}
 重要なキーワード: ${targetAudience.keywords.join(", ")}
 
-ターゲットに響く魅力的な投稿を作成してください。`,
+ターゲットに響く魅力的な投稿を作成してください。
+
+重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」を具体的に提案するライフスタイル提案型の文章を作成してください。`,
       },
       {
         role: "user",
@@ -165,6 +189,12 @@ export async function generatePostContent(
 - 文章の長さ: ${guideline.length}
 - ハッシュタグ数: ${guideline.hashtagCount}
 - トーン: ${guideline.tone}
+
+ライフスタイル提案:
+${targetAudience.lifestylePrompt}
+
+推奨ハッシュタグ（以下から選んで使用してください）:
+${recommendedHashtags.map(tag => `#${tag}`).join(" ")}
 
 投稿文とハッシュタグを生成してください。`,
       },
@@ -213,10 +243,10 @@ export interface GenerateReplyParams {
 }
 
 /**
- * 写真ごとの個別コメントを生成する
+ * 写真ごとの個別コメントを生成する（1枚の写真用）
  */
 export async function generateIndividualComment(
-  imageAnalysis: ImageAnalysis,
+  imageAnalysis: ImageAnalysisResult,
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -224,12 +254,16 @@ export async function generateIndividualComment(
     ? {
         name: "住宅購入検討者（一般ユーザー）",
         tone: "親しみやすく、共感を呼ぶ温かい表現",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"],
+        lifestylePrompt: "この空間でどのような暮らしができるかを簡潔に提案してください。",
+        recommendedHashtags: ["家づくり", "マイホーム計画", "理想の暮らし", "注文住宅", "ナチュラルハウス", "モダン住宅", "愛知県工務店", "一戸建て"]
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         tone: "専門的で信頼感のある表現",
-        keywords: ["患者様体験", "医療環境", "機能性"]
+        keywords: ["患者様体験", "医療環境", "機能性"],
+        lifestylePrompt: "この医療空間で患者様がどのような体験ができるかを簡潔に提案してください。",
+        recommendedHashtags: ["患者様体験", "医療環境", "クリニック設計", "クリニック開業", "モダンクリニック", "愛知県クリニック", "医療施設デザイン"]
       };
 
   const response = await invokeLLM({
@@ -240,7 +274,8 @@ export async function generateIndividualComment(
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
-この1枚の写真に焦点を当てた、簡潔で魅力的な投稿を作成してください。`,
+この1枚の写真に焦点を当てた、簡潔で魅力的な投稿を作成してください。
+重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」を提案してください。`,
       },
       {
         role: "user",
@@ -251,6 +286,12 @@ export async function generateIndividualComment(
 - スタイル: ${imageAnalysis.style}
 - 説明: ${imageAnalysis.description}
 - キーワード: ${imageAnalysis.keywords.join(", ")}
+
+ライフスタイル提案:
+${targetAudience.lifestylePrompt}
+
+推奨ハッシュタグ（以下から選んで使用してください）:
+${targetAudience.recommendedHashtags.map(tag => `#${tag}`).join(" ")}
 
 文章は100-150文字程度で、ハッシュタグは5-10個程度にしてください。`,
       },
@@ -292,7 +333,7 @@ export async function generateIndividualComment(
  * 複数の写真をまとめた投稿文を生成する
  */
 export async function generateCarouselPost(
-  imageAnalyses: ImageAnalysis[],
+  imageAnalyses: ImageAnalysisResult[],
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -300,19 +341,23 @@ export async function generateCarouselPost(
     ? {
         name: "住宅購入検討者（一般ユーザー）",
         tone: "親しみやすく、共感を呼ぶ温かい表現",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"],
+        lifestylePrompt: "複数の写真から、この家でどのような暮らしができるかをストーリー仕立てで提案してください。",
+        recommendedHashtags: ["家づくり", "マイホーム計画", "理想の暮らし", "注文住宅", "ナチュラルハウス", "モダン住宅", "愛知県工務店", "一戸建て", "新築注文住宅", "住まいづくり", "家族の家", "シンプルな家"]
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         tone: "専門的で信頼感のある表現",
-        keywords: ["患者様体験", "医療環境", "機能性"]
+        keywords: ["患者様体験", "医療環境", "機能性"],
+        lifestylePrompt: "複数の写真から、この医療空間で患者様がどのような体験ができるかをストーリー仕立てで提案してください。",
+        recommendedHashtags: ["患者様体験", "医療環境", "クリニック設計", "クリニック開業", "モダンクリニック", "愛知県クリニック", "医療施設デザイン", "クリニック経営", "開業医", "医療空間", "患者様に優しい空間"]
       };
 
   const imagesDescription = imageAnalyses.map((analysis, index) => 
     `写真${index + 1}: ${analysis.category} - ${analysis.description} (スタイル: ${analysis.style})`
   ).join("\n");
 
-  const allKeywords = [...new Set(imageAnalyses.flatMap(a => a.keywords))];
+  const allKeywords = Array.from(new Set(imageAnalyses.flatMap(a => a.keywords)));
 
   const response = await invokeLLM({
     messages: [
@@ -322,7 +367,8 @@ export async function generateCarouselPost(
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
-複数の写真を一つのストーリーとして繋げ、Instagramカルーセル投稿に最適な魅力的な投稿を作成してください。`,
+複数の写真を一つのストーリーとして繋げ、Instagramカルーセル投稿に最適な魅力的な投稿を作成してください。
+重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」をストーリー仕立てで提案してください。`,
       },
       {
         role: "user",
@@ -331,6 +377,12 @@ export async function generateCarouselPost(
 ${imagesDescription}
 
 共通キーワード: ${allKeywords.join(", ")}
+
+ライフスタイル提案:
+${targetAudience.lifestylePrompt}
+
+推奨ハッシュタグ（以下から選んで使用してください）:
+${targetAudience.recommendedHashtags.map(tag => `#${tag}`).join(" ")}
 
 複数の写真を統一したストーリーを語り、各写真の魅力を引き出す文章を作成してください。
 文章は200-300文字程度で、ハッシュタグは15-20個程度にしてください。`,
