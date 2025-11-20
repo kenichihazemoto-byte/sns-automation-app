@@ -26,15 +26,8 @@ export default function Demo() {
   const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
   const [reelsContent, setReelsContent] = useState<any>(null);
   const [selectedContentType, setSelectedContentType] = useState<"hook" | "question" | "emotion" | "cta" | "storytelling">("hook");
-  const [showAlbumPicker, setShowAlbumPicker] = useState<boolean>(false);
-  const [selectedAlbum, setSelectedAlbum] = useState<any>(null);
-  const [albumPhotos, setAlbumPhotos] = useState<any[]>([]);
-  const [selectedPhotosFromAlbum, setSelectedPhotosFromAlbum] = useState<any[]>([]);
 
   const utils = trpc.useUtils();
-
-  // Google フォトアルバム一覧を取得
-  const { data: photoAlbums } = trpc.demo.getPhotoAlbums.useQuery();
 
   const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
     onSuccess: (data) => {
@@ -127,24 +120,7 @@ export default function Demo() {
     },
   });
 
-  const getPhotosFromAlbumMutation = trpc.demo.getPhotosFromAlbum.useMutation({
-    onSuccess: (data) => {
-      setAlbumPhotos(data);
-      toast.success("写真一覧を取得しました");
-    },
-    onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
-    },
-  });
 
-  const analyzeSelectedPhotoMutation = trpc.demo.analyzeSelectedPhoto.useMutation({
-    onSuccess: (data) => {
-      toast.success("写真をAI分析しました");
-    },
-    onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
-    },
-  });
 
   const savePostMutation = trpc.demo.saveGeneratedPost.useMutation({
     onSuccess: () => {
@@ -411,65 +387,78 @@ export default function Demo() {
         <Card>
           <CardHeader>
             <CardTitle>写真の取得</CardTitle>
-            <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
+            <CardDescription>
+              ローカルファイル、NAS、Googleドライブ、Dropboxなどから写真を選択できます
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="file-upload">写真を選択（最大5枚）</Label>
-              <Input
+            {/* ファイルアップロードエリア */}
+            <div className="border-2 border-dashed border-primary/50 rounded-lg p-8 text-center hover:border-primary transition-colors">
+              <input
                 id="file-upload"
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handleFileUpload}
                 disabled={uploadImageMutation.isPending}
-                className="mt-2"
+                className="hidden"
               />
+              <label
+                htmlFor="file-upload"
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="h-12 w-12 text-muted-foreground" />
+                <div>
+                  <p className="text-lg font-semibold">写真を選択（最大5枚）</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    クリックしてファイルを選択、またはドラッグ&ドロップ
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    💻 ローカルファイル ・ 🗄️ NAS ・ ☁️ クラウドストレージ
+                  </p>
+                </div>
+              </label>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                onClick={() => setShowAlbumPicker(true)}
-                variant="default"
-                className="col-span-3"
-              >
-                <ImageIcon className="mr-2 h-4 w-4" />
-                ドライブから選択
-              </Button>
-              <Button
-                onClick={() => fetchPhotoMutation.mutate()}
-                disabled={fetchPhotoMutation.isPending}
-                variant="outline"
-              >
-                {fetchPhotoMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    取得中...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    1枚ランダム
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
-                disabled={fetchMultiplePhotosMutation.isPending}
-                variant="outline"
-                className="col-span-2"
-              >
-                {fetchMultiplePhotosMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    取得中...
-                  </>
-                ) : (
-                  <>
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    {photoCount}枚ランダム
-                  </>
-                )}
-              </Button>
+
+            {/* Googleフォトからランダム取得 */}
+            <div className="pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-3">または、Googleフォトからランダムに取得：</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={() => fetchPhotoMutation.mutate()}
+                  disabled={fetchPhotoMutation.isPending}
+                  variant="outline"
+                >
+                  {fetchPhotoMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      取得中...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      1枚ランダム
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
+                  disabled={fetchMultiplePhotosMutation.isPending}
+                  variant="outline"
+                >
+                  {fetchMultiplePhotosMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      取得中...
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      {photoCount}枚ランダム
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -839,161 +828,6 @@ export default function Demo() {
           </Card>
         )}
       </div>
-
-      {/* アルバム・写真選択ダイアログ */}
-      <Dialog open={showAlbumPicker} onOpenChange={setShowAlbumPicker}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Google フォトから写真を選択</DialogTitle>
-            <DialogDescription>
-              アルバムを選択して、その中から写真を選んでください（最大5枚まで）
-            </DialogDescription>
-          </DialogHeader>
-
-          {!selectedAlbum ? (
-            // アルバム一覧
-            <div className="space-y-4">
-              <h3 className="font-semibold">竣工写真アルバム（年度別）</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {photoAlbums?.map((album: any) => (
-                  <Button
-                    key={album.url}
-                    variant="outline"
-                    className="h-auto py-4 flex flex-col items-center"
-                    onClick={() => {
-                      setSelectedAlbum(album);
-                      getPhotosFromAlbumMutation.mutate({ albumUrl: album.url });
-                    }}
-                  >
-                    <Calendar className="h-8 w-8 mb-2" />
-                    <span className="font-semibold">{album.year}年</span>
-                    <span className="text-xs text-muted-foreground">{album.title}</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            // 写真一覧
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">{selectedAlbum.title}</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedAlbum(null);
-                    setAlbumPhotos([]);
-                    setSelectedPhotosFromAlbum([]);
-                  }}
-                >
-                  アルバム一覧に戻る
-                </Button>
-              </div>
-
-              {getPhotosFromAlbumMutation.isPending ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="ml-2">写真を読み込み中...</span>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-4 gap-4">
-                    {albumPhotos.map((photo: any, index: number) => (
-                      <div
-                        key={index}
-                        className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
-                          selectedPhotosFromAlbum.includes(photo) ? 'border-primary' : 'border-transparent'
-                        }`}
-                        onClick={() => {
-                          if (selectedPhotosFromAlbum.includes(photo)) {
-                            setSelectedPhotosFromAlbum(selectedPhotosFromAlbum.filter(p => p !== photo));
-                          } else if (selectedPhotosFromAlbum.length < 5) {
-                            setSelectedPhotosFromAlbum([...selectedPhotosFromAlbum, photo]);
-                          } else {
-                            toast.error("最大5枚まで選択できます");
-                          }
-                        }}
-                      >
-                        <img
-                          src={photo.thumbnailUrl}
-                          alt={photo.title || `写真 ${index + 1}`}
-                          className="w-full h-32 object-cover"
-                        />
-                        {selectedPhotosFromAlbum.includes(photo) && (
-                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center">
-                            <Check className="h-4 w-4" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <span className="text-sm text-muted-foreground">
-                      {selectedPhotosFromAlbum.length}枚選択中（最大5枚まで）
-                    </span>
-                    <Button
-                      onClick={async () => {
-                        if (selectedPhotosFromAlbum.length === 0) {
-                          toast.error("写真を選択してください");
-                          return;
-                        }
-
-                        toast.info(`${selectedPhotosFromAlbum.length}枚の写真をAI分析中...`);
-
-                        const uploadedPhotos: any[] = [];
-                        for (const photo of selectedPhotosFromAlbum) {
-                          try {
-                            const data = await new Promise<any>((resolve, reject) => {
-                              analyzeSelectedPhotoMutation.mutate(
-                                {
-                                  photoUrl: photo.url,
-                                  companyName,
-                                },
-                                {
-                                  onSuccess: resolve,
-                                  onError: reject,
-                                }
-                              );
-                            });
-                            uploadedPhotos.push(data);
-                          } catch (error) {
-                            console.error('Failed to analyze photo:', error);
-                          }
-                        }
-
-                        if (uploadedPhotos.length > 0) {
-                          setMultiplePhotos(uploadedPhotos);
-                          setSelectedImage(uploadedPhotos[0]);
-                          setAnalysis(uploadedPhotos[0].analysis);
-                          setContents(null);
-                          setIndividualComments(null);
-                          setCarouselPost(null);
-                          toast.success(`${uploadedPhotos.length}枚の写真をAI分析しました`);
-                          setShowAlbumPicker(false);
-                          setSelectedAlbum(null);
-                          setAlbumPhotos([]);
-                          setSelectedPhotosFromAlbum([]);
-                        }
-                      }}
-                      disabled={selectedPhotosFromAlbum.length === 0 || analyzeSelectedPhotoMutation.isPending}
-                    >
-                      {analyzeSelectedPhotoMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          分析中...
-                        </>
-                      ) : (
-                        `${selectedPhotosFromAlbum.length}枚をAI分析`
-                      )}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
