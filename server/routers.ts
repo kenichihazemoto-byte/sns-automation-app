@@ -565,6 +565,30 @@ export const appRouter = router({
         return carouselPost;
       }),
 
+    // リール・ストーリーズ用短文を生成
+    generateReelsStories: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        contentType: z.enum(["hook", "question", "emotion", "cta", "storytelling"]),
+        imageAnalysis: z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateReelsStoriesContent } = await import("./ai-service");
+        
+        const reelsContent = await generateReelsStoriesContent(
+          input.imageAnalysis,
+          input.companyName,
+          input.contentType
+        );
+
+        return reelsContent;
+      }),
+
     // 複数写真を取得して分析
     getMultiplePhotosWithAnalysis: protectedProcedure
       .input(z.object({

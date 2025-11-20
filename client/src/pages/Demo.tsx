@@ -23,6 +23,8 @@ export default function Demo() {
   const [photoCount, setPhotoCount] = useState<number>(5);
   const [multiplePhotos, setMultiplePhotos] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
+  const [reelsContent, setReelsContent] = useState<any>(null);
+  const [selectedContentType, setSelectedContentType] = useState<"hook" | "question" | "emotion" | "cta" | "storytelling">("hook");
 
   const utils = trpc.useUtils();
 
@@ -101,6 +103,16 @@ export default function Demo() {
       setCarouselPost(data);
       setViewMode("carousel");
       toast.success("カルーセル投稿を生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const generateReelsStoriesMutation = trpc.demo.generateReelsStories.useMutation({
+    onSuccess: (data) => {
+      setReelsContent(data);
+      toast.success("リール・ストーリーズ用短文を生成しました");
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
@@ -210,6 +222,19 @@ export default function Demo() {
       companyName,
       platform: "instagram",
       imageAnalyses,
+    });
+  };
+
+  const handleGenerateReelsStories = () => {
+    if (!analysis) {
+      toast.error("写真を選択してください");
+      return;
+    }
+
+    generateReelsStoriesMutation.mutate({
+      companyName,
+      contentType: selectedContentType,
+      imageAnalysis: analysis,
     });
   };
 
@@ -497,6 +522,37 @@ export default function Demo() {
                   </Button>
                 </a>
               </div>
+              <div className="pt-4 border-t">
+                <Label className="text-sm font-semibold mb-2 block">リール・ストーリーズ用短文生成</Label>
+                <div className="flex gap-2 mb-2">
+                  <Select value={selectedContentType} onValueChange={(value: any) => setSelectedContentType(value)}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hook">🎯 Hook（注意を引く）</SelectItem>
+                      <SelectItem value="question">❓ Question（問いかけ）</SelectItem>
+                      <SelectItem value="emotion">💖 Emotion（感情訴求）</SelectItem>
+                      <SelectItem value="cta">👆 CTA（行動喚起）</SelectItem>
+                      <SelectItem value="storytelling">📖 Storytelling（物語）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleGenerateReelsStories}
+                    disabled={generateReelsStoriesMutation.isPending}
+                    variant="outline"
+                  >
+                    {generateReelsStoriesMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      "生成"
+                    )}
+                  </Button>
+                </div>
+              </div>
               {multiplePhotos.length >= 2 && (
                 <div className="flex gap-2 pt-4 border-t">
                   <Button
@@ -655,6 +711,42 @@ export default function Demo() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {reelsContent && (
+          <Card>
+            <CardHeader>
+              <CardTitle>🎥 リール・ストーリーズ用短文</CardTitle>
+              <CardDescription>生成された短文をInstagram ReelsやStoriesで使用できます</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-semibold">短文</Label>
+                <p className="text-lg font-medium mt-2 p-4 bg-muted rounded-lg">
+                  {reelsContent.shortText}
+                </p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-semibold">スタイル</Label>
+                  <p className="text-sm mt-1">{reelsContent.style}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">使用シーン</Label>
+                  <p className="text-sm mt-1">{reelsContent.usage}</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyToClipboard(reelsContent.shortText, "reels")}
+                className="w-full"
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                短文をコピー
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {contents && (
