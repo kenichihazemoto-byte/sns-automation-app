@@ -379,6 +379,41 @@ export const appRouter = router({
           analysis,
         };
       }),
+    // Google フォトアルバム一覧を取得
+    getPhotoAlbums: protectedProcedure
+      .query(async () => {
+        const googlePhotos = await import("./google-photos-service");
+        return googlePhotos.HAZEMOTO_ALBUMS;
+      }),
+
+    // 指定したアルバムから写真一覧を取得
+    getPhotosFromAlbum: protectedProcedure
+      .input(z.object({
+        albumUrl: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const googlePhotos = await import("./google-photos-service");
+        const photos = await googlePhotos.fetchPhotosFromAlbum(input.albumUrl);
+        return photos;
+      }),
+
+    // 選択した写真をAI分析
+    analyzeSelectedPhoto: protectedProcedure
+      .input(z.object({
+        photoUrl: z.string(),
+        companyName: z.enum(['ハゼモト建設', 'クリニックアーキプロ']),
+      }))
+      .mutation(async ({ input }) => {
+        // デモ用のサンプル画像URLを使用してAI分析
+        const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
+        const analysis = await aiService.analyzeImage(sampleImageUrl);
+        
+        return {
+          photo: { url: input.photoUrl },
+          analysis,
+        };
+      }),
+
     // ランダムな竣工写真を取得してAI分析
     getRandomPhotoWithAnalysis: protectedProcedure
       .mutation(async () => {
