@@ -121,11 +121,33 @@ export async function generatePostContent(
 
   const guideline = platformGuidelines[platform];
 
+  // ターゲット別の設定
+  const targetAudience = companyName === "ハゼモト建設" 
+    ? {
+        name: "住宅購入検討者（一般ユーザー）",
+        description: "マイホームを夢見る家族、住まいへのこだわりを持つ方、快適な生活空間を求める方",
+        tone: "親しみやすく、共感を呼ぶ温かい表現。「家族」「夢」「安心」などのキーワードを使用",
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし", "安心", "住まい", "ライフスタイル"]
+      }
+    : {
+        name: "医療関係者（医師、クリニック経営者）",
+        description: "クリニック開業を考える医師、施設リニューアルを検討する経営者、患者体験向上を目指す医療プロフェッショナル",
+        tone: "専門的で信頼感のある表現。「患者様」「医療環境」「機能性」などのキーワードを使用",
+        keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"]
+      };
+
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。建築・医療施設の魅力を伝える投稿を作成してください。`,
+        content: `あなたは${companyName}のSNSマーケティング担当者です。
+
+ターゲット: ${targetAudience.name}
+ターゲットの詳細: ${targetAudience.description}
+トーン: ${targetAudience.tone}
+重要なキーワード: ${targetAudience.keywords.join(", ")}
+
+ターゲットに響く魅力的な投稿を作成してください。`,
       },
       {
         role: "user",

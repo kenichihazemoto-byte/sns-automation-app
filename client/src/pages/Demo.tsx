@@ -86,31 +86,59 @@ export default function Demo() {
   });
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    // ファイルサイズチェック（10MB制限）
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("ファイルサイズは10MB以下にしてください");
+    // 最大5枚までの制限
+    if (files.length > 5) {
+      toast.error("一度にアップロードできるのは5枚までです");
       return;
     }
 
-    // 画像ファイルかチェック
-    if (!file.type.startsWith('image/')) {
-      toast.error("画像ファイルを選択してください");
-      return;
-    }
+    const uploadedPhotos: any[] = [];
+    let processedCount = 0;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      uploadImageMutation.mutate({
-        imageBase64: base64,
-        fileName: file.name,
-        companyName,
-      });
-    };
-    reader.readAsDataURL(file);
+    Array.from(files).forEach((file) => {
+      // ファイルサイズチェック（10MB制限）
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name}: ファイルサイズは10MB以下にしてください`);
+        return;
+      }
+
+      // 画像ファイルかチェック
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name}: 画像ファイルを選択してください`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        try {
+          const result = await uploadImageMutation.mutateAsync({
+            imageBase64: base64,
+            fileName: file.name,
+            companyName,
+          });
+          uploadedPhotos.push(result);
+          processedCount++;
+
+          // 全てのファイルの処理が完了したら
+          if (processedCount === files.length) {
+            setMultiplePhotos(uploadedPhotos.sort((a, b) => (b.score || 0) - (a.score || 0)));
+            if (uploadedPhotos.length > 0) {
+              setSelectedImage(uploadedPhotos[0]);
+              setAnalysis(uploadedPhotos[0].analysis);
+              setContents(null);
+            }
+            toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
+          }
+        } catch (error) {
+          toast.error(`${file.name}: アップロードに失敗しました`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleFetchAndAnalyze = () => {
@@ -273,6 +301,7 @@ export default function Demo() {
                   id="file-upload"
                   type="file"
                   accept="image/*"
+                  multiple
                   onChange={handleFileUpload}
                   disabled={isLoading}
                   className="hidden"
