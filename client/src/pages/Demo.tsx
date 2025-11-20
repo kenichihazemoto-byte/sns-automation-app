@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar } from "lucide-react";
+import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
@@ -114,6 +114,56 @@ export default function Demo() {
     setCopiedPlatform(platform);
     toast.success(`${platform}の投稿文をコピーしました`);
     setTimeout(() => setCopiedPlatform(null), 2000);
+  };
+
+  // 写真をダウンロードする関数
+  const handleDownloadImage = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const response = await fetch(selectedImage.photo.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${companyName}_${new Date().getTime()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("写真をダウンロードしました");
+    } catch (error) {
+      toast.error("写真のダウンロードに失敗しました");
+    }
+  };
+
+  // 写真と投稿文を一括コピーする関数
+  const handleCopyWithImage = async (platform: string, content: string) => {
+    if (!selectedImage) {
+      toast.error("写真が選択されていません");
+      return;
+    }
+
+    try {
+      // 画像をBlobとして取得
+      const response = await fetch(selectedImage.photo.url);
+      const blob = await response.blob();
+
+      // ClipboardItemを使用して画像とテキストを一緒にコピー
+      const clipboardItem = new ClipboardItem({
+        'image/jpeg': blob,
+        'text/plain': new Blob([content], { type: 'text/plain' }),
+      });
+
+      await navigator.clipboard.write([clipboardItem]);
+      setCopiedPlatform(platform);
+      toast.success(`${platform}の投稿文と写真をコピーしました`);
+      setTimeout(() => setCopiedPlatform(null), 2000);
+    } catch (error) {
+      // フォールバック: テキストのみコピー
+      navigator.clipboard.writeText(content);
+      toast.info(`投稿文のみコピーしました（写真は手動でダウンロードしてください）`);
+    }
   };
 
   const handleSelectPhoto = (photo: any) => {
@@ -275,6 +325,66 @@ export default function Demo() {
           </Card>
         )}
 
+        {/* 選択された写真の表示 */}
+        {selectedImage && (
+          <Card>
+            <CardHeader>
+              <CardTitle>選択された写真</CardTitle>
+              <CardDescription>
+                この写真で投稿文を生成します
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative w-full max-w-2xl mx-auto">
+                <img
+                  src={selectedImage.photo.url}
+                  alt="Selected"
+                  className="w-full h-auto rounded-lg shadow-lg"
+                />
+              </div>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={handleDownloadImage} variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  写真をダウンロード
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AI分析結果 */}
+        {analysis && (
+          <Card>
+            <CardHeader>
+              <CardTitle>AI分析結果</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground">カテゴリー</Label>
+                  <p className="font-medium">{analysis.category}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">スタイル</Label>
+                  <p className="font-medium">{analysis.style}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">説明</Label>
+                <p className="text-sm">{analysis.description}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">キーワード</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {analysis.keywords.map((keyword: string, index: number) => (
+                    <Badge key={index} variant="secondary">{keyword}</Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex flex-wrap gap-4">
           <Button
             onClick={handleGenerateAll}
@@ -299,7 +409,7 @@ export default function Demo() {
             onClick={handleSavePost}
             disabled={!contents || isLoading}
             size="lg"
-            variant="secondary"
+            variant="outline"
             className="flex-1 min-w-[200px]"
           >
             {savePostMutation.isPending ? (
@@ -320,199 +430,105 @@ export default function Demo() {
         {contents && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">投稿スケジュール（オプション）</CardTitle>
+              <CardTitle className="text-lg">投稿予約（オプション）</CardTitle>
               <CardDescription>
                 特定の日時に投稿を予約する場合は日時を選択してください
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <Input
-                  type="datetime-local"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  className="max-w-md"
-                />
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <Label htmlFor="scheduledDate">予約日時</Label>
+                  <Input
+                    id="scheduledDate"
+                    type="datetime-local"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 左側: 画像と分析結果 */}
-          <div className="space-y-6">
-            {/* 選択された画像 */}
-            {selectedImage && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>選択された写真</CardTitle>
-                  <CardDescription>{selectedImage.album.title}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <img
-                    src={selectedImage.photo.url}
-                    alt="Selected"
-                    className="w-full h-auto rounded-lg shadow-md"
-                  />
-                </CardContent>
-              </Card>
-            )}
+        {/* 生成された投稿文 */}
+        {contents && (
+          <Card>
+            <CardHeader>
+              <CardTitle>生成された投稿文</CardTitle>
+              <CardDescription>
+                各プラットフォームに最適化された投稿文とハッシュタグが生成されました
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="instagram" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="instagram">
+                    <Instagram className="mr-2 h-4 w-4" />
+                    Instagram
+                  </TabsTrigger>
+                  <TabsTrigger value="x">
+                    <Twitter className="mr-2 h-4 w-4" />
+                    X
+                  </TabsTrigger>
+                  <TabsTrigger value="threads">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Threads
+                  </TabsTrigger>
+                </TabsList>
 
-            {/* AI分析結果 */}
-            {analysis && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI画像分析結果</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-2">カテゴリー</h4>
-                    <Badge variant="secondary">{analysis.category}</Badge>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">スタイル</h4>
-                    <Badge variant="outline">{analysis.style}</Badge>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">説明</h4>
-                    <p className="text-sm text-gray-700">{analysis.description}</p>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">キーワード</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {analysis.keywords.map((keyword: string, index: number) => (
-                        <Badge key={index} variant="secondary">
-                          {keyword}
-                        </Badge>
-                      ))}
+                {["instagram", "x", "threads"].map((platform) => (
+                  <TabsContent key={platform} value={platform} className="space-y-4">
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                      <p className="whitespace-pre-wrap mb-3">
+                        {contents[platform].caption}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {contents[platform].hashtags.map((tag: string, index: number) => (
+                          <Badge key={index} variant="secondary">
+                            #{tag}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* 右側: 生成された投稿文 */}
-          <div>
-            {contents && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>生成された投稿文</CardTitle>
-                  <CardDescription>
-                    各SNSに最適化された投稿文が生成されました
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="instagram" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="instagram" className="flex items-center gap-2">
-                        <Instagram className="h-4 w-4" />
-                        Instagram
-                      </TabsTrigger>
-                      <TabsTrigger value="x" className="flex items-center gap-2">
-                        <Twitter className="h-4 w-4" />
-                        X
-                      </TabsTrigger>
-                      <TabsTrigger value="threads" className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4" />
-                        Threads
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {["instagram", "x", "threads"].map((platform) => (
-                      <TabsContent key={platform} value={platform} className="space-y-4">
-                        <div className="bg-muted/50 p-4 rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-semibold flex items-center gap-2">
-                              {getPlatformIcon(platform)}
-                              投稿文
-                            </h4>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                handleCopyContent(
-                                  platform,
-                                  `${contents[platform].caption}\n\n${contents[platform].hashtags.map((tag: string) => `#${tag}`).join(" ")}`
-                                )
-                              }
-                            >
-                              {copiedPlatform === platform ? (
-                                <>
-                                  <Check className="mr-2 h-4 w-4 text-green-600" />
-                                  コピー済み
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="mr-2 h-4 w-4" />
-                                  コピー
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap mb-4">
-                            {contents[platform].caption}
-                          </p>
-                          <div className="border-t pt-4">
-                            <h4 className="font-semibold mb-2">ハッシュタグ</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {contents[platform].hashtags.map((tag: string, index: number) => (
-                                <Badge key={index} variant="secondary">
-                                  #{tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-background border rounded-lg p-4">
-                          <h4 className="font-semibold mb-2">投稿プレビュー</h4>
-                          <div className="text-sm space-y-2">
-                            <p className="whitespace-pre-wrap">{contents[platform].caption}</p>
-                            <p className="text-primary">
-                              {contents[platform].hashtags.map((tag: string) => `#${tag}`).join(" ")}
-                            </p>
-                          </div>
-                        </div>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                </CardContent>
-              </Card>
-            )}
-
-            {!contents && !isLoading && (
-              <Card className="h-full flex items-center justify-center min-h-[400px]">
-                <CardContent className="text-center text-muted-foreground">
-                  <ImageIcon className="mx-auto h-16 w-16 mb-4 opacity-50" />
-                  <p>写真を取得して「全SNSの投稿文を生成」ボタンを押してください</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        {/* 説明 */}
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader>
-            <CardTitle className="text-lg">デモについて</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-2">
-            <p>
-              このデモでは、Google フォトの竣工写真アルバム（2009年〜2025年）からランダムに写真を選び、
-              OpenAI Vision APIで画像の内容を分析します。
-            </p>
-            <p>
-              その後、分析結果を基に各SNSプラットフォーム（Instagram、X、Threads）に
-              最適化された投稿文とハッシュタグを自動生成します。
-            </p>
-            <p className="font-medium text-primary">
-              生成された投稿文は「コピー」ボタンで簡単にコピーでき、各SNSに手動で投稿できます。
-              また、「投稿を保存」ボタンで投稿内容をデータベースに保存し、後から確認・再利用できます。
-            </p>
-          </CardContent>
-        </Card>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleCopyContent(
+                          platform,
+                          `${contents[platform].caption}\n\n${contents[platform].hashtags.map((t: string) => `#${t}`).join(" ")}`
+                        )}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        {copiedPlatform === platform ? (
+                          <>
+                            <Check className="mr-2 h-4 w-4" />
+                            コピー済み
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="mr-2 h-4 w-4" />
+                            投稿文をコピー
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={() => handleCopyWithImage(
+                          platform,
+                          `${contents[platform].caption}\n\n${contents[platform].hashtags.map((t: string) => `#${t}`).join(" ")}`
+                        )}
+                        className="flex-1"
+                      >
+                        <ImageIcon className="mr-2 h-4 w-4" />
+                        写真と投稿文を一括コピー
+                      </Button>
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );
