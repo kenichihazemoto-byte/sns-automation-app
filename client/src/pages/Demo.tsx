@@ -16,10 +16,13 @@ export default function Demo() {
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
   const [contents, setContents] = useState<any>(null);
+  const [individualComments, setIndividualComments] = useState<any>(null);
+  const [carouselPost, setCarouselPost] = useState<any>(null);
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const [scheduledDate, setScheduledDate] = useState<string>("");
   const [photoCount, setPhotoCount] = useState<number>(5);
   const [multiplePhotos, setMultiplePhotos] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
 
   const utils = trpc.useUtils();
 
@@ -28,6 +31,8 @@ export default function Demo() {
       setSelectedImage(data);
       setAnalysis(data.analysis);
       setContents(null);
+      setIndividualComments(null);
+      setCarouselPost(null);
       setMultiplePhotos([]);
       toast.success("写真をアップロードし、AI分析が完了しました");
     },
@@ -41,6 +46,8 @@ export default function Demo() {
       setSelectedImage(data);
       setAnalysis(data.analysis);
       setContents(null);
+      setIndividualComments(null);
+      setCarouselPost(null);
       setMultiplePhotos([]);
       toast.success("写真を取得し、AI分析が完了しました");
     },
@@ -57,6 +64,8 @@ export default function Demo() {
         setSelectedImage(data[0]);
         setAnalysis(data[0].analysis);
         setContents(null);
+        setIndividualComments(null);
+        setCarouselPost(null);
       }
       toast.success(`${data.length}枚の写真を取得し、AI分析が完了しました`);
     },
@@ -68,7 +77,30 @@ export default function Demo() {
   const generateAllContentsMutation = trpc.demo.generateAllPlatformContents.useMutation({
     onSuccess: (data) => {
       setContents(data);
+      setViewMode("single");
       toast.success("全プラットフォームの投稿文を生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const generateIndividualCommentsMutation = trpc.demo.generateIndividualComments.useMutation({
+    onSuccess: (data) => {
+      setIndividualComments(data);
+      setViewMode("individual");
+      toast.success("写真ごとの個別コメントを生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const generateCarouselPostMutation = trpc.demo.generateCarouselPost.useMutation({
+    onSuccess: (data) => {
+      setCarouselPost(data);
+      setViewMode("carousel");
+      toast.success("カルーセル投稿を生成しました");
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
@@ -99,57 +131,47 @@ export default function Demo() {
     let processedCount = 0;
 
     Array.from(files).forEach((file) => {
-      // ファイルサイズチェック（10MB制限）
+      // ファイルサイズチェック (10MB)
       if (file.size > 10 * 1024 * 1024) {
-        toast.error(`${file.name}: ファイルサイズは10MB以下にしてください`);
+        toast.error(`${file.name}は10MBを超えています`);
         return;
       }
 
       // 画像ファイルかチェック
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name}: 画像ファイルを選択してください`);
+      if (!file.type.startsWith("image/")) {
+        toast.error(`${file.name}は画像ファイルではありません`);
         return;
       }
 
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        try {
-          const result = await uploadImageMutation.mutateAsync({
-            imageBase64: base64,
-            fileName: file.name,
-            companyName,
-          });
-          uploadedPhotos.push(result);
-          processedCount++;
-
-          // 全てのファイルの処理が完了したら
-          if (processedCount === files.length) {
-            setMultiplePhotos(uploadedPhotos.sort((a, b) => (b.score || 0) - (a.score || 0)));
-            if (uploadedPhotos.length > 0) {
-              setSelectedImage(uploadedPhotos[0]);
-              setAnalysis(uploadedPhotos[0].analysis);
-              setContents(null);
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        
+        uploadImageMutation.mutate({
+          imageBase64: base64String,
+          fileName: file.name,
+          companyName,
+        }, {
+          onSuccess: (data) => {
+            uploadedPhotos.push(data);
+            processedCount++;
+            
+            if (processedCount === files.length) {
+              setMultiplePhotos(uploadedPhotos);
+              if (uploadedPhotos.length > 0) {
+                setSelectedImage(uploadedPhotos[0]);
+                setAnalysis(uploadedPhotos[0].analysis);
+              }
+              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
             }
-            toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
-          }
-        } catch (error) {
-          toast.error(`${file.name}: アップロードに失敗しました`);
-        }
+          },
+        });
       };
       reader.readAsDataURL(file);
     });
   };
 
-  const handleFetchAndAnalyze = () => {
-    fetchPhotoMutation.mutate();
-  };
-
-  const handleFetchMultiple = () => {
-    fetchMultiplePhotosMutation.mutate({ count: photoCount });
-  };
-
-  const handleGenerateAll = async () => {
+  const handleGenerateAllContents = () => {
     if (!analysis) {
       toast.error("まず写真を取得してください");
       return;
@@ -161,9 +183,67 @@ export default function Demo() {
     });
   };
 
+  const handleGenerateIndividualComments = () => {
+    if (multiplePhotos.length === 0) {
+      toast.error("複数の写真をアップロードしてください");
+      return;
+    }
+
+    const imageAnalyses = multiplePhotos.map(photo => photo.analysis);
+    
+    generateIndividualCommentsMutation.mutate({
+      companyName,
+      platform: "instagram",
+      imageAnalyses,
+    });
+  };
+
+  const handleGenerateCarouselPost = () => {
+    if (multiplePhotos.length < 2) {
+      toast.error("カルーセル投稿には2枚以上の写真が必要です");
+      return;
+    }
+
+    const imageAnalyses = multiplePhotos.map(photo => photo.analysis);
+    
+    generateCarouselPostMutation.mutate({
+      companyName,
+      platform: "instagram",
+      imageAnalyses,
+    });
+  };
+
+  const copyToClipboard = async (text: string, platform: string, imageUrl?: string) => {
+    try {
+      if (imageUrl && navigator.clipboard.write) {
+        // 画像と投稿文を一緒にコピー
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const clipboardItem = new ClipboardItem({
+          [blob.type]: blob,
+          "text/plain": new Blob([text], { type: "text/plain" }),
+        });
+        await navigator.clipboard.write([clipboardItem]);
+        toast.success(`${platform}の投稿文と写真をコピーしました`);
+      } else {
+        // 投稿文のみコピー
+        await navigator.clipboard.writeText(text);
+        toast.success(`${platform}の投稿文をコピーしました`);
+      }
+      setCopiedPlatform(platform);
+      setTimeout(() => setCopiedPlatform(null), 2000);
+    } catch (error) {
+      // フォールバック: 投稿文のみコピー
+      await navigator.clipboard.writeText(text);
+      toast.success(`${platform}の投稿文をコピーしました`);
+      setCopiedPlatform(platform);
+      setTimeout(() => setCopiedPlatform(null), 2000);
+    }
+  };
+
   const handleSavePost = () => {
-    if (!selectedImage || !analysis || !contents) {
-      toast.error("写真と投稿文を生成してから保存してください");
+    if (!selectedImage || !contents) {
+      toast.error("投稿を生成してから保存してください");
       return;
     }
 
@@ -178,98 +258,68 @@ export default function Demo() {
     });
   };
 
-  const handleCopyContent = (platform: string, content: string) => {
-    navigator.clipboard.writeText(content);
-    setCopiedPlatform(platform);
-    toast.success(`${platform}の投稿文をコピーしました`);
-    setTimeout(() => setCopiedPlatform(null), 2000);
-  };
+  const renderPostContent = (platform: string, content: any, icon: any) => {
+    const fullText = `${content.caption}\n\n${content.hashtags.map((tag: string) => `#${tag}`).join(" ")}`;
+    const Icon = icon;
 
-  // 写真をダウンロードする関数
-  const handleDownloadImage = async () => {
-    if (!selectedImage) return;
-
-    try {
-      const response = await fetch(selectedImage.photo.url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${companyName}_${new Date().getTime()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success("写真をダウンロードしました");
-    } catch (error) {
-      toast.error("写真のダウンロードに失敗しました");
-    }
-  };
-
-  // 写真と投稿文を一括コピーする関数
-  const handleCopyWithImage = async (platform: string, content: string) => {
-    if (!selectedImage) {
-      toast.error("写真が選択されていません");
-      return;
-    }
-
-    try {
-      // 画像をBlobとして取得
-      const response = await fetch(selectedImage.photo.url);
-      const blob = await response.blob();
-
-      // ClipboardItemを使用して画像とテキストを一緒にコピー
-      const clipboardItem = new ClipboardItem({
-        'image/jpeg': blob,
-        'text/plain': new Blob([content], { type: 'text/plain' }),
-      });
-
-      await navigator.clipboard.write([clipboardItem]);
-      setCopiedPlatform(platform);
-      toast.success(`${platform}の投稿文と写真をコピーしました`);
-      setTimeout(() => setCopiedPlatform(null), 2000);
-    } catch (error) {
-      // フォールバック: テキストのみコピー
-      navigator.clipboard.writeText(content);
-      toast.info(`投稿文のみコピーしました（写真は手動でダウンロードしてください）`);
-    }
-  };
-
-  const handleSelectPhoto = (photo: any) => {
-    setSelectedImage(photo);
-    setAnalysis(photo.analysis);
-    setContents(null);
-  };
-
-  const isLoading = uploadImageMutation.isPending || fetchPhotoMutation.isPending || 
-                    generateAllContentsMutation.isPending || savePostMutation.isPending || 
-                    fetchMultiplePhotosMutation.isPending;
-
-  const getPlatformIcon = (platform: string) => {
-    switch (platform) {
-      case "instagram":
-        return <Instagram className="h-4 w-4" />;
-      case "x":
-        return <Twitter className="h-4 w-4" />;
-      case "threads":
-        return <MessageSquare className="h-4 w-4" />;
-      default:
-        return null;
-    }
+    return (
+      <Card key={platform}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon className="h-5 w-5" />
+            {platform === "instagram" ? "Instagram" : platform === "x" ? "X (Twitter)" : "Threads"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label className="text-sm font-semibold">投稿文</Label>
+            <p className="mt-2 text-sm whitespace-pre-wrap">{content.caption}</p>
+          </div>
+          <div>
+            <Label className="text-sm font-semibold">ハッシュタグ</Label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {content.hashtags.map((tag: string, index: number) => (
+                <Badge key={index} variant="secondary">
+                  #{tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => copyToClipboard(fullText, platform, selectedImage?.photo?.url)}
+              className="flex-1"
+            >
+              {copiedPlatform === platform ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  コピー済み
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  写真と投稿文を一括コピー
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* ヘッダー */}
         <div>
-          <h1 className="text-3xl font-bold">SNS投稿自動生成デモ</h1>
+          <h1 className="text-3xl font-bold">AI投稿文生成デモ</h1>
           <p className="text-muted-foreground mt-2">
-            写真をアップロードまたはGoogle フォトから取得し、AIが自動で各SNSに最適化された投稿文を生成します
+            写真をアップロードまたはGoogle フォトから取得し、AIが自動で投稿文を生成します
           </p>
         </div>
 
-        {/* 会社選択 */}
         <Card>
           <CardHeader>
             <CardTitle>会社選択</CardTitle>
@@ -277,161 +327,108 @@ export default function Demo() {
           </CardHeader>
           <CardContent>
             <Select value={companyName} onValueChange={(value: any) => setCompanyName(value)}>
-              <SelectTrigger className="w-full md:w-[300px]">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ハゼモト建設">ハゼモト建設</SelectItem>
-                <SelectItem value="クリニックアーキプロ">クリニックアーキプロ</SelectItem>
+                <SelectItem value="ハゼモト建設">ハゼモト建設（住宅購入検討者向け）</SelectItem>
+                <SelectItem value="クリニックアーキプロ">クリニックアーキプロ（医療関係者向け）</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
         </Card>
 
-        {/* アクションボタン */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">写真をアップロード</CardTitle>
-              <CardDescription>手動で写真を選択</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileUpload}
-                  disabled={isLoading}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  disabled={isLoading}
-                  size="lg"
-                  className="w-full"
-                >
-                  {uploadImageMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      アップロード中...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      写真を選択
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  10MB以下のJPG、PNG画像
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">1枚の写真を取得</CardTitle>
-              <CardDescription>Google フォトから自動取得</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <Card>
+          <CardHeader>
+            <CardTitle>写真の取得</CardTitle>
+            <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="file-upload">写真を選択（最大5枚）</Label>
+              <Input
+                id="file-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileUpload}
+                disabled={uploadImageMutation.isPending}
+                className="mt-2"
+              />
+            </div>
+            <div className="flex gap-2">
               <Button
-                onClick={handleFetchAndAnalyze}
-                disabled={isLoading}
-                size="lg"
-                className="w-full"
+                onClick={() => fetchPhotoMutation.mutate()}
+                disabled={fetchPhotoMutation.isPending}
                 variant="outline"
+                className="flex-1"
               >
                 {fetchPhotoMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    取得・分析中...
+                    取得中...
                   </>
                 ) : (
                   <>
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    写真を取得 & AI分析
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Google フォトから1枚取得
                   </>
                 )}
               </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">複数写真を比較</CardTitle>
-              <CardDescription>Google フォトから複数取得</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="photoCount">取得枚数</Label>
-                <Input
-                  id="photoCount"
-                  type="number"
-                  min="2"
-                  max="10"
-                  value={photoCount}
-                  onChange={(e) => setPhotoCount(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
               <Button
-                onClick={handleFetchMultiple}
-                disabled={isLoading}
-                size="lg"
-                className="w-full"
+                onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
+                disabled={fetchMultiplePhotosMutation.isPending}
                 variant="outline"
+                className="flex-1"
               >
                 {fetchMultiplePhotosMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    取得・分析中...
+                    取得中...
                   </>
                 ) : (
                   <>
                     <ImageIcon className="mr-2 h-4 w-4" />
-                    {photoCount}枚の写真を取得 & 比較
+                    {photoCount}枚取得 & AI分析
                   </>
                 )}
               </Button>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* 複数写真の表示 */}
         {multiplePhotos.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>写真の比較（スコア順）</CardTitle>
-              <CardDescription>
-                AIが各写真を評価しました。クリックして選択してください
-              </CardDescription>
+              <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>
+              <CardDescription>AIがスコア付けした結果です</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {multiplePhotos.map((photo, index) => (
                   <div
                     key={index}
-                    onClick={() => handleSelectPhoto(photo)}
-                    className={`cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${
-                      selectedImage === photo ? "border-primary shadow-lg" : "border-transparent hover:border-gray-300"
+                    className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
+                      selectedImage?.photo?.id === photo.photo.id ? "border-primary" : "border-transparent"
                     }`}
+                    onClick={() => {
+                      setSelectedImage(photo);
+                      setAnalysis(photo.analysis);
+                    }}
                   >
                     <img
                       src={photo.photo.url}
-                      alt={`Photo ${index + 1}`}
+                      alt={`写真 ${index + 1}`}
                       className="w-full h-32 object-cover"
                     />
-                    <div className="p-2 bg-background">
-                      <Badge variant={index === 0 ? "default" : "secondary"}>
-                        スコア: {photo.score ? photo.score.toFixed(1) : 'N/A'}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {photo.analysis.category}
-                      </p>
+                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
+                      スコア: {photo.score?.toFixed(1) || 'N/A'}
                     </div>
+                    {selectedImage?.photo?.id === photo.photo.id && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <Check className="h-8 w-8 text-primary-foreground" />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -439,207 +436,261 @@ export default function Demo() {
           </Card>
         )}
 
-        {/* 選択された写真の表示 */}
         {selectedImage && (
           <Card>
             <CardHeader>
               <CardTitle>選択された写真</CardTitle>
-              <CardDescription>
-                この写真で投稿文を生成します
-              </CardDescription>
+              <CardDescription>AI分析結果</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="relative w-full max-w-2xl mx-auto">
+              <div className="flex justify-center">
                 <img
                   src={selectedImage.photo.url}
                   alt="Selected"
-                  className="w-full h-auto rounded-lg shadow-lg"
+                  className="max-w-full max-h-96 object-contain rounded-lg"
                 />
               </div>
-              <div className="flex gap-2 justify-center">
-                <Button onClick={handleDownloadImage} variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  写真をダウンロード
+              {analysis && (
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-sm font-semibold">カテゴリー</Label>
+                    <p className="text-sm">{analysis.category}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">スタイル</Label>
+                    <p className="text-sm">{analysis.style}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">説明</Label>
+                    <p className="text-sm">{analysis.description}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold">キーワード</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {analysis.keywords.map((keyword: string, index: number) => (
+                        <Badge key={index} variant="outline">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleGenerateAllContents}
+                  disabled={generateAllContentsMutation.isPending}
+                  className="flex-1"
+                >
+                  {generateAllContentsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    "全SNSの投稿文を生成"
+                  )}
                 </Button>
+                <a href={selectedImage.photo.url} download className="flex-shrink-0">
+                  <Button variant="outline" size="icon">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </a>
               </div>
+              {multiplePhotos.length >= 2 && (
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    onClick={handleGenerateIndividualComments}
+                    disabled={generateIndividualCommentsMutation.isPending}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    {generateIndividualCommentsMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      "写真ごとの個別コメント生成"
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleGenerateCarouselPost}
+                    disabled={generateCarouselPostMutation.isPending}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    {generateCarouselPostMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      "カルーセル投稿を生成"
+                    )}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* AI分析結果 */}
-        {analysis && (
-          <Card>
-            <CardHeader>
-              <CardTitle>AI分析結果</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">カテゴリー</Label>
-                  <p className="font-medium">{analysis.category}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">スタイル</Label>
-                  <p className="font-medium">{analysis.style}</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">説明</Label>
-                <p className="text-sm">{analysis.description}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">キーワード</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {analysis.keywords.map((keyword: string, index: number) => (
-                    <Badge key={index} variant="secondary">{keyword}</Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {viewMode === "single" && contents && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">生成された投稿文</h2>
+              <Badge variant="outline">単一投稿モード</Badge>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              {renderPostContent("instagram", contents.instagram, Instagram)}
+              {renderPostContent("x", contents.x, Twitter)}
+              {renderPostContent("threads", contents.threads, MessageSquare)}
+            </div>
+          </div>
         )}
 
-        <div className="flex flex-wrap gap-4">
-          <Button
-            onClick={handleGenerateAll}
-            disabled={!analysis || isLoading}
-            size="lg"
-            className="flex-1 min-w-[200px]"
-          >
-            {generateAllContentsMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                生成中...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                全SNSの投稿文を生成
-              </>
-            )}
-          </Button>
-
-          <Button
-            onClick={handleSavePost}
-            disabled={!contents || isLoading}
-            size="lg"
-            variant="outline"
-            className="flex-1 min-w-[200px]"
-          >
-            {savePostMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                投稿を保存
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* 投稿予約日時 */}
-        {contents && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">投稿予約（オプション）</CardTitle>
-              <CardDescription>
-                特定の日時に投稿を予約する場合は日時を選択してください
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4 items-end">
-                <div className="flex-1">
-                  <Label htmlFor="scheduledDate">予約日時</Label>
-                  <Input
-                    id="scheduledDate"
-                    type="datetime-local"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 生成された投稿文 */}
-        {contents && (
-          <Card>
-            <CardHeader>
-              <CardTitle>生成された投稿文</CardTitle>
-              <CardDescription>
-                各プラットフォームに最適化された投稿文とハッシュタグが生成されました
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="instagram" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="instagram">
-                    <Instagram className="mr-2 h-4 w-4" />
-                    Instagram
-                  </TabsTrigger>
-                  <TabsTrigger value="x">
-                    <Twitter className="mr-2 h-4 w-4" />
-                    X
-                  </TabsTrigger>
-                  <TabsTrigger value="threads">
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Threads
-                  </TabsTrigger>
-                </TabsList>
-
-                {["instagram", "x", "threads"].map((platform) => (
-                  <TabsContent key={platform} value={platform} className="space-y-4">
-                    <div className="bg-muted/50 p-4 rounded-lg">
-                      <p className="whitespace-pre-wrap mb-3">
-                        {contents[platform].caption}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {contents[platform].hashtags.map((tag: string, index: number) => (
-                          <Badge key={index} variant="secondary">
+        {viewMode === "individual" && individualComments && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">写真ごとの個別コメント</h2>
+              <Badge variant="outline">個別コメントモード</Badge>
+            </div>
+            <div className="space-y-6">
+              {individualComments.map((comment: any, index: number) => (
+                <Card key={index}>
+                  <CardHeader>
+                    <CardTitle>写真 {index + 1} のコメント</CardTitle>
+                    {multiplePhotos[index] && (
+                      <img
+                        src={multiplePhotos[index].photo.url}
+                        alt={`写真 ${index + 1}`}
+                        className="w-full h-48 object-cover rounded-lg mt-2"
+                      />
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-semibold">投稿文</Label>
+                      <p className="mt-2 text-sm whitespace-pre-wrap">{comment.caption}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-semibold">ハッシュタグ</Label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {comment.hashtags.map((tag: string, tagIndex: number) => (
+                          <Badge key={tagIndex} variant="secondary">
                             #{tag}
                           </Badge>
                         ))}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleCopyContent(
-                          platform,
-                          `${contents[platform].caption}\n\n${contents[platform].hashtags.map((t: string) => `#${t}`).join(" ")}`
-                        )}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        {copiedPlatform === platform ? (
-                          <>
-                            <Check className="mr-2 h-4 w-4" />
-                            コピー済み
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="mr-2 h-4 w-4" />
-                            投稿文をコピー
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        onClick={() => handleCopyWithImage(
-                          platform,
-                          `${contents[platform].caption}\n\n${contents[platform].hashtags.map((t: string) => `#${t}`).join(" ")}`
-                        )}
-                        className="flex-1"
-                      >
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        写真と投稿文を一括コピー
-                      </Button>
-                    </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const fullText = `${comment.caption}\n\n${comment.hashtags.map((tag: string) => `#${tag}`).join(" ")}`;
+                        copyToClipboard(fullText, `photo-${index}`, multiplePhotos[index]?.photo?.url);
+                      }}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      写真と投稿文をコピー
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {viewMode === "carousel" && carouselPost && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">カルーセル投稿</h2>
+              <Badge variant="outline">カルーセルモード</Badge>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Instagram className="h-5 w-5" />
+                  Instagram カルーセル投稿
+                </CardTitle>
+                <CardDescription>{multiplePhotos.length}枚の写真をまとめた投稿</CardDescription>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mt-4">
+                  {multiplePhotos.map((photo, index) => (
+                    <img
+                      key={index}
+                      src={photo.photo.url}
+                      alt={`写真 ${index + 1}`}
+                      className="w-full h-24 object-cover rounded"
+                    />
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-sm font-semibold">投稿文</Label>
+                  <p className="mt-2 text-sm whitespace-pre-wrap">{carouselPost.caption}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">ハッシュタグ</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {carouselPost.hashtags.map((tag: string, index: number) => (
+                      <Badge key={index} variant="secondary">
+                        #{tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const fullText = `${carouselPost.caption}\n\n${carouselPost.hashtags.map((tag: string) => `#${tag}`).join(" ")}`;
+                    copyToClipboard(fullText, "carousel");
+                  }}
+                  className="w-full"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  投稿文をコピー
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {contents && (
+          <Card>
+            <CardHeader>
+              <CardTitle>投稿の保存</CardTitle>
+              <CardDescription>投稿履歴に保存したり、スケジュール予約ができます</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="scheduled-date">投稿予定日時（オプション）</Label>
+                <Input
+                  id="scheduled-date"
+                  type="datetime-local"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="mt-2"
+                />
+              </div>
+              <Button
+                onClick={handleSavePost}
+                disabled={savePostMutation.isPending}
+                className="w-full"
+              >
+                {savePostMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    投稿を保存
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
         )}

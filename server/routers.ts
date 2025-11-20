@@ -511,6 +511,58 @@ export const appRouter = router({
         return await db.getPostSchedulesByUserId(ctx.user.id);
       }),
 
+    // 写真ごとの個別コメントを生成
+    generateIndividualComments: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        platform: z.enum(["instagram", "x", "threads"]),
+        imageAnalyses: z.array(z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateIndividualComment } = await import("./ai-service");
+        const individualComments = [];
+
+        for (const analysis of input.imageAnalyses) {
+          const comment = await generateIndividualComment(
+            analysis,
+            input.companyName,
+            input.platform
+          );
+          individualComments.push(comment);
+        }
+
+        return individualComments;
+      }),
+
+    // 複数枚まとめたカルーセル投稿を生成
+    generateCarouselPost: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        platform: z.enum(["instagram", "x", "threads"]),
+        imageAnalyses: z.array(z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateCarouselPost } = await import("./ai-service");
+        
+        const carouselPost = await generateCarouselPost(
+          input.imageAnalyses,
+          input.companyName,
+          input.platform
+        );
+
+        return carouselPost;
+      }),
+
     // 複数写真を取得して分析
     getMultiplePhotosWithAnalysis: protectedProcedure
       .input(z.object({

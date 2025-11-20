@@ -212,6 +212,163 @@ export interface GenerateReplyParams {
   companyName: "ハゼモト建設" | "クリニックアーキプロ";
 }
 
+/**
+ * 写真ごとの個別コメントを生成する
+ */
+export async function generateIndividualComment(
+  imageAnalysis: ImageAnalysis,
+  companyName: string,
+  platform: "instagram" | "x" | "threads"
+): Promise<{ caption: string; hashtags: string[] }> {
+  const targetAudience = companyName === "ハゼモト建設" 
+    ? {
+        name: "住宅購入検討者（一般ユーザー）",
+        tone: "親しみやすく、共感を呼ぶ温かい表現",
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
+      }
+    : {
+        name: "医療関係者（医師、クリニック経営者）",
+        tone: "専門的で信頼感のある表現",
+        keywords: ["患者様体験", "医療環境", "機能性"]
+      };
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: `あなたは${companyName}のSNSマーケティング担当者です。
+ターゲット: ${targetAudience.name}
+トーン: ${targetAudience.tone}
+
+この1枚の写真に焦点を当てた、簡潔で魅力的な投稿を作成してください。`,
+      },
+      {
+        role: "user",
+        content: `以下の画像分析結果に基づいて、${platform}向けの個別投稿を作成してください。
+
+画像分析結果:
+- カテゴリー: ${imageAnalysis.category}
+- スタイル: ${imageAnalysis.style}
+- 説明: ${imageAnalysis.description}
+- キーワード: ${imageAnalysis.keywords.join(", ")}
+
+文章は100-150文字程度で、ハッシュタグは5-10個程度にしてください。`,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "individual_comment",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            caption: {
+              type: "string",
+              description: "投稿の本文（ハッシュタグを含まない）",
+            },
+            hashtags: {
+              type: "array",
+              items: { type: "string" },
+              description: "ハッシュタグのリスト（#を含まない）",
+            },
+          },
+          required: ["caption", "hashtags"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content || typeof content !== 'string') {
+    throw new Error("AI content generation returned empty content");
+  }
+
+  return JSON.parse(content);
+}
+
+/**
+ * 複数の写真をまとめた投稿文を生成する
+ */
+export async function generateCarouselPost(
+  imageAnalyses: ImageAnalysis[],
+  companyName: string,
+  platform: "instagram" | "x" | "threads"
+): Promise<{ caption: string; hashtags: string[] }> {
+  const targetAudience = companyName === "ハゼモト建設" 
+    ? {
+        name: "住宅購入検討者（一般ユーザー）",
+        tone: "親しみやすく、共感を呼ぶ温かい表現",
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
+      }
+    : {
+        name: "医療関係者（医師、クリニック経営者）",
+        tone: "専門的で信頼感のある表現",
+        keywords: ["患者様体験", "医療環境", "機能性"]
+      };
+
+  const imagesDescription = imageAnalyses.map((analysis, index) => 
+    `写真${index + 1}: ${analysis.category} - ${analysis.description} (スタイル: ${analysis.style})`
+  ).join("\n");
+
+  const allKeywords = [...new Set(imageAnalyses.flatMap(a => a.keywords))];
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: `あなたは${companyName}のSNSマーケティング担当者です。
+ターゲット: ${targetAudience.name}
+トーン: ${targetAudience.tone}
+
+複数の写真を一つのストーリーとして繋げ、Instagramカルーセル投稿に最適な魅力的な投稿を作成してください。`,
+      },
+      {
+        role: "user",
+        content: `以下の${imageAnalyses.length}枚の写真分析結果に基づいて、${platform}向けのカルーセル投稿を作成してください。
+
+${imagesDescription}
+
+共通キーワード: ${allKeywords.join(", ")}
+
+複数の写真を統一したストーリーを語り、各写真の魅力を引き出す文章を作成してください。
+文章は200-300文字程度で、ハッシュタグは15-20個程度にしてください。`,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "carousel_post",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            caption: {
+              type: "string",
+              description: "投稿の本文（ハッシュタグを含まない）",
+            },
+            hashtags: {
+              type: "array",
+              items: { type: "string" },
+              description: "ハッシュタグのリスト（#を含まない）",
+            },
+          },
+          required: ["caption", "hashtags"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content || typeof content !== 'string') {
+    throw new Error("AI content generation returned empty content");
+  }
+
+  return JSON.parse(content);
+}
+
 export async function generateCommentReply(
   params: GenerateReplyParams
 ): Promise<string> {
