@@ -5,6 +5,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import * as aiService from "./ai-service";
+import { storagePut } from "./storage";
+import { analyzeImage } from "./ai-service";
 
 export const appRouter = router({
   system: systemRouter,
@@ -347,6 +349,34 @@ export const appRouter = router({
 
   // デモ機能
   demo: router({
+    uploadAndAnalyzeImage: protectedProcedure
+      .input(z.object({
+        imageBase64: z.string(),
+        fileName: z.string(),
+        companyName: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { imageBase64, fileName, companyName } = input;
+
+        // Base64をBufferに変換
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        // S3にアップロード
+        const fileKey = `${ctx.user.id}-uploads/${Date.now()}-${fileName}`;
+        const { url: imageUrl } = await storagePut(fileKey, buffer, 'image/jpeg');
+
+        // AI画像分析
+        const analysis = await analyzeImage(imageUrl, companyName);
+
+        return {
+          photo: {
+            url: imageUrl,
+            id: fileKey,
+          },
+          analysis,
+        };
+      }),
     // ランダムな竣工写真を取得してAI分析
     getRandomPhotoWithAnalysis: protectedProcedure
       .mutation(async () => {

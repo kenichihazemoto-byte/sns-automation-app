@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download } from "lucide-react";
+import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,19 @@ export default function Demo() {
   const [multiplePhotos, setMultiplePhotos] = useState<any[]>([]);
 
   const utils = trpc.useUtils();
+
+  const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
+    onSuccess: (data) => {
+      setSelectedImage(data);
+      setAnalysis(data.analysis);
+      setContents(null);
+      setMultiplePhotos([]);
+      toast.success("写真をアップロードし、AI分析が完了しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
 
   const fetchPhotoMutation = trpc.demo.getRandomPhotoWithAnalysis.useMutation({
     onSuccess: (data) => {
@@ -71,6 +84,34 @@ export default function Demo() {
       toast.error(`保存エラー: ${error.message}`);
     },
   });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // ファイルサイズチェック（10MB制限）
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("ファイルサイズは10MB以下にしてください");
+      return;
+    }
+
+    // 画像ファイルかチェック
+    if (!file.type.startsWith('image/')) {
+      toast.error("画像ファイルを選択してください");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      uploadImageMutation.mutate({
+        imageBase64: base64,
+        fileName: file.name,
+        companyName,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleFetchAndAnalyze = () => {
     fetchPhotoMutation.mutate();
@@ -172,8 +213,9 @@ export default function Demo() {
     setContents(null);
   };
 
-  const isLoading = fetchPhotoMutation.isPending || generateAllContentsMutation.isPending || 
-                    savePostMutation.isPending || fetchMultiplePhotosMutation.isPending;
+  const isLoading = uploadImageMutation.isPending || fetchPhotoMutation.isPending || 
+                    generateAllContentsMutation.isPending || savePostMutation.isPending || 
+                    fetchMultiplePhotosMutation.isPending;
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
@@ -195,7 +237,7 @@ export default function Demo() {
         <div>
           <h1 className="text-3xl font-bold">SNS投稿自動生成デモ</h1>
           <p className="text-muted-foreground mt-2">
-            Google フォトから竣工写真を取得し、AIが自動で各SNSに最適化された投稿文を生成します
+            写真をアップロードまたはGoogle フォトから取得し、AIが自動で各SNSに最適化された投稿文を生成します
           </p>
         </div>
 
@@ -219,10 +261,51 @@ export default function Demo() {
         </Card>
 
         {/* アクションボタン */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">写真をアップロード</CardTitle>
+              <CardDescription>手動で写真を選択</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Input
+                  id="file-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={isLoading}
+                  className="hidden"
+                />
+                <Button
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  disabled={isLoading}
+                  size="lg"
+                  className="w-full"
+                >
+                  {uploadImageMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      アップロード中...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      写真を選択
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  10MB以下のJPG、PNG画像
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">1枚の写真を取得</CardTitle>
+              <CardDescription>Google フォトから自動取得</CardDescription>
             </CardHeader>
             <CardContent>
               <Button
@@ -230,6 +313,7 @@ export default function Demo() {
                 disabled={isLoading}
                 size="lg"
                 className="w-full"
+                variant="outline"
               >
                 {fetchPhotoMutation.isPending ? (
                   <>
@@ -249,6 +333,7 @@ export default function Demo() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">複数写真を比較</CardTitle>
+              <CardDescription>Google フォトから複数取得</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
