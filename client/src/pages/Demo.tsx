@@ -129,7 +129,7 @@ export default function Demo() {
     },
   });
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -139,48 +139,66 @@ export default function Demo() {
       return;
     }
 
-    const uploadedPhotos: any[] = [];
-    let processedCount = 0;
+    toast.info(`${files.length}枚の写真をアップロード中...`);
 
-    Array.from(files).forEach((file) => {
+    const uploadedPhotos: any[] = [];
+
+    for (const file of Array.from(files)) {
       // ファイルサイズチェック (10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name}は10MBを超えています`);
-        return;
+        continue;
       }
 
       // 画像ファイルかチェック
       if (!file.type.startsWith("image/")) {
         toast.error(`${file.name}は画像ファイルではありません`);
-        return;
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        
-        uploadImageMutation.mutate({
-          imageBase64: base64String,
-          fileName: file.name,
-          companyName,
-        }, {
-          onSuccess: (data) => {
-            uploadedPhotos.push(data);
-            processedCount++;
-            
-            if (processedCount === files.length) {
-              setMultiplePhotos(uploadedPhotos);
-              if (uploadedPhotos.length > 0) {
-                setSelectedImage(uploadedPhotos[0]);
-                setAnalysis(uploadedPhotos[0].analysis);
-              }
-              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
-            }
-          },
+      try {
+        const base64String = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
-      };
-      reader.readAsDataURL(file);
-    });
+
+        const data = await new Promise<any>((resolve, reject) => {
+          uploadImageMutation.mutate(
+            {
+              imageBase64: base64String,
+              fileName: file.name,
+              companyName,
+            },
+            {
+              onSuccess: resolve,
+              onError: reject,
+            }
+          );
+        });
+
+        uploadedPhotos.push(data);
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        toast.error(`${file.name}のアップロードに失敗しました`);
+      }
+    }
+
+    if (uploadedPhotos.length > 0) {
+      setMultiplePhotos(uploadedPhotos);
+      setSelectedImage(uploadedPhotos[0]);
+      setAnalysis(uploadedPhotos[0].analysis);
+      setContents(null);
+      setIndividualComments(null);
+      setCarouselPost(null);
+      toast.success(`${uploadedPhotos.length}枚の写真をアップロードし、AI分析が完了しました`);
+    } else {
+      toast.error("写真のアップロードに失敗しました");
+    }
+
+    // ファイル入力をリセット
+    event.target.value = '';
   };
 
   const handleGenerateAllContents = () => {
