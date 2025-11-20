@@ -426,7 +426,7 @@ export default function Demo() {
                     />
                     <div className="p-2 bg-background">
                       <Badge variant={index === 0 ? "default" : "secondary"}>
-                        スコア: {photo.score.toFixed(1)}
+                        スコア: {photo.score ? photo.score.toFixed(1) : 'N/A'}
                       </Badge>
                       <p className="text-xs text-muted-foreground mt-1">
                         {photo.analysis.category}
