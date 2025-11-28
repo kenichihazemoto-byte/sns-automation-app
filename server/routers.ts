@@ -745,6 +745,24 @@ export const appRouter = router({
         };
       }),
   }),
+
+  // Scheduler Management
+  scheduler: router({
+    listScheduledPosts: protectedProcedure.query(async ({ ctx }) => {
+      const schedulerService = await import('./scheduler-service');
+      return await schedulerService.listScheduledPosts(ctx.user.id);
+    }),
+
+    updateScheduledPost: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        scheduledAt: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const schedulerService = await import('./scheduler-service');
+        return await schedulerService.updateScheduledPost(input.id, input.scheduledAt);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -288,3 +288,62 @@ export const CronExpressions = {
   // 毎時0分
   HOURLY: '0 * * * *',
 };
+
+/**
+ * スケジュールされた投稿を更新
+ */
+export async function updateScheduledPost(scheduleId: number, scheduledAt: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error('Database not available');
+  }
+
+  await db
+    .update(postSchedules)
+    .set({
+      scheduledAt: new Date(scheduledAt),
+      updatedAt: new Date(),
+    })
+    .where(eq(postSchedules.id, scheduleId));
+
+  return { success: true };
+}
+
+/**
+ * スケジュールされた投稿の一覧を取得
+ */
+export async function listScheduledPosts(userId?: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error('Database not available');
+  }
+
+  const conditions = userId ? eq(postSchedules.userId, userId) : undefined;
+
+  const schedules = await db
+    .select({
+      id: postSchedules.id,
+      userId: postSchedules.userId,
+      companyName: postSchedules.companyName,
+      scheduledAt: postSchedules.scheduledAt,
+      status: postSchedules.status,
+      createdAt: postSchedules.createdAt,
+      platform: postContents.platform,
+      caption: postContents.caption,
+      hashtags: postContents.hashtags,
+    })
+    .from(postSchedules)
+    .leftJoin(postContents, eq(postSchedules.id, postContents.postScheduleId))
+    .where(conditions)
+    .orderBy(postSchedules.scheduledAt);
+
+  return schedules.map((schedule) => ({
+    id: schedule.id,
+    platform: schedule.platform || 'instagram',
+    companyName: schedule.companyName || '不明',
+    content: schedule.caption || '',
+    scheduledAt: schedule.scheduledAt.toISOString(),
+    status: schedule.status,
+    createdAt: schedule.createdAt.toISOString(),
+  }));
+}
