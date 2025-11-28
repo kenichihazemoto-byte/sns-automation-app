@@ -28,6 +28,7 @@ export default function Demo() {
   const [useTemplate, setUseTemplate] = useState<boolean>(false);
 
   const utils = trpc.useUtils();
+  const { data: customTemplates } = trpc.customTemplates.list.useQuery();
 
   const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
     onSuccess: (data) => {
@@ -254,17 +255,40 @@ export default function Demo() {
         const platforms = ["instagram", "x", "threads"] as const;
         const templateContents: any = {};
 
-        for (const platform of platforms) {
-          const result = await generatePostFromTemplateMutation.mutateAsync({
-            templateId: selectedTemplate,
-            platform,
-            imageAnalysis: analysis,
-          });
+        // カスタムテンプレートかデフォルトテンプレートかを判定
+        const isCustomTemplate = selectedTemplate.startsWith("custom-");
+        
+        if (isCustomTemplate) {
+          // カスタムテンプレートを使用
+          const templateId = parseInt(selectedTemplate.replace("custom-", ""));
+          const generateCustomPostMutation = trpc.customTemplates.generatePost.useMutation();
+          
+          for (const platform of platforms) {
+            const result = await generateCustomPostMutation.mutateAsync({
+              templateId,
+              platform,
+              imageAnalysis: analysis,
+            });
 
-          templateContents[platform] = {
-            caption: result.content,
-            hashtags: result.hashtags.split(", "),
-          };
+            templateContents[platform] = {
+              caption: result.content,
+              hashtags: result.hashtags.split(", "),
+            };
+          }
+        } else {
+          // デフォルトテンプレートを使用
+          for (const platform of platforms) {
+            const result = await generatePostFromTemplateMutation.mutateAsync({
+              templateId: selectedTemplate,
+              platform,
+              imageAnalysis: analysis,
+            });
+
+            templateContents[platform] = {
+              caption: result.content,
+              hashtags: result.hashtags.split(", "),
+            };
+          }
         }
 
         setContents(templateContents);
@@ -612,16 +636,32 @@ export default function Demo() {
                   <Label htmlFor="use-template">投稿テンプレートを使用</Label>
                 </div>
                 {useTemplate && (
-                  <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="テンプレートを選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new_construction">新築完成</SelectItem>
-                      <SelectItem value="renovation">リフォーム事例</SelectItem>
-                      <SelectItem value="open_house">見学会告知</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="テンプレートを選択" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div className="font-semibold px-2 py-1.5 text-sm text-muted-foreground">デフォルトテンプレート</div>
+                        <SelectItem value="new_construction">新築完成</SelectItem>
+                        <SelectItem value="renovation">リフォーム事例</SelectItem>
+                        <SelectItem value="open_house">見学会告知</SelectItem>
+                        {customTemplates && customTemplates.length > 0 && (
+                          <>
+                            <div className="font-semibold px-2 py-1.5 text-sm text-muted-foreground border-t mt-2 pt-2">カスタムテンプレート</div>
+                            {customTemplates.map((template) => (
+                              <SelectItem key={`custom-${template.id}`} value={`custom-${template.id}`}>
+                                {template.name}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground">
+                      テンプレートを編集するには<a href="/templates" className="underline">テンプレート管理ページ</a>へ
+                    </div>
+                  </div>
                 )}
               </div>
 

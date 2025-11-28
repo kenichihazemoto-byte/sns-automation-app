@@ -344,3 +344,70 @@ export async function updateCommentReply(id: number, replyContent: string): Prom
     repliedAt: new Date(),
   }).where(eq(comments.id, id));
 }
+
+
+// Custom Templates
+export async function getCustomTemplatesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { customTemplates } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  
+  return await db.select().from(customTemplates).where(eq(customTemplates.userId, userId));
+}
+
+export async function getCustomTemplateById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const { customTemplates } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  
+  const result = await db.select().from(customTemplates).where(eq(customTemplates.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createCustomTemplate(data: {
+  userId: number;
+  baseTemplateId?: string | null;
+  name: string;
+  description?: string | null;
+  structure: string;
+  hashtags: string;
+  targetAudience?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { customTemplates } = await import("../drizzle/schema");
+  
+  const result = await db.insert(customTemplates).values(data);
+  return result;
+}
+
+export async function updateCustomTemplate(id: number, data: {
+  name?: string;
+  description?: string | null;
+  structure?: string;
+  hashtags?: string;
+  targetAudience?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { customTemplates } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  
+  await db.update(customTemplates).set(data).where(eq(customTemplates.id, id));
+}
+
+export async function deleteCustomTemplate(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { customTemplates } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  
+  await db.delete(customTemplates).where(eq(customTemplates.id, id));
+}

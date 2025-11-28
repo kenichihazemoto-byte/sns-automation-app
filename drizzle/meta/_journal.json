@@ -43,6 +43,13 @@
       "when": 1763527780683,
       "tag": "0005_thin_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1764333448299,
+      "tag": "0006_adorable_havok",
+      "breakpoints": true
     }
   ]
 }

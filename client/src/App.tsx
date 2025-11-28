@@ -14,6 +14,7 @@ import Demo from "./pages/Demo";
 import PostHistory from "./pages/PostHistory";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
+import Templates from "./pages/Templates";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path={"/history"} component={PostHistory} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/help"} component={Help} />
+      <Route path={"/templates"} component={Templates} />
       <Route path={"/sns-accounts"} component={SnsAccounts} />
       <Route path={"/cloud-storage"} component={CloudStorage} />
       <Route path={"/calendar"} component={PostCalendar} />

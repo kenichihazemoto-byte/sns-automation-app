@@ -642,6 +642,109 @@ export const appRouter = router({
         return result;
       }),
   }),
+
+  // Custom Templates Management
+  customTemplates: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getCustomTemplatesByUserId(ctx.user.id);
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getCustomTemplateById(input.id);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        baseTemplateId: z.string().optional(),
+        name: z.string(),
+        description: z.string().optional(),
+        structure: z.object({
+          opening: z.string(),
+          body: z.string(),
+          cta: z.string(),
+        }),
+        hashtags: z.array(z.string()),
+        targetAudience: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.createCustomTemplate({
+          userId: ctx.user.id,
+          baseTemplateId: input.baseTemplateId || null,
+          name: input.name,
+          description: input.description || null,
+          structure: JSON.stringify(input.structure),
+          hashtags: input.hashtags.join(", "),
+          targetAudience: input.targetAudience || null,
+        });
+        return { success: true, id: result.insertId };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        structure: z.object({
+          opening: z.string(),
+          body: z.string(),
+          cta: z.string(),
+        }).optional(),
+        hashtags: z.array(z.string()).optional(),
+        targetAudience: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const updateData: any = {};
+        if (input.name) updateData.name = input.name;
+        if (input.description !== undefined) updateData.description = input.description || null;
+        if (input.structure) updateData.structure = JSON.stringify(input.structure);
+        if (input.hashtags) updateData.hashtags = input.hashtags.join(", ");
+        if (input.targetAudience !== undefined) updateData.targetAudience = input.targetAudience || null;
+
+        await db.updateCustomTemplate(input.id, updateData);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteCustomTemplate(input.id);
+        return { success: true };
+      }),
+
+    generatePost: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        imageAnalysis: z.object({
+          description: z.string(),
+          category: z.string(),
+          style: z.string(),
+          keywords: z.array(z.string()),
+          score: z.number(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const template = await db.getCustomTemplateById(input.templateId);
+        if (!template) {
+          throw new Error("テンプレートが見つかりません");
+        }
+
+        const structure = JSON.parse(template.structure);
+        const result = await aiService.generatePostFromTemplate({
+          templateStructure: structure,
+          imageAnalysis: input.imageAnalysis,
+          platform: input.platform,
+          companyName: template.targetAudience || "ハゼモト建設",
+        });
+
+        return {
+          content: result.content,
+          hashtags: template.hashtags,
+        };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

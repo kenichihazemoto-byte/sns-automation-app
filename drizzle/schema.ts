@@ -184,3 +184,23 @@ export const comments = mysqlTable("comments", {
 
 export type Comment = typeof comments.$inferSelect;
 export type InsertComment = typeof comments.$inferInsert;
+
+/**
+ * Custom templates table
+ * Stores user-customized post templates
+ */
+export const customTemplates = mysqlTable("custom_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  baseTemplateId: varchar("baseTemplateId", { length: 100 }), // null for completely custom templates
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  structure: text("structure").notNull(), // JSON: { opening, body, cta }
+  hashtags: text("hashtags").notNull(), // Comma-separated hashtags
+  targetAudience: text("targetAudience"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CustomTemplate = typeof customTemplates.$inferSelect;
+export type InsertCustomTemplate = typeof customTemplates.$inferInsert;
