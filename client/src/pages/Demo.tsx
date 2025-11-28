@@ -26,6 +26,10 @@ export default function Demo() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [useTemplate, setUseTemplate] = useState<boolean>(false);
+  const [beforeImage, setBeforeImage] = useState<any>(null);
+  const [afterImage, setAfterImage] = useState<any>(null);
+  const [beforeAfterPost, setBeforeAfterPost] = useState<any>(null);
+  const [isBeforeAfterMode, setIsBeforeAfterMode] = useState<boolean>(false);
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -122,6 +126,16 @@ export default function Demo() {
   });
 
   const generatePostFromTemplateMutation = trpc.demo.generatePostFromTemplate.useMutation();
+
+  const generateBeforeAfterPostMutation = trpc.demo.generateBeforeAfterPost.useMutation({
+    onSuccess: (data) => {
+      setBeforeAfterPost(data);
+      toast.success("ビフォーアフター投稿文を生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -461,11 +475,195 @@ export default function Demo() {
           </CardContent>
         </Card>
 
+        {/* ビフォーアフターモード切り替え */}
         <Card>
           <CardHeader>
-            <CardTitle>写真の取得</CardTitle>
-            <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
+            <CardTitle>投稿モード</CardTitle>
+            <CardDescription>通常投稿またはビフォーアフター投稿を選択</CardDescription>
           </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setIsBeforeAfterMode(false);
+                  setBeforeImage(null);
+                  setAfterImage(null);
+                  setBeforeAfterPost(null);
+                }}
+                variant={!isBeforeAfterMode ? "default" : "outline"}
+                className="flex-1"
+              >
+                通常投稿
+              </Button>
+              <Button
+                onClick={() => {
+                  setIsBeforeAfterMode(true);
+                  setSelectedImage(null);
+                  setAnalysis(null);
+                  setContents(null);
+                  setMultiplePhotos([]);
+                }}
+                variant={isBeforeAfterMode ? "default" : "outline"}
+                className="flex-1"
+              >
+                🔄 ビフォーアフター
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ビフォーアフターモードのUI */}
+        {isBeforeAfterMode ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>🔄 ビフォーアフター投稿文生成</CardTitle>
+              <CardDescription>施工前と施工後の2枚の写真をアップロードして、変化を強調する投稿文を生成</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* 施工前の写真 */}
+                <div>
+                  <Label htmlFor="before-image">施工前の写真</Label>
+                  <div className="mt-2 border-2 border-dashed rounded-lg p-4 text-center">
+                    <input
+                      id="before-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          uploadImageMutation.mutate({
+                            imageBase64: reader.result as string,
+                            fileName: file.name,
+                            companyName,
+                          }, {
+                            onSuccess: (data) => {
+                              setBeforeImage(data);
+                              toast.success("施工前の写真をアップロードしました");
+                            },
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="hidden"
+                    />
+                    <label htmlFor="before-image" className="cursor-pointer">
+                      {beforeImage ? (
+                        <img src={beforeImage.url} alt="施工前" className="w-full h-48 object-cover rounded" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 py-8">
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">クリックして選択</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                {/* 施工後の写真 */}
+                <div>
+                  <Label htmlFor="after-image">施工後の写真</Label>
+                  <div className="mt-2 border-2 border-dashed rounded-lg p-4 text-center">
+                    <input
+                      id="after-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          uploadImageMutation.mutate({
+                            imageBase64: reader.result as string,
+                            fileName: file.name,
+                            companyName,
+                          }, {
+                            onSuccess: (data) => {
+                              setAfterImage(data);
+                              toast.success("施工後の写真をアップロードしました");
+                            },
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="hidden"
+                    />
+                    <label htmlFor="after-image" className="cursor-pointer">
+                      {afterImage ? (
+                        <img src={afterImage.url} alt="施工後" className="w-full h-48 object-cover rounded" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 py-8">
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">クリックして選択</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* 生成ボタン */}
+              <Button
+                onClick={() => {
+                  if (!beforeImage || !afterImage) {
+                    toast.error("施工前と施工後の両方の写真をアップロードしてください");
+                    return;
+                  }
+                  generateBeforeAfterPostMutation.mutate({
+                    beforeImageUrl: beforeImage.url,
+                    afterImageUrl: afterImage.url,
+                    companyName,
+                    platform: "instagram",
+                  });
+                }}
+                disabled={!beforeImage || !afterImage || generateBeforeAfterPostMutation.isPending}
+                className="w-full"
+              >
+                {generateBeforeAfterPostMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  "🔄 ビフォーアフター投稿文を生成"
+                )}
+              </Button>
+
+              {/* 生成結果表示 */}
+              {beforeAfterPost && (
+                <div className="mt-4 space-y-4">
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">生成された投稿文</h3>
+                    <p className="whitespace-pre-wrap text-sm">{beforeAfterPost.content}</p>
+                  </div>
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">ハッシュタグ</h3>
+                    <p className="text-sm text-muted-foreground">{beforeAfterPost.hashtags}</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const fullPost = `${beforeAfterPost.content}\n\n${beforeAfterPost.hashtags}`;
+                      navigator.clipboard.writeText(fullPost);
+                      toast.success("投稿文をコピーしました");
+                    }}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    投稿文をコピー
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>写真の取得</CardTitle>
+              <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
+            </CardHeader>
           <CardContent className="space-y-4">
             {/* ドラッグ&ドロップエリア */}
             <div
@@ -543,8 +741,9 @@ export default function Demo() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        {multiplePhotos.length > 0 && (
+        {!isBeforeAfterMode && multiplePhotos.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>

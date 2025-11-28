@@ -641,6 +641,29 @@ export const appRouter = router({
 
         return result;
       }),
+
+    // ビフォーアフター投稿文を生成
+    generateBeforeAfterPost: protectedProcedure
+      .input(z.object({
+        beforeImageUrl: z.string(),
+        afterImageUrl: z.string(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        platform: z.enum(["instagram", "x", "threads"]),
+        additionalContext: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateBeforeAfterPost } = await import("./ai-service");
+        
+        const result = await generateBeforeAfterPost({
+          beforeImageUrl: input.beforeImageUrl,
+          afterImageUrl: input.afterImageUrl,
+          companyName: input.companyName,
+          platform: input.platform,
+          additionalContext: input.additionalContext,
+        });
+
+        return result;
+      }),
   }),
 
   // Custom Templates Management

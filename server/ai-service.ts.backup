@@ -1,5 +1,4 @@
 import { invokeLLM } from "./_core/llm";
-import { getTemplateById } from "../shared/templates";
 
 /**
  * AI画像分析サービス
@@ -621,10 +620,121 @@ export async function generateReelsStoriesContent(params: {
   return content.trim();
 }
 
+4. 推奨ハッシュタグから適切なものを10個程度選択すること
+5. 本文とハッシュタグを分けて出力すること
+
+出力形式:
+本文:
+[ここに投稿文を記載]
+
+ハッシュタグ:
+[ここにハッシュタグを記載（スペース区切り）]`;
+
+  const response = await invokeLLM({
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const result = response.choices[0].message.content || "";
+
+  // 本文とハッシュタグを分離
+  const parts = result.split(/ハッシュタグ[:：]/);
+  const content = parts[0].replace(/本文[:：]/, "").trim();
+  const hashtags = parts[1]?.trim() || template.recommendedHashtags.slice(0, 10).join(" ");
+
+  return {
+    content,
+    hashtags,
+  };
+}
+
+/**
+ * リール・ストーリーズ用の短文を生成
+ */
+export async function generateReelsStoriesContent(params: {
+  imageAnalysis: {
+    category: string;
+    style: string;
+    description: string;
+    keywords: string[];
+  };
+  companyName: string;
+  style: "hook" | "question" | "emotion" | "cta" | "storytelling";
+}): Promise<string> {
+  const { imageAnalysis, companyName, style } = params;
+
+  const styleGuidelines = {
+    hook: {
+      description: "注意を引く冒頭フレーズ",
+      example: "「この光、最高すぎ！」",
+      length: "5-15文字",
+    },
+    question: {
+      description: "問いかけ形式",
+      example: "「この広々リビングで何をしたい？」",
+      length: "10-25文字",
+    },
+    emotion: {
+      description: "感情訴求",
+      example: "「この光の中で、ずっと暮らしたい。」",
+      length: "10-30文字",
+    },
+    cta: {
+      description: "行動喚起",
+      example: "「理想の暮らし、覗いてみませんか？」",
+      length: "10-30文字",
+    },
+    storytelling: {
+      description: "物語形式",
+      example: "「この光の中で、家族の笑顔が生まれる。」",
+      length: "20-40文字",
+    },
+  };
+
+  const guideline = styleGuidelines[style];
+
+  const targetAudience = companyName === "ハゼモト建設" 
+    ? "住宅購入検討者（一般ユーザー）"
+    : "医療関係者（医師、クリニック経営者）";
+
+  const prompt = `あなたは${companyName}のSNSマーケティング担当者です。
+
+【タスク】
+Instagram ReelsやStoriesに最適な短文を生成してください。
+
+【ターゲット】
+${targetAudience}
+
+【スタイル】
+${style}（${guideline.description}）
+例: ${guideline.example}
+文字数: ${guideline.length}
+
+【画像分析結果】
+カテゴリー: ${imageAnalysis.category}
+スタイル: ${imageAnalysis.style}
+説明: ${imageAnalysis.description}
+キーワード: ${imageAnalysis.keywords.join(", ")}
+
+【重要な指示】
+1. 指定された文字数範囲内で作成すること
+2. インパクトがあり、視聴者の目を止める表現にすること
+3. 画像の内容を反映すること
+4. ターゲットに響く言葉選びをすること
+
+短文のみを出力してください（説明不要）。`;
+
+  const response = await invokeLLM({
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  return response.choices[0].message.content?.trim() || "";
+}
+
 /**
  * ビフォーアフター投稿文生成
  * 施工前と施工後の2枚の写真を比較して、変化を強調する投稿文を生成
  */
+import { getTemplateById } from "../shared/templates";
 
 export async function generateBeforeAfterPost(params: {
   beforeImageUrl: string;
