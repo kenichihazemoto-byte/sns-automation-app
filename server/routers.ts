@@ -590,6 +590,57 @@ export const appRouter = router({
 
         return photos;
       }),
+
+    // テンプレート一覧を取得
+    getTemplates: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["\u30cf\u30bc\u30e2\u30c8\u5efa\u8a2d", "\u30af\u30ea\u30cb\u30c3\u30af\u30a2\u30fc\u30ad\u30d7\u30ed"]).optional(),
+      }))
+      .query(async ({ input }) => {
+        const { POST_TEMPLATES, getTemplatesByCompany } = await import("../shared/templates");
+        
+        if (input.companyName) {
+          return getTemplatesByCompany(input.companyName);
+        }
+        
+        return POST_TEMPLATES;
+      }),
+
+    // テンプレートを使用して投稿文を生成
+    generatePostFromTemplate: protectedProcedure
+      .input(z.object({
+        templateId: z.string(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        imageAnalysis: z.object({
+          category: z.string(),
+          style: z.string(),
+          description: z.string(),
+          keywords: z.array(z.string()),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const { getTemplateById } = await import("../shared/templates");
+        const { generatePostFromTemplate } = await import("./ai-service");
+        
+        const template = getTemplateById(input.templateId);
+        if (!template) {
+          throw new Error(`Template not found: ${input.templateId}`);
+        }
+
+        const result = await generatePostFromTemplate({
+          template: {
+            name: template.name,
+            structure: template.structure,
+            tone: template.tone,
+            recommendedHashtags: template.recommendedHashtags,
+          },
+          imageAnalysis: input.imageAnalysis,
+          platform: input.platform,
+          companyName: template.companyName,
+        });
+
+        return result;
+      }),
   }),
 });
 

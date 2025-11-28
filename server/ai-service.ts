@@ -437,3 +437,185 @@ export async function generateCommentReply(
 
   return content;
 }
+
+/**
+ * テンプレートを使用して投稿文を生成
+ */
+export async function generatePostFromTemplate(params: {
+  template: {
+    name: string;
+    structure: {
+      opening: string;
+      body: string;
+      cta: string;
+    };
+    tone: string;
+    recommendedHashtags: string[];
+  };
+  imageAnalysis: {
+    category: string;
+    style: string;
+    description: string;
+    keywords: string[];
+  };
+  platform: "instagram" | "x" | "threads";
+  companyName: string;
+}): Promise<{ content: string; hashtags: string }> {
+  const { template, imageAnalysis, platform, companyName } = params;
+
+  // プラットフォーム別の文字数制限
+  const maxLength = platform === "x" ? 280 : platform === "threads" ? 500 : 2200;
+
+  const prompt = `あなたはSNS投稿文のプロフェッショナルライターです。
+
+【会社情報】
+会社名: ${companyName}
+
+【テンプレート情報】
+テンプレート名: ${template.name}
+トーン: ${template.tone}
+
+【文章構成】
+- 冒頭: ${template.structure.opening}
+- 本文: ${template.structure.body}
+- CTA: ${template.structure.cta}
+
+【画像分析結果】
+カテゴリー: ${imageAnalysis.category}
+スタイル: ${imageAnalysis.style}
+説明: ${imageAnalysis.description}
+キーワード: ${imageAnalysis.keywords.join(", ")}
+
+【推奨ハッシュタグ】
+${template.recommendedHashtags.join(", ")}
+
+【プラットフォーム】
+${platform}（最大${maxLength}文字）
+
+上記のテンプレート構成に従って、画像の内容を反映した投稿文を生成してください。
+
+重要な指示:
+1. テンプレートの文章構成（冒頭・本文・CTA）を必ず守ること
+2. 指定されたトーンで書くこと
+3. 画像分析結果を活用して、具体的で魅力的な表現にすること
+4. ライフスタイル提案を含めること（「この空間でどのような暮らしができるか」を描写）
+5. 推奨ハッシュタグから適切なものを10個程度選んで使用すること
+6. プラットフォームの文字数制限を守ること
+7. 絵文字を適度に使用して視覚的に魅力的にすること
+
+出力形式:
+本文: [投稿文]
+ハッシュタグ: [ハッシュタグ（カンマ区切り、#なし）]`;
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: "あなたはSNS投稿文のプロフェッショナルライターです。テンプレートに従って、魅力的で効果的な投稿文を生成します。"
+      },
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+  });
+
+  const generatedText = response.choices[0].message.content || "";
+
+  // 本文とハッシュタグを分離
+  const contentMatch = generatedText.match(/本文:\s*(.+?)(?=ハッシュタグ:|$)/s);
+  const hashtagsMatch = generatedText.match(/ハッシュタグ:\s*(.+?)$/s);
+
+  const content = contentMatch ? contentMatch[1].trim() : generatedText;
+  const hashtags = hashtagsMatch ? hashtagsMatch[1].trim() : template.recommendedHashtags.slice(0, 10).join(", ");
+
+  return {
+    content,
+    hashtags
+  };
+}
+
+/**
+ * リール・ストーリーズ用の短文を生成
+ */
+export async function generateReelsStoriesContent(params: {
+  imageAnalysis: ImageAnalysisResult;
+  companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  style: "hook" | "question" | "emotion" | "cta" | "storytelling";
+}): Promise<string> {
+  const { imageAnalysis, companyName, style } = params;
+
+  const styleGuides = {
+    hook: {
+      description: "注意を引く冒頭フレーズ",
+      example: "「この光、最高すぎ！」",
+      length: "5-15文字",
+      tone: "インパクトのある短いフレーズ"
+    },
+    question: {
+      description: "問いかけ形式",
+      example: "「この広々リビングで何をしたい？」",
+      length: "10-25文字",
+      tone: "視聴者に考えさせる問いかけ"
+    },
+    emotion: {
+      description: "感情訴求",
+      example: "「この光の中で、ずっと暮らしたい。」",
+      length: "15-30文字",
+      tone: "感情に訴えかける表現"
+    },
+    cta: {
+      description: "行動喚起",
+      example: "「理想の暮らし、覗いてみませんか？」",
+      length: "15-30文字",
+      tone: "次のアクションを促す"
+    },
+    storytelling: {
+      description: "物語形式",
+      example: "「この光の中で、家族の笑顔が生まれる。」",
+      length: "20-40文字",
+      tone: "短いストーリーで情景を描く"
+    }
+  };
+
+  const guide = styleGuides[style];
+
+  const targetAudience = companyName === "ハゼモト建設" 
+    ? "住宅購入検討者（一般ユーザー）"
+    : "医療関係者（医師、クリニック経営者）";
+
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: `あなたは${companyName}のSNSマーケティング担当者です。Instagram ReelsやStoriesに最適な短くてインパクトのある文章を作成します。`
+      },
+      {
+        role: "user",
+        content: `以下の画像分析結果に基づいて、${style}スタイルの短文を生成してください。
+
+画像分析結果:
+- カテゴリー: ${imageAnalysis.category}
+- スタイル: ${imageAnalysis.style}
+- 説明: ${imageAnalysis.description}
+- キーワード: ${imageAnalysis.keywords.join(", ")}
+
+ターゲット: ${targetAudience}
+
+スタイル: ${guide.description}
+例: ${guide.example}
+文字数: ${guide.length}
+トーン: ${guide.tone}
+
+短くてインパクトのある${guide.length}の文章を1つだけ生成してください。`
+      }
+    ]
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content || typeof content !== 'string') {
+    throw new Error("AI content generation returned empty content");
+  }
+
+  return content.trim();
+}

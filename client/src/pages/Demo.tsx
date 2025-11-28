@@ -24,6 +24,8 @@ export default function Demo() {
   const [multiplePhotos, setMultiplePhotos] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [useTemplate, setUseTemplate] = useState<boolean>(false);
 
   const utils = trpc.useUtils();
 
@@ -117,6 +119,8 @@ export default function Demo() {
       toast.error(`保存エラー: ${error.message}`);
     },
   });
+
+  const generatePostFromTemplateMutation = trpc.demo.generatePostFromTemplate.useMutation();
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -238,16 +242,44 @@ export default function Demo() {
     });
   };
 
-  const handleGenerateAllContents = () => {
+  const handleGenerateAllContents = async () => {
     if (!analysis) {
       toast.error("まず写真を取得してください");
       return;
     }
 
-    generateAllContentsMutation.mutate({
-      companyName,
-      imageAnalysis: analysis,
-    });
+    if (useTemplate && selectedTemplate) {
+      // テンプレートを使用して生成
+      try {
+        const platforms = ["instagram", "x", "threads"] as const;
+        const templateContents: any = {};
+
+        for (const platform of platforms) {
+          const result = await generatePostFromTemplateMutation.mutateAsync({
+            templateId: selectedTemplate,
+            platform,
+            imageAnalysis: analysis,
+          });
+
+          templateContents[platform] = {
+            caption: result.content,
+            hashtags: result.hashtags.split(", "),
+          };
+        }
+
+        setContents(templateContents);
+        setViewMode("single");
+        toast.success("テンプレートで投稿文を生成しました");
+      } catch (error: any) {
+        toast.error(`エラー: ${error.message}`);
+      }
+    } else {
+      // 通常の生成
+      generateAllContentsMutation.mutate({
+        companyName,
+        imageAnalysis: analysis,
+      });
+    }
   };
 
   const handleGenerateIndividualComments = () => {
@@ -567,10 +599,36 @@ export default function Demo() {
                   </div>
                 </div>
               )}
+              {/* テンプレート選択 */}
+              <div className="space-y-4 pb-4 border-b">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="use-template"
+                    checked={useTemplate}
+                    onChange={(e) => setUseTemplate(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="use-template">投稿テンプレートを使用</Label>
+                </div>
+                {useTemplate && (
+                  <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="テンプレートを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new_construction">新築完成</SelectItem>
+                      <SelectItem value="renovation">リフォーム事例</SelectItem>
+                      <SelectItem value="open_house">見学会告知</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <Button
                   onClick={handleGenerateAllContents}
-                  disabled={generateAllContentsMutation.isPending}
+                  disabled={generateAllContentsMutation.isPending || (useTemplate && !selectedTemplate)}
                   className="flex-1"
                 >
                   {generateAllContentsMutation.isPending ? (
@@ -578,6 +636,8 @@ export default function Demo() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       生成中...
                     </>
+                  ) : useTemplate ? (
+                    "テンプレートで投稿文を生成"
                   ) : (
                     "全SNSの投稿文を生成"
                   )}
