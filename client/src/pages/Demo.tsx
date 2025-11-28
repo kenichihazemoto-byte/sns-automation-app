@@ -31,6 +31,8 @@ export default function Demo() {
   const [beforeAfterPost, setBeforeAfterPost] = useState<any>(null);
   const [isBeforeAfterMode, setIsBeforeAfterMode] = useState<boolean>(false);
   const [beforeAfterPlatform, setBeforeAfterPlatform] = useState<"instagram" | "x" | "threads">("instagram");
+  const [allPlatformsPosts, setAllPlatformsPosts] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"instagram" | "x" | "threads">("instagram");
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -131,7 +133,19 @@ export default function Demo() {
   const generateBeforeAfterPostMutation = trpc.demo.generateBeforeAfterPost.useMutation({
     onSuccess: (data) => {
       setBeforeAfterPost(data);
+      setAllPlatformsPosts(null); // 単一プラットフォーム生成時は一括生成結果をクリア
       toast.success("ビフォーアフター投稿文を生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const generateAllPlatformsPostMutation = trpc.demo.generateBeforeAfterPostForAllPlatforms.useMutation({
+    onSuccess: (data) => {
+      setAllPlatformsPosts(data);
+      setBeforeAfterPost(null); // 一括生成時は単一プラットフォーム結果をクリア
+      toast.success("すべてのプラットフォーム向けの投稿文を生成しました");
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
@@ -636,36 +650,62 @@ export default function Demo() {
               </div>
 
               {/* 生成ボタン */}
-              <Button
-                onClick={() => {
-                  if (!beforeImage || !afterImage) {
-                    toast.error("施工前と施工後の両方の写真をアップロードしてください");
-                    return;
-                  }
-                  generateBeforeAfterPostMutation.mutate({
-                    beforeImageUrl: beforeImage.url,
-                    afterImageUrl: afterImage.url,
-                    companyName,
-                    platform: beforeAfterPlatform,
-                  });
-                }}
-                disabled={!beforeImage || !afterImage || generateBeforeAfterPostMutation.isPending}
-                className="w-full"
-              >
-                {generateBeforeAfterPostMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    生成中...
-                  </>
-                ) : (
-                  <>
-                    {beforeAfterPlatform === "instagram" && <Instagram className="mr-2 h-4 w-4" />}
-                    {beforeAfterPlatform === "x" && <Twitter className="mr-2 h-4 w-4" />}
-                    {beforeAfterPlatform === "threads" && <MessageSquare className="mr-2 h-4 w-4" />}
-                    🔄 {beforeAfterPlatform === "instagram" ? "Instagram" : beforeAfterPlatform === "x" ? "X" : "Threads"}投稿文を生成
-                  </>
-                )}
-              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={() => {
+                    if (!beforeImage || !afterImage) {
+                      toast.error("施工前と施工後の両方の写真をアップロードしてください");
+                      return;
+                    }
+                    generateBeforeAfterPostMutation.mutate({
+                      beforeImageUrl: beforeImage.url,
+                      afterImageUrl: afterImage.url,
+                      companyName,
+                      platform: beforeAfterPlatform,
+                    });
+                  }}
+                  disabled={!beforeImage || !afterImage || generateBeforeAfterPostMutation.isPending || generateAllPlatformsPostMutation.isPending}
+                  variant="outline"
+                >
+                  {generateBeforeAfterPostMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      {beforeAfterPlatform === "instagram" && <Instagram className="mr-2 h-4 w-4" />}
+                      {beforeAfterPlatform === "x" && <Twitter className="mr-2 h-4 w-4" />}
+                      {beforeAfterPlatform === "threads" && <MessageSquare className="mr-2 h-4 w-4" />}
+                      {beforeAfterPlatform === "instagram" ? "Instagram" : beforeAfterPlatform === "x" ? "X" : "Threads"}のみ
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  onClick={() => {
+                    if (!beforeImage || !afterImage) {
+                      toast.error("施工前と施工後の両方の写真をアップロードしてください");
+                      return;
+                    }
+                    generateAllPlatformsPostMutation.mutate({
+                      beforeImageUrl: beforeImage.url,
+                      afterImageUrl: afterImage.url,
+                      companyName,
+                    });
+                  }}
+                  disabled={!beforeImage || !afterImage || generateBeforeAfterPostMutation.isPending || generateAllPlatformsPostMutation.isPending}
+                >
+                  {generateAllPlatformsPostMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    "🚀 すべてのプラットフォーム向けに一括生成"
+                  )}
+                </Button>
+              </div>
 
               {/* 生成結果表示 */}
               {beforeAfterPost && (() => {
@@ -731,6 +771,116 @@ export default function Demo() {
                   </div>
                 );
               })()}
+
+              {/* 一括生成結果表示 */}
+              {allPlatformsPosts && (
+                <div className="mt-4 space-y-4">
+                  {/* タブ */}
+                  <div className="flex gap-2 border-b">
+                    <button
+                      onClick={() => setActiveTab("instagram")}
+                      className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
+                        activeTab === "instagram"
+                          ? "border-primary text-primary font-semibold"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Instagram className="h-4 w-4" />
+                      Instagram
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("x")}
+                      className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
+                        activeTab === "x"
+                          ? "border-primary text-primary font-semibold"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Twitter className="h-4 w-4" />
+                      X
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("threads")}
+                      className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${
+                        activeTab === "threads"
+                          ? "border-primary text-primary font-semibold"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Threads
+                    </button>
+                  </div>
+
+                  {/* タブコンテンツ */}
+                  {(() => {
+                    const currentPost = allPlatformsPosts[activeTab];
+                    if (!currentPost) return null;
+
+                    const fullPost = `${currentPost.content}\n\n${currentPost.hashtags}`;
+                    const charCount = fullPost.length;
+                    const maxChars = activeTab === "instagram" ? 2200 : activeTab === "x" ? 280 : 500;
+                    const isOverLimit = charCount > maxChars;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* プラットフォーム情報 */}
+                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                          <div className="flex items-center gap-2">
+                            {activeTab === "instagram" && <Instagram className="h-5 w-5" />}
+                            {activeTab === "x" && <Twitter className="h-5 w-5" />}
+                            {activeTab === "threads" && <MessageSquare className="h-5 w-5" />}
+                            <span className="font-semibold">
+                              {activeTab === "instagram" ? "Instagram" : activeTab === "x" ? "X" : "Threads"}向け投稿文
+                            </span>
+                          </div>
+                          <div className={`text-sm font-medium ${
+                            isOverLimit ? "text-destructive" : charCount > maxChars * 0.9 ? "text-orange-500" : "text-muted-foreground"
+                          }`}>
+                            {charCount} / {maxChars}文字
+                            {isOverLimit && " (制限超過)"}
+                          </div>
+                        </div>
+
+                        {/* 投稿文 */}
+                        <div className="border rounded-lg p-4">
+                          <h3 className="font-semibold mb-2">生成された投稿文</h3>
+                          <p className="whitespace-pre-wrap text-sm">{currentPost.content}</p>
+                        </div>
+
+                        {/* ハッシュタグ */}
+                        <div className="border rounded-lg p-4">
+                          <h3 className="font-semibold mb-2">ハッシュタグ</h3>
+                          <p className="text-sm text-muted-foreground">{currentPost.hashtags}</p>
+                        </div>
+
+                        {/* 文字数超過警告 */}
+                        {isOverLimit && (
+                          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                            <p className="text-sm text-destructive font-medium">
+                              ⚠️ 文字数が{activeTab === "instagram" ? "Instagram" : activeTab === "x" ? "X" : "Threads"}の制限({maxChars}文字)を超えています。
+                              投稿前に編集してください。
+                            </p>
+                          </div>
+                        )}
+
+                        {/* コピーボタン */}
+                        <Button
+                          onClick={() => {
+                            navigator.clipboard.writeText(fullPost);
+                            toast.success("投稿文をコピーしました");
+                          }}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          投稿文をコピー
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : (

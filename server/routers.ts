@@ -664,6 +664,44 @@ export const appRouter = router({
 
         return result;
       }),
+
+    // すべてのプラットフォーム向けに一括生成
+    generateBeforeAfterPostForAllPlatforms: protectedProcedure
+      .input(z.object({
+        beforeImageUrl: z.string(),
+        afterImageUrl: z.string(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        additionalContext: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateBeforeAfterPost } = await import("./ai-service");
+        
+        // Instagram, X, Threadsの3つのプラットフォーム向けに並列生成
+        const platforms: ("instagram" | "x" | "threads")[] = ["instagram", "x", "threads"];
+        
+        const results = await Promise.all(
+          platforms.map(async (platform) => {
+            const result = await generateBeforeAfterPost({
+              beforeImageUrl: input.beforeImageUrl,
+              afterImageUrl: input.afterImageUrl,
+              companyName: input.companyName,
+              platform,
+              additionalContext: input.additionalContext,
+            });
+            
+            return {
+              platform,
+              ...result,
+            };
+          })
+        );
+
+        return {
+          instagram: results.find(r => r.platform === "instagram"),
+          x: results.find(r => r.platform === "x"),
+          threads: results.find(r => r.platform === "threads"),
+        };
+      }),
   }),
 
   // Custom Templates Management
