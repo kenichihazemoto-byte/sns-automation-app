@@ -242,7 +242,7 @@ export async function getPostSchedulesByUserId(userId: number): Promise<PostSche
     .orderBy(desc(postSchedules.scheduledAt));
 }
 
-export async function updatePostScheduleStatus(id: number, status: "draft" | "scheduled" | "active" | "pending" | "processing" | "completed" | "failed" | "cancelled"): Promise<void> {
+export async function updatePostScheduleStatus(id: number, status: "pending" | "processing" | "published" | "failed" | "cancelled"): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -286,7 +286,7 @@ export async function getPostHistoryByUserId(userId: number, limit = 50): Promis
   return await db.select().from(postHistory)
     .innerJoin(postSchedules, eq(postHistory.postScheduleId, postSchedules.id))
     .where(eq(postSchedules.userId, userId))
-    .orderBy(desc(postHistory.createdAt))
+    .orderBy(desc(postHistory.publishedAt))
     .limit(limit)
     .then(results => results.map(r => r.post_history));
 }

@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Demo() {
   const [companyName, setCompanyName] = useState<"ハゼモト建設" | "クリニックアーキプロ">("ハゼモト建設");
@@ -24,8 +23,7 @@ export default function Demo() {
   const [photoCount, setPhotoCount] = useState<number>(5);
   const [multiplePhotos, setMultiplePhotos] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
-  const [reelsContent, setReelsContent] = useState<any>(null);
-  const [selectedContentType, setSelectedContentType] = useState<"hook" | "question" | "emotion" | "cta" | "storytelling">("hook");
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const utils = trpc.useUtils();
 
@@ -110,18 +108,6 @@ export default function Demo() {
     },
   });
 
-  const generateReelsStoriesMutation = trpc.demo.generateReelsStories.useMutation({
-    onSuccess: (data) => {
-      setReelsContent(data);
-      toast.success("リール・ストーリーズ用短文を生成しました");
-    },
-    onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
-    },
-  });
-
-
-
   const savePostMutation = trpc.demo.saveGeneratedPost.useMutation({
     onSuccess: () => {
       toast.success("投稿を保存しました");
@@ -132,7 +118,73 @@ export default function Demo() {
     },
   });
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      toast.error("画像ファイルをドロップしてください");
+      return;
+    }
+    if (files.length > 5) {
+      toast.error("最大5枚まで選択できます");
+      return;
+    }
+
+    toast.info(`${files.length}枚の写真をアップロード中...`);
+
+    const uploadedPhotos: any[] = [];
+    let processedCount = 0;
+
+    files.forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name}は10MBを超えています`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        
+        uploadImageMutation.mutate({
+          imageBase64: base64String,
+          fileName: file.name,
+          companyName,
+        }, {
+          onSuccess: (data) => {
+            uploadedPhotos.push(data);
+            processedCount++;
+            
+            if (processedCount === files.length) {
+              setMultiplePhotos(uploadedPhotos);
+              if (uploadedPhotos.length > 0) {
+                setSelectedImage(uploadedPhotos[0]);
+                setAnalysis(uploadedPhotos[0].analysis);
+              }
+              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
+            }
+          },
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -142,66 +194,48 @@ export default function Demo() {
       return;
     }
 
-    toast.info(`${files.length}枚の写真をアップロード中...`);
-
     const uploadedPhotos: any[] = [];
+    let processedCount = 0;
 
-    for (const file of Array.from(files)) {
+    Array.from(files).forEach((file) => {
       // ファイルサイズチェック (10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name}は10MBを超えています`);
-        continue;
+        return;
       }
 
       // 画像ファイルかチェック
       if (!file.type.startsWith("image/")) {
         toast.error(`${file.name}は画像ファイルではありません`);
-        continue;
+        return;
       }
 
-      try {
-        const base64String = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        const data = await new Promise<any>((resolve, reject) => {
-          uploadImageMutation.mutate(
-            {
-              imageBase64: base64String,
-              fileName: file.name,
-              companyName,
-            },
-            {
-              onSuccess: resolve,
-              onError: reject,
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        
+        uploadImageMutation.mutate({
+          imageBase64: base64String,
+          fileName: file.name,
+          companyName,
+        }, {
+          onSuccess: (data) => {
+            uploadedPhotos.push(data);
+            processedCount++;
+            
+            if (processedCount === files.length) {
+              setMultiplePhotos(uploadedPhotos);
+              if (uploadedPhotos.length > 0) {
+                setSelectedImage(uploadedPhotos[0]);
+                setAnalysis(uploadedPhotos[0].analysis);
+              }
+              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
             }
-          );
+          },
         });
-
-        uploadedPhotos.push(data);
-      } catch (error) {
-        console.error(`Failed to upload ${file.name}:`, error);
-        toast.error(`${file.name}のアップロードに失敗しました`);
-      }
-    }
-
-    if (uploadedPhotos.length > 0) {
-      setMultiplePhotos(uploadedPhotos);
-      setSelectedImage(uploadedPhotos[0]);
-      setAnalysis(uploadedPhotos[0].analysis);
-      setContents(null);
-      setIndividualComments(null);
-      setCarouselPost(null);
-      toast.success(`${uploadedPhotos.length}枚の写真をアップロードし、AI分析が完了しました`);
-    } else {
-      toast.error("写真のアップロードに失敗しました");
-    }
-
-    // ファイル入力をリセット
-    event.target.value = '';
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleGenerateAllContents = () => {
@@ -243,19 +277,6 @@ export default function Demo() {
       companyName,
       platform: "instagram",
       imageAnalyses,
-    });
-  };
-
-  const handleGenerateReelsStories = () => {
-    if (!analysis) {
-      toast.error("写真を選択してください");
-      return;
-    }
-
-    generateReelsStoriesMutation.mutate({
-      companyName,
-      contentType: selectedContentType,
-      imageAnalysis: analysis,
     });
   };
 
@@ -387,13 +408,20 @@ export default function Demo() {
         <Card>
           <CardHeader>
             <CardTitle>写真の取得</CardTitle>
-            <CardDescription>
-              ローカルファイル、NAS、Googleドライブ、Dropboxなどから写真を選択できます
-            </CardDescription>
+            <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* ファイルアップロードエリア */}
-            <div className="border-2 border-dashed border-primary/50 rounded-lg p-8 text-center hover:border-primary transition-colors">
+            {/* ドラッグ&ドロップエリア */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                isDragging
+                  ? 'border-primary bg-primary/10'
+                  : 'border-primary/50 hover:border-primary'
+              }`}
+            >
               <input
                 id="file-upload"
                 type="file"
@@ -419,46 +447,43 @@ export default function Demo() {
                 </div>
               </label>
             </div>
-
-            {/* Googleフォトからランダム取得 */}
-            <div className="pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-3">または、Googleフォトからランダムに取得：</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={() => fetchPhotoMutation.mutate()}
-                  disabled={fetchPhotoMutation.isPending}
-                  variant="outline"
-                >
-                  {fetchPhotoMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      取得中...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      1枚ランダム
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
-                  disabled={fetchMultiplePhotosMutation.isPending}
-                  variant="outline"
-                >
-                  {fetchMultiplePhotosMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      取得中...
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="mr-2 h-4 w-4" />
-                      {photoCount}枚ランダム
-                    </>
-                  )}
-                </Button>
-              </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => fetchPhotoMutation.mutate()}
+                disabled={fetchPhotoMutation.isPending}
+                variant="outline"
+                className="flex-1"
+              >
+                {fetchPhotoMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    取得中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Google フォトから1枚取得
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
+                disabled={fetchMultiplePhotosMutation.isPending}
+                variant="outline"
+                className="flex-1"
+              >
+                {fetchMultiplePhotosMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    取得中...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    {photoCount}枚取得 & AI分析
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -562,37 +587,6 @@ export default function Demo() {
                     <Download className="h-4 w-4" />
                   </Button>
                 </a>
-              </div>
-              <div className="pt-4 border-t">
-                <Label className="text-sm font-semibold mb-2 block">リール・ストーリーズ用短文生成</Label>
-                <div className="flex gap-2 mb-2">
-                  <Select value={selectedContentType} onValueChange={(value: any) => setSelectedContentType(value)}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hook">🎯 Hook（注意を引く）</SelectItem>
-                      <SelectItem value="question">❓ Question（問いかけ）</SelectItem>
-                      <SelectItem value="emotion">💖 Emotion（感情訴求）</SelectItem>
-                      <SelectItem value="cta">👆 CTA（行動喚起）</SelectItem>
-                      <SelectItem value="storytelling">📖 Storytelling（物語）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    onClick={handleGenerateReelsStories}
-                    disabled={generateReelsStoriesMutation.isPending}
-                    variant="outline"
-                  >
-                    {generateReelsStoriesMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        生成中...
-                      </>
-                    ) : (
-                      "生成"
-                    )}
-                  </Button>
-                </div>
               </div>
               {multiplePhotos.length >= 2 && (
                 <div className="flex gap-2 pt-4 border-t">
@@ -752,42 +746,6 @@ export default function Demo() {
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {reelsContent && (
-          <Card>
-            <CardHeader>
-              <CardTitle>🎥 リール・ストーリーズ用短文</CardTitle>
-              <CardDescription>生成された短文をInstagram ReelsやStoriesで使用できます</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-sm font-semibold">短文</Label>
-                <p className="text-lg font-medium mt-2 p-4 bg-muted rounded-lg">
-                  {reelsContent.shortText}
-                </p>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-semibold">スタイル</Label>
-                  <p className="text-sm mt-1">{reelsContent.style}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-semibold">使用シーン</Label>
-                  <p className="text-sm mt-1">{reelsContent.usage}</p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => copyToClipboard(reelsContent.shortText, "reels")}
-                className="w-full"
-              >
-                <Copy className="mr-2 h-4 w-4" />
-                短文をコピー
-              </Button>
-            </CardContent>
-          </Card>
         )}
 
         {contents && (

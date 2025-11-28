@@ -127,36 +127,14 @@ export async function generatePostContent(
         name: "住宅購入検討者（一般ユーザー）",
         description: "マイホームを夢見る家族、住まいへのこだわりを持つ方、快適な生活空間を求める方",
         tone: "親しみやすく、共感を呼ぶ温かい表現。「家族」「夢」「安心」などのキーワードを使用",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし", "安心", "住まい", "ライフスタイル"],
-        lifestylePrompt: "この家でどのような暮らしができるかを具体的に提案してください。例：家族が集まるリビング、子供が遊べる広い空間、趣味を楽しめる部屋など。",
-        hashtagCategories: {
-          location: ["愛知県工務店", "名古屋注文住宅", "東海地方の家づくり"],
-          constructionType: ["新築注文住宅", "注文住宅", "一戸建て", "マイホーム"],
-          designStyle: ["ナチュラルハウス", "モダン住宅", "シンプルな家", "和モダン"],
-          lifestyle: ["家づくり", "マイホーム計画", "理想の暮らし", "住まいづくり", "家族の家"]
-        }
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし", "安心", "住まい", "ライフスタイル"]
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         description: "クリニック開業を考える医師、施設リニューアルを検討する経営者、患者体験向上を目指す医療プロフェッショナル",
         tone: "専門的で信頼感のある表現。「患者様」「医療環境」「機能性」などのキーワードを使用",
-        keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"],
-        lifestylePrompt: "この医療空間で患者様がどのような体験ができるかを具体的に提案してください。例：リラックスできる待合室、プライバシーに配慮した診察室、最新設備による快適な治療環境など。",
-        hashtagCategories: {
-          location: ["愛知県クリニック設計", "名古屋医療施設", "東海地方クリニック"],
-          constructionType: ["クリニック設計", "医療施設デザイン", "クリニック開業", "医院建築"],
-          designStyle: ["モダンクリニック", "清潔感のある空間", "機能的デザイン", "患者様に優しい空間"],
-          lifestyle: ["患者様体験", "医療環境", "クリニック経営", "開業医", "医療空間"]
-        }
+        keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"]
       };
-
-  // ハッシュタグ推奨リストを生成
-  const recommendedHashtags = [
-    ...targetAudience.hashtagCategories.location.slice(0, 2),
-    ...targetAudience.hashtagCategories.constructionType.slice(0, 3),
-    ...targetAudience.hashtagCategories.designStyle.slice(0, 3),
-    ...targetAudience.hashtagCategories.lifestyle.slice(0, 3)
-  ];
 
   const response = await invokeLLM({
     messages: [
@@ -169,9 +147,7 @@ export async function generatePostContent(
 トーン: ${targetAudience.tone}
 重要なキーワード: ${targetAudience.keywords.join(", ")}
 
-ターゲットに響く魅力的な投稿を作成してください。
-
-重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」を具体的に提案するライフスタイル提案型の文章を作成してください。`,
+ターゲットに響く魅力的な投稿を作成してください。`,
       },
       {
         role: "user",
@@ -190,11 +166,38 @@ export async function generatePostContent(
 - ハッシュタグ数: ${guideline.hashtagCount}
 - トーン: ${guideline.tone}
 
-ライフスタイル提案:
-${targetAudience.lifestylePrompt}
-
-推奨ハッシュタグ（以下から選んで使用してください）:
-${recommendedHashtags.map(tag => `#${tag}`).join(" ")}
+${companyName === "ハゼモト建設" ? `
+推奨ハッシュタグ（以下から選択）:
+#注文住宅
+#北九州新築
+#北九州工務店
+#注文住宅北九州
+#新築北九州
+#工務店北九州
+#リフォーム北九州
+#リノベーション北九州
+#福岡子育て
+#土地探し北九州
+#ローコスト住宅北九州
+#現場見学会北九州
+#シンプルな暮らし
+#モデルハウス北九州
+#マイホーム準備
+#ZEH北九州
+#ハゼモト建設
+#マイホーム北九州
+#高断熱住宅北九州
+#木造住宅北九州
+#子育て北九州
+#施工事例北九州
+#スマートハウス北九州
+#長期優良住宅北九州
+#家づくり北九州
+#一戸建て北九州
+#ハウスメーカー北九州
+#北九州市
+#ハゼモト建設株式会社
+` : ""}
 
 投稿文とハッシュタグを生成してください。`,
       },
@@ -243,10 +246,10 @@ export interface GenerateReplyParams {
 }
 
 /**
- * 写真ごとの個別コメントを生成する（1枚の写真用）
+ * 写真ごとの個別コメントを生成する
  */
 export async function generateIndividualComment(
-  imageAnalysis: ImageAnalysisResult,
+  imageAnalysis: ImageAnalysis,
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -254,16 +257,12 @@ export async function generateIndividualComment(
     ? {
         name: "住宅購入検討者（一般ユーザー）",
         tone: "親しみやすく、共感を呼ぶ温かい表現",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし"],
-        lifestylePrompt: "この空間でどのような暮らしができるかを簡潔に提案してください。",
-        recommendedHashtags: ["家づくり", "マイホーム計画", "理想の暮らし", "注文住宅", "ナチュラルハウス", "モダン住宅", "愛知県工務店", "一戸建て"]
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         tone: "専門的で信頼感のある表現",
-        keywords: ["患者様体験", "医療環境", "機能性"],
-        lifestylePrompt: "この医療空間で患者様がどのような体験ができるかを簡潔に提案してください。",
-        recommendedHashtags: ["患者様体験", "医療環境", "クリニック設計", "クリニック開業", "モダンクリニック", "愛知県クリニック", "医療施設デザイン"]
+        keywords: ["患者様体験", "医療環境", "機能性"]
       };
 
   const response = await invokeLLM({
@@ -274,8 +273,7 @@ export async function generateIndividualComment(
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
-この1枚の写真に焦点を当てた、簡潔で魅力的な投稿を作成してください。
-重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」を提案してください。`,
+この1枚の写真に焦点を当てた、簡潔で魅力的な投稿を作成してください。`,
       },
       {
         role: "user",
@@ -286,12 +284,6 @@ export async function generateIndividualComment(
 - スタイル: ${imageAnalysis.style}
 - 説明: ${imageAnalysis.description}
 - キーワード: ${imageAnalysis.keywords.join(", ")}
-
-ライフスタイル提案:
-${targetAudience.lifestylePrompt}
-
-推奨ハッシュタグ（以下から選んで使用してください）:
-${targetAudience.recommendedHashtags.map(tag => `#${tag}`).join(" ")}
 
 文章は100-150文字程度で、ハッシュタグは5-10個程度にしてください。`,
       },
@@ -333,7 +325,7 @@ ${targetAudience.recommendedHashtags.map(tag => `#${tag}`).join(" ")}
  * 複数の写真をまとめた投稿文を生成する
  */
 export async function generateCarouselPost(
-  imageAnalyses: ImageAnalysisResult[],
+  imageAnalyses: ImageAnalysis[],
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -341,23 +333,19 @@ export async function generateCarouselPost(
     ? {
         name: "住宅購入検討者（一般ユーザー）",
         tone: "親しみやすく、共感を呼ぶ温かい表現",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし"],
-        lifestylePrompt: "複数の写真から、この家でどのような暮らしができるかをストーリー仕立てで提案してください。",
-        recommendedHashtags: ["家づくり", "マイホーム計画", "理想の暮らし", "注文住宅", "ナチュラルハウス", "モダン住宅", "愛知県工務店", "一戸建て", "新築注文住宅", "住まいづくり", "家族の家", "シンプルな家"]
+        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
       }
     : {
         name: "医療関係者（医師、クリニック経営者）",
         tone: "専門的で信頼感のある表現",
-        keywords: ["患者様体験", "医療環境", "機能性"],
-        lifestylePrompt: "複数の写真から、この医療空間で患者様がどのような体験ができるかをストーリー仕立てで提案してください。",
-        recommendedHashtags: ["患者様体験", "医療環境", "クリニック設計", "クリニック開業", "モダンクリニック", "愛知県クリニック", "医療施設デザイン", "クリニック経営", "開業医", "医療空間", "患者様に優しい空間"]
+        keywords: ["患者様体験", "医療環境", "機能性"]
       };
 
   const imagesDescription = imageAnalyses.map((analysis, index) => 
     `写真${index + 1}: ${analysis.category} - ${analysis.description} (スタイル: ${analysis.style})`
   ).join("\n");
 
-  const allKeywords = Array.from(new Set(imageAnalyses.flatMap(a => a.keywords)));
+  const allKeywords = [...new Set(imageAnalyses.flatMap(a => a.keywords))];
 
   const response = await invokeLLM({
     messages: [
@@ -367,8 +355,7 @@ export async function generateCarouselPost(
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
-複数の写真を一つのストーリーとして繋げ、Instagramカルーセル投稿に最適な魅力的な投稿を作成してください。
-重要：単なる建物の紹介ではなく、「この空間でどのような生活・体験ができるか」をストーリー仕立てで提案してください。`,
+複数の写真を一つのストーリーとして繋げ、Instagramカルーセル投稿に最適な魅力的な投稿を作成してください。`,
       },
       {
         role: "user",
@@ -377,12 +364,6 @@ export async function generateCarouselPost(
 ${imagesDescription}
 
 共通キーワード: ${allKeywords.join(", ")}
-
-ライフスタイル提案:
-${targetAudience.lifestylePrompt}
-
-推奨ハッシュタグ（以下から選んで使用してください）:
-${targetAudience.recommendedHashtags.map(tag => `#${tag}`).join(" ")}
 
 複数の写真を統一したストーリーを語り、各写真の魅力を引き出す文章を作成してください。
 文章は200-300文字程度で、ハッシュタグは15-20個程度にしてください。`,
@@ -455,128 +436,4 @@ export async function generateCommentReply(
   }
 
   return content;
-}
-
-/**
- * リール・ストーリーズ用短文生成サービス
- */
-
-export interface ReelsStoriesContent {
-  shortText: string;
-  style: string;
-  usage: string;
-}
-
-export type ContentStyle = "hook" | "question" | "emotion" | "cta" | "storytelling";
-
-export async function generateReelsStoriesContent(
-  imageAnalysis: ImageAnalysisResult,
-  companyName: "ハゼモト建設" | "クリニックアーキプロ",
-  contentType: ContentStyle
-): Promise<ReelsStoriesContent> {
-  const targetAudience = companyName === "ハゼモト建設" 
-    ? {
-        name: "住宅購入検討者（一般ユーザー）",
-        tone: "親しみやすく、共感を呼ぶ温かい表現",
-        keywords: ["家族", "夢のマイホーム", "快適な暮らし"]
-      }
-    : {
-        name: "医療関係者（医師、クリニック経営者）",
-        tone: "専門的で信頼感のある表現",
-        keywords: ["患者様体験", "医療環境", "機能性"]
-      };
-
-  const contentTypeGuide = {
-    hook: {
-      description: "視聴者の注意を引く冒頭のフレーズ",
-      example: "「え、これ本当に同じ家？」",
-      length: "5-15文字"
-    },
-    question: {
-      description: "視聴者に問いかけて興味を引く",
-      example: "「理想のリビング、どんな空間ですか？」",
-      length: "15-25文字"
-    },
-    emotion: {
-      description: "感情に訴えかける表現",
-      example: "「家族の笑顔が集まる場所✨」",
-      length: "10-20文字"
-    },
-    cta: {
-      description: "行動を促す呼びかけ",
-      example: "「詳しくはプロフィールから👆」",
-      length: "10-20文字"
-    },
-    storytelling: {
-      description: "短いストーリー形式",
-      example: "「朝、光が差し込むキッチンで淹れるコーヒー。これが私の理想の暮らし☕」",
-      length: "20-40文字"
-    }
-  };
-
-  const guide = contentTypeGuide[contentType];
-
-  const response = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。
-ターゲット: ${targetAudience.name}
-トーン: ${targetAudience.tone}
-
-Instagram ReelsやStoriesに最適な、短くてキャッチーな文章を作成してください。
-重要：視聴者の注意を引き、感情に訴えかける表現を使用してください。`
-      },
-      {
-        role: "user",
-        content: `以下の画像分析結果に基づいて、${contentType}スタイルの短文を生成してください。
-
-画像分析結果:
-- カテゴリー: ${imageAnalysis.category}
-- スタイル: ${imageAnalysis.style}
-- 説明: ${imageAnalysis.description}
-- キーワード: ${imageAnalysis.keywords.join(", ")}
-
-コンテンツタイプ: ${contentType}
-説明: ${guide.description}
-例: ${guide.example}
-文字数: ${guide.length}
-
-短くてインパクトのある文章を1つ生成してください。`
-      }
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "reels_stories_content",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            shortText: {
-              type: "string",
-              description: "生成された短文"
-            },
-            style: {
-              type: "string",
-              description: "文章のスタイル説明"
-            },
-            usage: {
-              type: "string",
-              description: "使用シーン"
-            }
-          },
-          required: ["shortText", "style", "usage"],
-          additionalProperties: false
-        }
-      }
-    }
-  });
-
-  const content = response.choices[0].message.content;
-  if (!content || typeof content !== 'string') {
-    throw new Error("AI content generation returned empty content");
-  }
-
-  return JSON.parse(content);
 }

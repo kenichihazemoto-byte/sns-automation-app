@@ -44,7 +44,6 @@ export const appRouter = router({
       .input(z.object({
         platform: z.enum(["instagram", "x", "threads"]),
         accountName: z.string(),
-        companyName: z.enum(['ハゼモト建設', 'クリニックアーキプロ']),
         apiKey: z.string().optional(),
         apiSecret: z.string().optional(),
         accessToken: z.string().optional(),
@@ -196,7 +195,6 @@ export const appRouter = router({
       .input(z.object({
         imageId: z.number(),
         scheduledAt: z.date(),
-        companyName: z.enum(['ハゼモト建設', 'クリニックアーキプロ']),
       }))
       .mutation(async ({ ctx, input }) => {
         return await db.createPostSchedule({
@@ -208,7 +206,7 @@ export const appRouter = router({
     updateStatus: protectedProcedure
       .input(z.object({
         id: z.number(),
-        status: z.enum(["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled"]),
+        status: z.enum(["pending", "processing", "published", "failed", "cancelled"]),
       }))
       .mutation(async ({ input }) => {
         await db.updatePostScheduleStatus(input.id, input.status);
@@ -369,7 +367,7 @@ export const appRouter = router({
         const { url: imageUrl } = await storagePut(fileKey, buffer, 'image/jpeg');
 
         // AI画像分析
-        const analysis = await analyzeImage(imageUrl);
+        const analysis = await analyzeImage(imageUrl, companyName);
 
         return {
           photo: {
@@ -379,41 +377,6 @@ export const appRouter = router({
           analysis,
         };
       }),
-    // Google フォトアルバム一覧を取得
-    getPhotoAlbums: protectedProcedure
-      .query(async () => {
-        const googlePhotos = await import("./google-photos-service");
-        return googlePhotos.HAZEMOTO_ALBUMS;
-      }),
-
-    // 指定したアルバムから写真一覧を取得
-    getPhotosFromAlbum: protectedProcedure
-      .input(z.object({
-        albumUrl: z.string(),
-      }))
-      .mutation(async ({ input }) => {
-        const googlePhotos = await import("./google-photos-service");
-        const photos = await googlePhotos.fetchPhotosFromAlbum(input.albumUrl);
-        return photos;
-      }),
-
-    // 選択した写真をAI分析
-    analyzeSelectedPhoto: protectedProcedure
-      .input(z.object({
-        photoUrl: z.string(),
-        companyName: z.enum(['ハゼモト建設', 'クリニックアーキプロ']),
-      }))
-      .mutation(async ({ input }) => {
-        // デモ用のサンプル画像URLを使用してAI分析
-        const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
-        const analysis = await aiService.analyzeImage(sampleImageUrl);
-        
-        return {
-          photo: { url: input.photoUrl },
-          analysis,
-        };
-      }),
-
     // ランダムな竣工写真を取得してAI分析
     getRandomPhotoWithAnalysis: protectedProcedure
       .mutation(async () => {
@@ -512,11 +475,11 @@ export const appRouter = router({
         // 画像を保存
         const imageId = await db.createImage({
           userId: ctx.user.id,
-          cloudStorageConfigId: 1, // TODO: 実際のconfig IDを使用
-          originalUrl: input.imageUrl,
-          fileName: `google-photos-${Date.now()}.jpg`,
-          analysisResult: JSON.stringify(input.imageAnalysis),
-          imageCategory: input.imageAnalysis.category,
+          url: input.imageUrl,
+          source: "google_photos",
+          aiAnalysis: JSON.stringify(input.imageAnalysis),
+          category: input.imageAnalysis.category,
+          keywords: input.imageAnalysis.keywords.join(","),
         });
 
         // 投稿スケジュールを作成
@@ -532,7 +495,7 @@ export const appRouter = router({
         const platforms = ["instagram", "x", "threads"] as const;
         for (const platform of platforms) {
           await db.createPostContent({
-            postScheduleId: scheduleId,
+            scheduleId,
             platform,
             caption: input.contents[platform].caption,
             hashtags: input.contents[platform].hashtags.join(","),
@@ -598,30 +561,6 @@ export const appRouter = router({
         );
 
         return carouselPost;
-      }),
-
-    // リール・ストーリーズ用短文を生成
-    generateReelsStories: protectedProcedure
-      .input(z.object({
-        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
-        contentType: z.enum(["hook", "question", "emotion", "cta", "storytelling"]),
-        imageAnalysis: z.object({
-          category: z.string(),
-          style: z.string(),
-          description: z.string(),
-          keywords: z.array(z.string()),
-        }),
-      }))
-      .mutation(async ({ input }) => {
-        const { generateReelsStoriesContent } = await import("./ai-service");
-        
-        const reelsContent = await generateReelsStoriesContent(
-          input.imageAnalysis,
-          input.companyName,
-          input.contentType
-        );
-
-        return reelsContent;
       }),
 
     // 複数写真を取得して分析
