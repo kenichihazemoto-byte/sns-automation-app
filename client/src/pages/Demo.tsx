@@ -30,6 +30,7 @@ export default function Demo() {
   const [afterImage, setAfterImage] = useState<any>(null);
   const [beforeAfterPost, setBeforeAfterPost] = useState<any>(null);
   const [isBeforeAfterMode, setIsBeforeAfterMode] = useState<boolean>(false);
+  const [beforeAfterPlatform, setBeforeAfterPlatform] = useState<"instagram" | "x" | "threads">("instagram");
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -604,6 +605,36 @@ export default function Demo() {
                 </div>
               </div>
 
+              {/* プラットフォーム選択 */}
+              <div>
+                <Label htmlFor="before-after-platform">投稿先プラットフォーム</Label>
+                <Select value={beforeAfterPlatform} onValueChange={(value: any) => setBeforeAfterPlatform(value)}>
+                  <SelectTrigger id="before-after-platform" className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="instagram">
+                      <div className="flex items-center gap-2">
+                        <Instagram className="h-4 w-4" />
+                        Instagram (2200文字)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="x">
+                      <div className="flex items-center gap-2">
+                        <Twitter className="h-4 w-4" />
+                        X (280文字)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="threads">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Threads (500文字)
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* 生成ボタン */}
               <Button
                 onClick={() => {
@@ -615,7 +646,7 @@ export default function Demo() {
                     beforeImageUrl: beforeImage.url,
                     afterImageUrl: afterImage.url,
                     companyName,
-                    platform: "instagram",
+                    platform: beforeAfterPlatform,
                   });
                 }}
                 disabled={!beforeImage || !afterImage || generateBeforeAfterPostMutation.isPending}
@@ -627,35 +658,79 @@ export default function Demo() {
                     生成中...
                   </>
                 ) : (
-                  "🔄 ビフォーアフター投稿文を生成"
+                  <>
+                    {beforeAfterPlatform === "instagram" && <Instagram className="mr-2 h-4 w-4" />}
+                    {beforeAfterPlatform === "x" && <Twitter className="mr-2 h-4 w-4" />}
+                    {beforeAfterPlatform === "threads" && <MessageSquare className="mr-2 h-4 w-4" />}
+                    🔄 {beforeAfterPlatform === "instagram" ? "Instagram" : beforeAfterPlatform === "x" ? "X" : "Threads"}投稿文を生成
+                  </>
                 )}
               </Button>
 
               {/* 生成結果表示 */}
-              {beforeAfterPost && (
-                <div className="mt-4 space-y-4">
-                  <div className="border rounded-lg p-4">
-                    <h3 className="font-semibold mb-2">生成された投稿文</h3>
-                    <p className="whitespace-pre-wrap text-sm">{beforeAfterPost.content}</p>
+              {beforeAfterPost && (() => {
+                const fullPost = `${beforeAfterPost.content}\n\n${beforeAfterPost.hashtags}`;
+                const charCount = fullPost.length;
+                const maxChars = beforeAfterPlatform === "instagram" ? 2200 : beforeAfterPlatform === "x" ? 280 : 500;
+                const isOverLimit = charCount > maxChars;
+                
+                return (
+                  <div className="mt-4 space-y-4">
+                    {/* プラットフォーム情報 */}
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div className="flex items-center gap-2">
+                        {beforeAfterPlatform === "instagram" && <Instagram className="h-5 w-5" />}
+                        {beforeAfterPlatform === "x" && <Twitter className="h-5 w-5" />}
+                        {beforeAfterPlatform === "threads" && <MessageSquare className="h-5 w-5" />}
+                        <span className="font-semibold">
+                          {beforeAfterPlatform === "instagram" ? "Instagram" : beforeAfterPlatform === "x" ? "X" : "Threads"}向け投稿文
+                        </span>
+                      </div>
+                      <div className={`text-sm font-medium ${
+                        isOverLimit ? "text-destructive" : charCount > maxChars * 0.9 ? "text-orange-500" : "text-muted-foreground"
+                      }`}>
+                        {charCount} / {maxChars}文字
+                        {isOverLimit && " (制限超過)"}
+                      </div>
+                    </div>
+
+                    {/* 投稿文 */}
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-2">生成された投稿文</h3>
+                      <p className="whitespace-pre-wrap text-sm">{beforeAfterPost.content}</p>
+                    </div>
+
+                    {/* ハッシュタグ */}
+                    <div className="border rounded-lg p-4">
+                      <h3 className="font-semibold mb-2">ハッシュタグ</h3>
+                      <p className="text-sm text-muted-foreground">{beforeAfterPost.hashtags}</p>
+                    </div>
+
+                    {/* 文字数超過警告 */}
+                    {isOverLimit && (
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                        <p className="text-sm text-destructive font-medium">
+                          ⚠️ 文字数が{beforeAfterPlatform === "instagram" ? "Instagram" : beforeAfterPlatform === "x" ? "X" : "Threads"}の制限({maxChars}文字)を超えています。
+                          投稿前に編集してください。
+                        </p>
+                      </div>
+                    )}
+
+                    {/* コピーボタン */}
+                    <Button
+                      onClick={() => {
+                        navigator.clipboard.writeText(fullPost);
+                        toast.success("投稿文をコピーしました");
+                      }}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      投稿文をコピー
+                    </Button>
                   </div>
-                  <div className="border rounded-lg p-4">
-                    <h3 className="font-semibold mb-2">ハッシュタグ</h3>
-                    <p className="text-sm text-muted-foreground">{beforeAfterPost.hashtags}</p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      const fullPost = `${beforeAfterPost.content}\n\n${beforeAfterPost.hashtags}`;
-                      navigator.clipboard.writeText(fullPost);
-                      toast.success("投稿文をコピーしました");
-                    }}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    投稿文をコピー
-                  </Button>
-                </div>
-              )}
+                );
+              })()}
             </CardContent>
           </Card>
         ) : (

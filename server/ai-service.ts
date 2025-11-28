@@ -643,12 +643,34 @@ export async function generateBeforeAfterPost(params: {
 
   // プラットフォーム別の最適化
   let platformGuidance = '';
+  let maxLength = 2200;
+  let hashtagCount = '8-12';
+  
   if (platform === 'instagram') {
-    platformGuidance = '文字数制限: 2200文字以内。改行を効果的に使い、視覚的に読みやすく。絵文字を適度に使用。';
+    maxLength = 2200;
+    hashtagCount = '8-12';
+    platformGuidance = `文字数制限: ${maxLength}文字以内。
+改行を効果的に使い、視覚的に読みやすく。
+絵文字を適度に使用（🔄✨🏠等）。
+変化点は箱条書き（✅または•）で3-5個明記。
+ハッシュタグは${hashtagCount}個程度。`;
   } else if (platform === 'x') {
-    platformGuidance = '文字数制限: 280文字以内。簡潔で impactful な表現。ハッシュタグは2-3個まで。';
+    maxLength = 280;
+    hashtagCount = '2-3';
+    platformGuidance = `文字数制限: ${maxLength}文字以内（厳守）。
+非常に簡潔でimpactfulな表現。
+絵文字は1-2個のみ。
+変化点は1-2文で簡潔にまとめる。
+箱条書きは使わず、文章形式で。
+ハッシュタグは${hashtagCount}個のみ（文字数に含む）。`;
   } else if (platform === 'threads') {
-    platformGuidance = '文字数制限: 500文字以内。親しみやすく会話的なトーン。';
+    maxLength = 500;
+    hashtagCount = '5-8';
+    platformGuidance = `文字数制限: ${maxLength}文字以内。
+親しみやすく会話的なトーン。
+絵文字を適度に使用。
+変化点は簡潔な箱条書きで3個程度。
+ハッシュタグは${hashtagCount}個程度。`;
   }
 
   const prompt = `あなたは${companyName}のSNS投稿文作成の専門家です。
