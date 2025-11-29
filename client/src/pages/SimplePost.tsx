@@ -32,14 +32,33 @@ export default function SimplePost() {
     { id: 5, title: "完了", description: "予約完了" },
   ];
 
+  // 作業履歴記録
+  const logActivityMutation = trpc.activityLog.create.useMutation();
+
   // 写真取得
   const fetchPhotoMutation = trpc.demo.getRandomPhotoWithAnalysis.useMutation({
     onSuccess: (data) => {
       setSelectedImage(data);
       toast.success("写真を取得しました！");
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "photo_upload",
+        description: "かんたん投稿で写真を選択しました",
+        status: "success",
+        metadata: JSON.stringify({ imageId: data.id, fileName: data.fileName }),
+      });
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "photo_upload",
+        description: "写真の取得に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ error: error.message }),
+      });
     },
   });
 
@@ -48,22 +67,61 @@ export default function SimplePost() {
     onSuccess: (data) => {
       setGeneratedPost(data);
       toast.success("投稿文を生成しました！");
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "post_generation",
+        description: "かんたん投稿でAI投稿文を生成しました",
+        status: "success",
+        metadata: JSON.stringify({ 
+          platforms: ["instagram", "x", "threads"],
+          imageId: selectedImage?.id 
+        }),
+      });
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "post_generation",
+        description: "投稿文の生成に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ error: error.message }),
+      });
     },
   });
 
   // 下書き保存（承認待ち）
   const createDraftMutation = trpc.approval.createDraft.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("承認待ちとして保存しました！", {
         description: "支援員が確認後、予約投稿に登録されます",
       });
       setCurrentStep(5);
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "post_schedule",
+        description: "承認待ち投稿を作成しました（かんたん投稿）",
+        status: "success",
+        metadata: JSON.stringify({ 
+          draftId: data.id,
+          platform,
+          scheduledAt: `${scheduleDate}T${scheduleTime}` 
+        }),
+      });
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "post_schedule",
+        description: "承認待ち投稿の作成に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ error: error.message }),
+      });
     },
   });
 

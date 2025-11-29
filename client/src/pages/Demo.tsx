@@ -40,6 +40,9 @@ export default function Demo() {
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
+  
+  // 作業履歴記録
+  const logActivityMutation = trpc.activityLog.create.useMutation();
 
   const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
     onSuccess: (data) => {
@@ -50,9 +53,25 @@ export default function Demo() {
       setCarouselPost(null);
       setMultiplePhotos([]);
       toast.success("写真をアップロードし、AI分析が完了しました");
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "photo_upload",
+        description: "上級者向けデモで写真をアップロードしました",
+        status: "success",
+        metadata: JSON.stringify({ imageId: data.id, fileName: data.fileName }),
+      });
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "photo_upload",
+        description: "写真のアップロードに失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ error: error.message }),
+      });
     },
   });
 
@@ -94,9 +113,29 @@ export default function Demo() {
       setContents(data);
       setViewMode("single");
       toast.success("全プラットフォームの投稿文を生成しました");
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "post_generation",
+        description: "上級者向けデモで投稿文を生成しました",
+        status: "success",
+        metadata: JSON.stringify({ 
+          platforms: ["instagram", "x", "threads"],
+          companyName,
+          imageId: selectedImage?.id 
+        }),
+      });
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "post_generation",
+        description: "投稿文の生成に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ error: error.message }),
+      });
     },
   });
 
@@ -157,8 +196,21 @@ export default function Demo() {
   });
 
   const createScheduleMutation = trpc.posts.createSchedule.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("予約投稿を保存しました");
+      
+      // 作業履歴を記録
+      logActivityMutation.mutate({
+        activityType: "post_schedule",
+        description: "上級者向けデモで予約投稿を作成しました",
+        status: "success",
+        metadata: JSON.stringify({ 
+          scheduleId: data.id,
+          scheduledAt: `${scheduleDate}T${scheduleTime}`,
+          companyName,
+          isBeforeAfter: isBeforeAfterMode
+        }),
+      });
       setShowScheduleDialog(false);
       setScheduleDate("");
       setScheduleTime("");

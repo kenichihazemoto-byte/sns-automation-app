@@ -22,17 +22,48 @@ export default function ApprovalQueue() {
   const { data: pendingDrafts, isLoading, refetch } = trpc.approval.getPendingDrafts.useQuery();
   const approveMutation = trpc.approval.approveDraft.useMutation();
   const rejectMutation = trpc.approval.rejectDraft.useMutation();
+  
+  // 作業履歴記録
+  const logActivityMutation = trpc.activityLog.create.useMutation();
 
   const handleApprove = async (draftId: number) => {
+    const draft = pendingDrafts?.find((d: any) => d.id === draftId);
     try {
       await approveMutation.mutateAsync({ draftId });
       toast.success("投稿を承認しました", {
         description: "予約投稿として登録されました",
       });
+      
+      // 作業履歴を記録（支援員の承認行為）
+      if (draft) {
+        logActivityMutation.mutate({
+          activityType: "post_approval",
+          description: `支援員が投稿を承認しました（${draft.user?.name || '利用者'}さんの投稿）`,
+          status: "success",
+          metadata: JSON.stringify({ 
+            draftId,
+            userId: draft.userId,
+            platform: draft.platform,
+            action: "approved"
+          }),
+        });
+      }
+      
       refetch();
     } catch (error) {
       toast.error("承認に失敗しました", {
         description: error instanceof Error ? error.message : "エラーが発生しました",
+      });
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "post_approval",
+        description: "投稿の承認に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ 
+          draftId,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }),
       });
     }
   };
@@ -52,6 +83,21 @@ export default function ApprovalQueue() {
       toast.success("投稿を却下しました", {
         description: "利用者さんにフィードバックが送信されました",
       });
+      
+      // 作業履歴を記録（支援員の却下行為）
+      logActivityMutation.mutate({
+        activityType: "post_approval",
+        description: `支援員が投稿を却下しました（${selectedDraft.user?.name || '利用者'}さんの投稿）`,
+        status: "success",
+        metadata: JSON.stringify({ 
+          draftId: selectedDraft.id,
+          userId: selectedDraft.userId,
+          platform: selectedDraft.platform,
+          action: "rejected",
+          feedback: feedback.trim()
+        }),
+      });
+      
       setRejectDialogOpen(false);
       setSelectedDraft(null);
       setFeedback("");
@@ -59,6 +105,17 @@ export default function ApprovalQueue() {
     } catch (error) {
       toast.error("却下に失敗しました", {
         description: error instanceof Error ? error.message : "エラーが発生しました",
+      });
+      
+      // エラーも記録
+      logActivityMutation.mutate({
+        activityType: "post_approval",
+        description: "投稿の却下に失敗しました",
+        status: "failed",
+        metadata: JSON.stringify({ 
+          draftId: selectedDraft.id,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }),
       });
     }
   };
