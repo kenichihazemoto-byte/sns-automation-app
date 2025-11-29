@@ -27,6 +27,12 @@ import {
   comments,
   InsertComment,
   Comment,
+  draftPosts,
+  InsertDraftPost,
+  DraftPost,
+  approvalHistory,
+  InsertApprovalHistory,
+  ApprovalHistory,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -545,4 +551,80 @@ export async function deleteCustomTemplate(id: number) {
   const { eq } = await import("drizzle-orm");
   
   await db.delete(customTemplates).where(eq(customTemplates.id, id));
+}
+
+// Draft Posts (Approval Workflow)
+export async function createDraftPost(draftData: InsertDraftPost): Promise<DraftPost> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(draftPosts).values(draftData);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(draftPosts).where(eq(draftPosts.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getPendingDraftPosts(): Promise<DraftPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(draftPosts)
+    .where(eq(draftPosts.status, "pending"))
+    .orderBy(desc(draftPosts.createdAt));
+}
+
+export async function getDraftPostsByUserId(userId: number): Promise<DraftPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(draftPosts)
+    .where(eq(draftPosts.userId, userId))
+    .orderBy(desc(draftPosts.createdAt));
+}
+
+export async function getDraftPostById(id: number): Promise<DraftPost | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(draftPosts).where(eq(draftPosts.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateDraftPostStatus(
+  id: number,
+  status: "pending" | "approved" | "rejected"
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(draftPosts).set({ status }).where(eq(draftPosts.id, id));
+}
+
+export async function deleteDraftPost(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(draftPosts).where(eq(draftPosts.id, id));
+}
+
+// Approval History
+export async function createApprovalHistory(historyData: InsertApprovalHistory): Promise<ApprovalHistory> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(approvalHistory).values(historyData);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(approvalHistory).where(eq(approvalHistory.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getApprovalHistoryByDraftPostId(draftPostId: number): Promise<ApprovalHistory[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(approvalHistory)
+    .where(eq(approvalHistory.draftPostId, draftPostId))
+    .orderBy(desc(approvalHistory.createdAt));
 }

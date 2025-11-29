@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ProgressSteps } from "@/components/ProgressSteps";
 import { HelpButton } from "@/components/HelpButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { VoiceGuide } from "@/components/VoiceGuide";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Loader2, Image as ImageIcon, FileText, Calendar, CheckCircle } from "lucide-react";
@@ -53,6 +54,19 @@ export default function SimplePost() {
     },
   });
 
+  // 下書き保存（承認待ち）
+  const createDraftMutation = trpc.approval.createDraft.useMutation({
+    onSuccess: () => {
+      toast.success("承認待ちとして保存しました！", {
+        description: "支援員が確認後、予約投稿に登録されます",
+      });
+      setCurrentStep(5);
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
   // 予約投稿作成
   const createScheduleMutation = trpc.posts.createSchedule.useMutation({
     onSuccess: () => {
@@ -95,13 +109,14 @@ export default function SimplePost() {
   const handleConfirmSchedule = () => {
     const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`);
     
-    createScheduleMutation.mutate({
+    // 下書き保存（承認待ち）
+    createDraftMutation.mutate({
       imageId: selectedImage.id,
       companyName: "ハゼモト建設",
-      scheduledAt,
       platform,
       postContent: generatedPost[platform].post,
-      hashtags: generatedPost[platform].hashtags,
+      hashtags: JSON.stringify(generatedPost[platform].hashtags),
+      scheduledAt: scheduledAt.toISOString(),
     });
 
     setShowConfirmDialog(false);
@@ -168,6 +183,10 @@ export default function SimplePost() {
             {/* ステップ1: 写真を選ぶ */}
             {currentStep === 1 && (
               <div className="space-y-4">
+                <VoiceGuide
+                  text="ステップ1、写真を選びます。「写真を取得」ボタンを押すと、リフォーム事例の写真が表示されます。"
+                  autoPlay
+                />
                 <div className="text-center py-8">
                   {selectedImage ? (
                     <div className="space-y-4">

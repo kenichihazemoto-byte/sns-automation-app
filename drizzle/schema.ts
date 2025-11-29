@@ -212,3 +212,43 @@ export const customTemplates = mysqlTable("custom_templates", {
 
 export type CustomTemplate = typeof customTemplates.$inferSelect;
 export type InsertCustomTemplate = typeof customTemplates.$inferInsert;
+
+/**
+ * Draft posts table for approval workflow
+ * Stores posts created by users that require approval before scheduling
+ */
+export const draftPosts = mysqlTable("draft_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  imageId: int("imageId"),
+  companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
+  platform: mysqlEnum("platform", ["instagram", "x", "threads"]).notNull(),
+  postContent: text("postContent").notNull(),
+  hashtags: text("hashtags").notNull(), // JSON array
+  scheduledAt: timestamp("scheduledAt").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
+  beforeImageUrl: text("beforeImageUrl"),
+  afterImageUrl: text("afterImageUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DraftPost = typeof draftPosts.$inferSelect;
+export type InsertDraftPost = typeof draftPosts.$inferInsert;
+
+/**
+ * Approval history table
+ * Records approval/rejection actions and feedback from supervisors
+ */
+export const approvalHistory = mysqlTable("approval_history", {
+  id: int("id").autoincrement().primaryKey(),
+  draftPostId: int("draftPostId").notNull(),
+  reviewerId: int("reviewerId").notNull(), // admin user id
+  action: mysqlEnum("action", ["approved", "rejected"]).notNull(),
+  feedback: text("feedback"), // Feedback message for rejected posts
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ApprovalHistory = typeof approvalHistory.$inferSelect;
+export type InsertApprovalHistory = typeof approvalHistory.$inferInsert;

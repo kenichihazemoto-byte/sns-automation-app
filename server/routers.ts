@@ -878,6 +878,152 @@ export const appRouter = router({
   }),
 
   // Scheduler Management
+  // Approval Workflow
+  approval: router({
+    // Create draft post (for users)
+    createDraft: protectedProcedure
+      .input(z.object({
+        imageId: z.number().optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        platform: z.enum(["instagram", "x", "threads"]),
+        postContent: z.string(),
+        hashtags: z.string(),
+        scheduledAt: z.string(),
+        isBeforeAfter: z.boolean().optional(),
+        beforeImageUrl: z.string().optional(),
+        afterImageUrl: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const draftPost = await db.createDraftPost({
+          userId: ctx.user.id,
+          imageId: input.imageId,
+          companyName: input.companyName,
+          platform: input.platform,
+          postContent: input.postContent,
+          hashtags: input.hashtags,
+          scheduledAt: new Date(input.scheduledAt),
+          isBeforeAfter: input.isBeforeAfter || false,
+          beforeImageUrl: input.beforeImageUrl,
+          afterImageUrl: input.afterImageUrl,
+        });
+        return draftPost;
+      }),
+
+    // Get pending drafts (for admins)
+    getPendingDrafts: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new Error("Only admins can view pending drafts");
+      }
+      return await db.getPendingDraftPosts();
+    }),
+
+    // Get user's own drafts
+    getMyDrafts: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getDraftPostsByUserId(ctx.user.id);
+    }),
+
+    // Approve draft (for admins)
+    approveDraft: protectedProcedure
+      .input(z.object({
+        draftId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new Error("Only admins can approve drafts");
+        }
+
+        const draft = await db.getDraftPostById(input.draftId);
+        if (!draft) {
+          throw new Error("Draft not found");
+        }
+
+        // Update draft status
+        await db.updateDraftPostStatus(input.draftId, "approved");
+
+        // Create approval history
+        await db.createApprovalHistory({
+          draftPostId: input.draftId,
+          reviewerId: ctx.user.id,
+          action: "approved",
+        });
+
+        // Create scheduled post
+        const schedule = await db.createPostSchedule({
+          userId: draft.userId,
+          imageId: draft.imageId,
+          companyName: draft.companyName,
+          scheduledAt: draft.scheduledAt,
+          isBeforeAfter: draft.isBeforeAfter,
+          beforeImageUrl: draft.beforeImageUrl,
+          afterImageUrl: draft.afterImageUrl,
+        });
+
+        // Create post content
+        await db.createPostContent({
+          scheduleId: schedule.id,
+          platform: draft.platform,
+          content: draft.postContent,
+          hashtags: draft.hashtags,
+        });
+
+        return { success: true, scheduleId: schedule.id };
+      }),
+
+    // Reject draft (for admins)
+    rejectDraft: protectedProcedure
+      .input(z.object({
+        draftId: z.number(),
+        feedback: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new Error("Only admins can reject drafts");
+        }
+
+        // Update draft status
+        await db.updateDraftPostStatus(input.draftId, "rejected");
+
+        // Create approval history with feedback
+        await db.createApprovalHistory({
+          draftPostId: input.draftId,
+          reviewerId: ctx.user.id,
+          action: "rejected",
+          feedback: input.feedback,
+        });
+
+        return { success: true };
+      }),
+
+    // Get approval history for a draft
+    getApprovalHistory: protectedProcedure
+      .input(z.object({
+        draftId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getApprovalHistoryByDraftPostId(input.draftId);
+      }),
+
+    // Delete draft
+    deleteDraft: protectedProcedure
+      .input(z.object({
+        draftId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const draft = await db.getDraftPostById(input.draftId);
+        if (!draft) {
+          throw new Error("Draft not found");
+        }
+
+        // Only the creator or admin can delete
+        if (draft.userId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new Error("Permission denied");
+        }
+
+        await db.deleteDraftPost(input.draftId);
+        return { success: true };
+      }),
+  }),
+
   scheduler: router({
     listScheduledPosts: protectedProcedure.query(async ({ ctx }) => {
       const schedulerService = await import('./scheduler-service');
