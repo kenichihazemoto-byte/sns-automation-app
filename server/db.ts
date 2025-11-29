@@ -1,4 +1,4 @@
-import { eq, and, desc, gte, lte, asc } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -688,6 +688,89 @@ export async function getUserActivityStats(userId: number): Promise<{
   };
 
   return stats;
+}
+
+export async function getUserActivityLogsByDateRange(
+  userId: number | null,
+  startDate: Date,
+  endDate: Date
+): Promise<UserActivityLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (userId) {
+    return await db.select().from(userActivityLog)
+      .where(
+        and(
+          eq(userActivityLog.userId, userId),
+          gte(userActivityLog.createdAt, startDate),
+          lte(userActivityLog.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(userActivityLog.createdAt));
+  } else {
+    return await db.select().from(userActivityLog)
+      .where(
+        and(
+          gte(userActivityLog.createdAt, startDate),
+          lte(userActivityLog.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(userActivityLog.createdAt));
+  }
+}
+
+export async function getActivityTrendsByDateRange(
+  userId: number | null,
+  startDate: Date,
+  endDate: Date,
+  groupBy: 'day' | 'week' | 'month'
+): Promise<Array<{
+  date: string;
+  totalActivities: number;
+  successCount: number;
+  failedCount: number;
+  activityBreakdown: Record<string, number>;
+}>> {
+  const logs = await getUserActivityLogsByDateRange(userId, startDate, endDate);
+  
+  // 日付ごとにグループ化
+  const groupedByDate = logs.reduce((acc, log) => {
+    let dateKey: string;
+    const logDate = new Date(log.createdAt);
+    
+    if (groupBy === 'day') {
+      dateKey = logDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    } else if (groupBy === 'week') {
+      // 週の始まり（月曜日）を取得
+      const weekStart = new Date(logDate);
+      weekStart.setDate(logDate.getDate() - logDate.getDay() + 1);
+      dateKey = weekStart.toISOString().split('T')[0];
+    } else {
+      dateKey = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+    }
+    
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(log);
+    return acc;
+  }, {} as Record<string, UserActivityLog[]>);
+  
+  // 各日付の統計を計算
+  const trends = Object.entries(groupedByDate).map(([date, logs]) => ({
+    date,
+    totalActivities: logs.length,
+    successCount: logs.filter(log => log.status === 'success').length,
+    failedCount: logs.filter(log => log.status === 'failed').length,
+    activityBreakdown: logs.reduce((acc, log) => {
+      acc[log.activityType] = (acc[log.activityType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+  }));
+  
+  // 日付でソート
+  return trends.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // User Feedback

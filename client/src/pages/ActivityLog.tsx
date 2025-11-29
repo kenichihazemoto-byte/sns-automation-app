@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, XCircle, Clock, User, Activity, TrendingUp } from "lucide-react";
-import { format } from "date-fns";
+import { CheckCircle2, XCircle, Clock, User, Activity, TrendingUp, BarChart3, LineChart } from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
+import { LineChart as RechartsLine, Line, BarChart as RechartsBar, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 /**
  * 作業履歴一覧ページ（支援員向け）
@@ -15,6 +16,8 @@ import { ja } from "date-fns/locale";
  */
 export default function ActivityLog() {
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<"7days" | "30days" | "90days">("30days");
+  const [groupBy, setGroupBy] = useState<"day" | "week" | "month">("day");
   const { data: currentUser } = trpc.auth.me.useQuery();
   const { data: allLogs, isLoading: logsLoading } = trpc.activityLog.getAllLogs.useQuery(
     { limit: 100 },
@@ -26,6 +29,25 @@ export default function ActivityLog() {
   );
   const { data: userStats } = trpc.activityLog.getStats.useQuery(
     { userId: selectedUserId },
+    { enabled: !!selectedUserId }
+  );
+
+  // 期間計算
+  const getDateRange = () => {
+    const days = dateRange === "7days" ? 7 : dateRange === "30days" ? 30 : 90;
+    return {
+      startDate: startOfDay(subDays(new Date(), days)),
+      endDate: endOfDay(new Date()),
+    };
+  };
+
+  // 作業推移データ取得
+  const { data: trends } = trpc.activityLog.getTrends.useQuery(
+    {
+      userId: selectedUserId || null,
+      ...getDateRange(),
+      groupBy,
+    },
     { enabled: !!selectedUserId }
   );
 
@@ -174,6 +196,107 @@ export default function ActivityLog() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* 作業推移グラフ（ユーザー選択時のみ） */}
+      {selectedUserId && trends && trends.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <LineChart className="h-5 w-5" />
+                作業推移グラフ
+              </CardTitle>
+              <div className="flex gap-2">
+                <Select value={dateRange} onValueChange={(v: any) => setDateRange(v)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7days">過去7日間</SelectItem>
+                    <SelectItem value="30days">過去30日間</SelectItem>
+                    <SelectItem value="90days">過去90日間</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={groupBy} onValueChange={(v: any) => setGroupBy(v)}>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">日別</SelectItem>
+                    <SelectItem value="week">週別</SelectItem>
+                    <SelectItem value="month">月別</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="line" className="w-full">
+              <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+                <TabsTrigger value="line">折れ線グラフ</TabsTrigger>
+                <TabsTrigger value="bar">棒グラフ</TabsTrigger>
+              </TabsList>
+              <TabsContent value="line" className="mt-6">
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsLine data={trends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="totalActivities" 
+                      stroke="#3b82f6" 
+                      name="総作業数"
+                      strokeWidth={2}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="successCount" 
+                      stroke="#10b981" 
+                      name="成功"
+                      strokeWidth={2}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="failedCount" 
+                      stroke="#ef4444" 
+                      name="失敗"
+                      strokeWidth={2}
+                    />
+                  </RechartsLine>
+                </ResponsiveContainer>
+              </TabsContent>
+              <TabsContent value="bar" className="mt-6">
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsBar data={trends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="successCount" fill="#10b981" name="成功" />
+                    <Bar dataKey="failedCount" fill="#ef4444" name="失敗" />
+                  </RechartsBar>
+                </ResponsiveContainer>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       )}
 
       {/* 作業種別の内訳（ユーザー選択時のみ） */}

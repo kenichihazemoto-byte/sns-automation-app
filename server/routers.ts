@@ -1090,6 +1090,28 @@ export const appRouter = router({
         const userId = input.userId || ctx.user.id;
         return await db.getUserActivityStats(userId);
       }),
+
+    // Get activity trends by date range
+    getTrends: protectedProcedure
+      .input(z.object({
+        userId: z.number().optional().nullable(),
+        startDate: z.date(),
+        endDate: z.date(),
+        groupBy: z.enum(["day", "week", "month"]),
+      }))
+      .query(async ({ ctx, input }) => {
+        // 管理者以外は自分のデータのみ
+        const userId = ctx.user.role === "admin" && input.userId !== undefined 
+          ? input.userId 
+          : ctx.user.id;
+        
+        return await db.getActivityTrendsByDateRange(
+          userId,
+          input.startDate,
+          input.endDate,
+          input.groupBy
+        );
+      }),
   }),
 
   // Feedback Management
