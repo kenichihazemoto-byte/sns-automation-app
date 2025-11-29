@@ -1040,6 +1040,117 @@ export const appRouter = router({
         return await schedulerService.updateScheduledPost(input.id, input.scheduledAt);
       }),
   }),
+
+  // Activity Log Management
+  activityLog: router({
+    // Create activity log
+    create: protectedProcedure
+      .input(z.object({
+        activityType: z.enum(["photo_upload", "post_generation", "post_schedule", "post_approval", "post_publish", "template_create", "template_edit"]),
+        description: z.string(),
+        status: z.enum(["success", "failed"]),
+        metadata: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await db.createActivityLog({
+          userId: ctx.user.id,
+          ...input,
+        });
+      }),
+
+    // Get user's activity logs
+    getUserLogs: protectedProcedure
+      .input(z.object({
+        userId: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const userId = input.userId || ctx.user.id;
+        return await db.getUserActivityLogs(userId, input.limit);
+      }),
+
+    // Get all users' activity logs (admin only)
+    getAllLogs: protectedProcedure
+      .input(z.object({
+        limit: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new Error("Permission denied: Admin only");
+        }
+        return await db.getAllUsersActivityLogs(input.limit);
+      }),
+
+    // Get user activity stats
+    getStats: protectedProcedure
+      .input(z.object({
+        userId: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const userId = input.userId || ctx.user.id;
+        return await db.getUserActivityStats(userId);
+      }),
+  }),
+
+  // Feedback Management
+  feedback: router({
+    // Create feedback (admin only)
+    create: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        activityLogId: z.number().optional(),
+        feedbackType: z.enum(["praise", "suggestion", "correction", "reminder"]),
+        message: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new Error("Permission denied: Admin only");
+        }
+        return await db.createUserFeedback({
+          ...input,
+          createdBy: ctx.user.id,
+        });
+      }),
+
+    // Get user's feedback
+    getUserFeedback: protectedProcedure
+      .input(z.object({
+        userId: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const userId = input.userId || ctx.user.id;
+        return await db.getUserFeedback(userId, input.limit);
+      }),
+
+    // Get all users' feedback (admin only)
+    getAllFeedback: protectedProcedure
+      .input(z.object({
+        limit: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new Error("Permission denied: Admin only");
+        }
+        return await db.getAllUsersFeedback(input.limit);
+      }),
+
+    // Get unread feedback count
+    getUnreadCount: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getUnreadFeedbackCount(ctx.user.id);
+      }),
+
+    // Mark feedback as read
+    markAsRead: protectedProcedure
+      .input(z.object({
+        feedbackId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.markFeedbackAsRead(input.feedbackId);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
