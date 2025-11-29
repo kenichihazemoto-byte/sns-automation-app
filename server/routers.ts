@@ -193,14 +193,56 @@ export const appRouter = router({
 
     createSchedule: protectedProcedure
       .input(z.object({
-        imageId: z.number(),
+        imageId: z.number().optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
         scheduledAt: z.date(),
+        isBeforeAfter: z.boolean().optional(),
+        beforeImageUrl: z.string().optional(),
+        afterImageUrl: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        return await db.createPostSchedule({
+        const scheduleId = await db.createPostSchedule({
           userId: ctx.user.id,
-          ...input,
+          imageId: input.imageId,
+          companyName: input.companyName,
+          scheduledAt: input.scheduledAt,
+          status: "scheduled",
+          isBeforeAfter: input.isBeforeAfter || false,
+          beforeImageUrl: input.beforeImageUrl,
+          afterImageUrl: input.afterImageUrl,
         });
+        return { id: scheduleId };
+      }),
+
+    getSchedule: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPostScheduleById(input.id);
+      }),
+
+    updateSchedule: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        scheduledAt: z.date().optional(),
+        status: z.enum(["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await db.updatePostSchedule(id, updates);
+        return { success: true };
+      }),
+
+    deleteSchedule: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deletePostSchedule(input.id);
+        return { success: true };
+      }),
+
+    upcomingSchedules: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        return await db.getUpcomingPostSchedules(input.limit || 10);
       }),
 
     updateStatus: protectedProcedure
@@ -275,6 +317,34 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         return await db.getPostHistoryByUserId(ctx.user.id, input.limit);
+      }),
+
+    historyBySchedule: protectedProcedure
+      .input(z.object({ scheduleId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPostHistoryByScheduleId(input.scheduleId);
+      }),
+
+    markPublished: protectedProcedure
+      .input(z.object({
+        scheduleId: z.number(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        postId: z.string().optional(),
+        postUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.markPostAsPublished(
+          input.scheduleId,
+          input.platform,
+          input.postId,
+          input.postUrl
+        );
+        return { success: true };
+      }),
+
+    stats: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getPostHistoryStats(ctx.user.id);
       }),
   }),
 

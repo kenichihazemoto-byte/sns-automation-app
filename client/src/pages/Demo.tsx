@@ -33,6 +33,9 @@ export default function Demo() {
   const [beforeAfterPlatform, setBeforeAfterPlatform] = useState<"instagram" | "x" | "threads">("instagram");
   const [allPlatformsPosts, setAllPlatformsPosts] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"instagram" | "x" | "threads">("instagram");
+  const [showScheduleDialog, setShowScheduleDialog] = useState<boolean>(false);
+  const [scheduleDate, setScheduleDate] = useState<string>("");
+  const [scheduleTime, setScheduleTime] = useState<string>("");
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -146,6 +149,18 @@ export default function Demo() {
       setAllPlatformsPosts(data);
       setBeforeAfterPost(null); // 一括生成時は単一プラットフォーム結果をクリア
       toast.success("すべてのプラットフォーム向けの投稿文を生成しました");
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const createScheduleMutation = trpc.posts.createSchedule.useMutation({
+    onSuccess: () => {
+      toast.success("予約投稿を保存しました");
+      setShowScheduleDialog(false);
+      setScheduleDate("");
+      setScheduleTime("");
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);

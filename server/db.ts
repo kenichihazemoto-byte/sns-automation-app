@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -249,6 +249,71 @@ export async function updatePostScheduleStatus(id: number, status: "pending" | "
   await db.update(postSchedules).set({ status }).where(eq(postSchedules.id, id));
 }
 
+export async function getPostScheduleById(id: number): Promise<PostSchedule | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const results = await db.select().from(postSchedules).where(eq(postSchedules.id, id)).limit(1);
+  return results.length > 0 ? results[0] : undefined;
+}
+
+export async function updatePostSchedule(id: number, updates: Partial<InsertPostSchedule>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(postSchedules).set(updates).where(eq(postSchedules.id, id));
+}
+
+export async function deletePostSchedule(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 関連する投稿コンテンツも削除
+  await db.delete(postContents).where(eq(postContents.postScheduleId, id));
+  await db.delete(postSchedules).where(eq(postSchedules.id, id));
+}
+
+export async function getUpcomingPostSchedules(limit: number = 10): Promise<PostSchedule[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const now = new Date();
+  return await db.select().from(postSchedules)
+    .where(and(
+      eq(postSchedules.status, "scheduled"),
+      gte(postSchedules.scheduledAt, now)
+    ))
+    .orderBy(asc(postSchedules.scheduledAt))
+    .limit(limit);
+}
+
+export async function getPendingReminderSchedules(): Promise<PostSchedule[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const now = new Date();
+  const reminderTime = new Date(now.getTime() + 30 * 60 * 1000); // 30分後
+
+  return await db.select().from(postSchedules)
+    .where(and(
+      eq(postSchedules.status, "scheduled"),
+      eq(postSchedules.notificationSent, false),
+      lte(postSchedules.scheduledAt, reminderTime),
+      gte(postSchedules.scheduledAt, now)
+    ))
+    .orderBy(asc(postSchedules.scheduledAt));
+}
+
+export async function markReminderSent(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(postSchedules).set({
+    notificationSent: true,
+    reminderSentAt: new Date(),
+  }).where(eq(postSchedules.id, id));
+}
+
 // Post Contents
 export async function createPostContent(content: InsertPostContent): Promise<number> {
   const db = await getDb();
@@ -289,6 +354,76 @@ export async function getPostHistoryByUserId(userId: number, limit = 50): Promis
     .orderBy(desc(postHistory.publishedAt))
     .limit(limit)
     .then(results => results.map(r => r.post_history));
+}
+
+export async function getPostHistoryByScheduleId(scheduleId: number): Promise<PostHistoryRecord[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(postHistory)
+    .where(eq(postHistory.postScheduleId, scheduleId))
+    .orderBy(desc(postHistory.createdAt));
+}
+
+export async function markPostAsPublished(scheduleId: number, platform: "instagram" | "x" | "threads", postId?: string, postUrl?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 投稿履歴を記録
+  await db.insert(postHistory).values({
+    postScheduleId: scheduleId,
+    platform,
+    postId,
+    postUrl,
+    status: "published",
+    publishedAt: new Date(),
+  });
+
+  // スケジュールのステータスを更新
+  await db.update(postSchedules).set({
+    status: "completed",
+    lastExecutedAt: new Date(),
+  }).where(eq(postSchedules.id, scheduleId));
+}
+
+export async function getPostHistoryStats(userId: number): Promise<{
+  totalPosts: number;
+  successfulPosts: number;
+  failedPosts: number;
+  postsByPlatform: { platform: string; count: number }[];
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalPosts: 0,
+      successfulPosts: 0,
+      failedPosts: 0,
+      postsByPlatform: [],
+    };
+  }
+
+  const history = await getPostHistoryByUserId(userId, 1000);
+
+  const totalPosts = history.length;
+  const successfulPosts = history.filter(h => h.status === "published").length;
+  const failedPosts = history.filter(h => h.status === "failed").length;
+
+  const platformCounts = history.reduce((acc, h) => {
+    acc[h.platform] = (acc[h.platform] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const postsByPlatform = Object.entries(platformCounts).map(([platform, count]) => ({
+    platform,
+    count,
+  }));
+
+  return {
+    totalPosts,
+    successfulPosts,
+    failedPosts,
+    postsByPlatform,
+  };
 }
 
 // Analytics

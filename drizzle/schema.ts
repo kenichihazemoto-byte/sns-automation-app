@@ -105,6 +105,13 @@ export const postSchedules = mysqlTable("post_schedules", {
   cronExpression: varchar("cronExpression", { length: 100 }),
   status: mysqlEnum("status", ["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled"]).default("draft").notNull(),
   lastExecutedAt: timestamp("lastExecutedAt"),
+  // リマインダー通知用
+  notificationSent: boolean("notificationSent").default(false).notNull(),
+  reminderSentAt: timestamp("reminderSentAt"),
+  // ビフォーアフター投稿用
+  isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
+  beforeImageUrl: text("beforeImageUrl"),
+  afterImageUrl: text("afterImageUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -142,6 +149,7 @@ export const postHistory = mysqlTable("post_history", {
   postUrl: text("postUrl"),
   status: mysqlEnum("status", ["published", "failed"]).notNull(),
   errorMessage: text("errorMessage"),
+  publishedAt: timestamp("publishedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
