@@ -16,6 +16,7 @@ import ScheduledPosts from "./pages/ScheduledPosts";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import Templates from "./pages/Templates";
+import SimplePost from "./pages/SimplePost";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/demo"} component={Demo} />
+      <Route path={"/simple-post"} component={SimplePost} />
       <Route path={"/history"} component={PostHistory} />
       <Route path={"/scheduled"} component={ScheduledPosts} />
       <Route path={"/settings"} component={Settings} />
