@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload } from "lucide-react";
+import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Demo() {
   const [companyName, setCompanyName] = useState<"ハゼモト建設" | "クリニックアーキプロ">("ハゼモト建設");
@@ -879,18 +880,28 @@ export default function Demo() {
                           </div>
                         )}
 
-                        {/* コピーボタン */}
-                        <Button
-                          onClick={() => {
-                            navigator.clipboard.writeText(fullPost);
-                            toast.success("投稿文をコピーしました");
-                          }}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          <Copy className="mr-2 h-4 w-4" />
-                          投稿文をコピー
-                        </Button>
+                        {/* アクションボタン */}
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => {
+                              navigator.clipboard.writeText(fullPost);
+                              toast.success("投稿文をコピーしました");
+                            }}
+                            variant="outline"
+                            className="flex-1"
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            コピー
+                          </Button>
+                          <Button
+                            onClick={() => setShowScheduleDialog(true)}
+                            variant="default"
+                            className="flex-1"
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            予約投稿
+                          </Button>
+                        </div>
                       </div>
                     );
                   })()}
@@ -1325,6 +1336,122 @@ export default function Demo() {
           </Card>
         )}
       </div>
+
+      {/* 予約投稿ダイアログ */}
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>予約投稿を作成</DialogTitle>
+            <DialogDescription>
+              生成した投稿文を予約投稿として保存します。指定した日時の30分前に通知が届きます。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* 日付選択 */}
+            <div className="space-y-2">
+              <Label htmlFor="schedule-date">投稿予定日</Label>
+              <Input
+                id="schedule-date"
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+
+            {/* 時刻選択 */}
+            <div className="space-y-2">
+              <Label htmlFor="schedule-time">投稿予定時刻</Label>
+              <Input
+                id="schedule-time"
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+              />
+            </div>
+
+            {/* プラットフォーム表示 */}
+            <div className="space-y-2">
+              <Label>投稿先プラットフォーム</Label>
+              <div className="flex gap-2">
+                {allPlatformsPosts ? (
+                  <>
+                    <Badge variant="secondary">
+                      <Instagram className="mr-1 h-3 w-3" />
+                      Instagram
+                    </Badge>
+                    <Badge variant="secondary">
+                      <Twitter className="mr-1 h-3 w-3" />
+                      X
+                    </Badge>
+                    <Badge variant="secondary">
+                      <MessageSquare className="mr-1 h-3 w-3" />
+                      Threads
+                    </Badge>
+                  </>
+                ) : beforeAfterPost ? (
+                  <Badge variant="secondary">
+                    {beforeAfterPlatform === "instagram" && <><Instagram className="mr-1 h-3 w-3" />Instagram</>}
+                    {beforeAfterPlatform === "x" && <><Twitter className="mr-1 h-3 w-3" />X</>}
+                    {beforeAfterPlatform === "threads" && <><MessageSquare className="mr-1 h-3 w-3" />Threads</>}
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+
+            {/* 投稿タイプ表示 */}
+            {isBeforeAfterMode && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <Calendar className="inline mr-1 h-4 w-4" />
+                  ビフォーアフター投稿として保存されます
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowScheduleDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => {
+                if (!scheduleDate || !scheduleTime) {
+                  toast.error("日付と時刻を選択してください");
+                  return;
+                }
+
+                const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`);
+                
+                createScheduleMutation.mutate({
+                  companyName,
+                  scheduledAt,
+                  isBeforeAfter: isBeforeAfterMode,
+                  beforeImageUrl: beforeImage?.url,
+                  afterImageUrl: afterImage?.url,
+                });
+              }}
+              disabled={createScheduleMutation.isPending || !scheduleDate || !scheduleTime}
+            >
+              {createScheduleMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Clock className="mr-2 h-4 w-4" />
+                  予約投稿を保存
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

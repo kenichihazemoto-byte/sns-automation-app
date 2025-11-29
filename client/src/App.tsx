@@ -12,6 +12,7 @@ import PostCalendar from "./pages/PostCalendar";
 import Analytics from "./pages/Analytics";
 import Demo from "./pages/Demo";
 import PostHistory from "./pages/PostHistory";
+import ScheduledPosts from "./pages/ScheduledPosts";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import Templates from "./pages/Templates";
@@ -23,6 +24,7 @@ function Router() {
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/demo"} component={Demo} />
       <Route path={"/history"} component={PostHistory} />
+      <Route path={"/scheduled"} component={ScheduledPosts} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/help"} component={Help} />
       <Route path={"/templates"} component={Templates} />

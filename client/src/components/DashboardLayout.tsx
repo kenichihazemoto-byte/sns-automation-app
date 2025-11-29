@@ -21,15 +21,21 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
+  { icon: Sparkles, label: "AI投稿生成", path: "/demo" },
+  { icon: Calendar, label: "予約投稿管理", path: "/scheduled" },
+  { icon: History, label: "投稿履歴", path: "/history" },
+  { icon: BarChart3, label: "効果測定", path: "/analytics" },
+  { icon: FileText, label: "テンプレート", path: "/templates" },
+  { icon: Settings, label: "設定", path: "/settings" },
+  { icon: HelpCircle, label: "ヘルプ", path: "/help" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
