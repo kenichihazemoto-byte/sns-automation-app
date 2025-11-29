@@ -234,6 +234,7 @@ export default function SimplePost() {
             {/* ステップ2: 投稿文を作る */}
             {currentStep === 2 && (
               <div className="space-y-4">
+                <VoiceGuide text="ステップ2です。投稿文を生成ボタンを押すと、AIが写真から投稿文を自動で作成します。生成には少し時間がかかります。" />
                 <div className="text-center py-8">
                   {generatedPost ? (
                     <div className="space-y-4">
@@ -315,6 +316,7 @@ export default function SimplePost() {
             {/* ステップ4: 予約する */}
             {currentStep === 4 && (
               <div className="space-y-4">
+                <VoiceGuide text="ステップ4です。投稿する日時を選んでください。カレンダーから日付を選び、時刻を入力します。入力が終わったら、確認して保存ボタンを押してください。" />
                 <div>
                   <Label htmlFor="schedule-date">投稿する日付</Label>
                   <Input

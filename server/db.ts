@@ -33,6 +33,12 @@ import {
   approvalHistory,
   InsertApprovalHistory,
   ApprovalHistory,
+  userActivityLog,
+  InsertUserActivityLog,
+  UserActivityLog,
+  userFeedback,
+  InsertUserFeedback,
+  UserFeedback,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -627,4 +633,108 @@ export async function getApprovalHistoryByDraftPostId(draftPostId: number): Prom
   return await db.select().from(approvalHistory)
     .where(eq(approvalHistory.draftPostId, draftPostId))
     .orderBy(desc(approvalHistory.createdAt));
+}
+
+// User Activity Log
+export async function createActivityLog(logData: InsertUserActivityLog): Promise<UserActivityLog> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(userActivityLog).values(logData);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(userActivityLog).where(eq(userActivityLog.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getUserActivityLogs(userId: number, limit: number = 50): Promise<UserActivityLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(userActivityLog)
+    .where(eq(userActivityLog.userId, userId))
+    .orderBy(desc(userActivityLog.createdAt))
+    .limit(limit);
+}
+
+export async function getAllUsersActivityLogs(limit: number = 100): Promise<UserActivityLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(userActivityLog)
+    .orderBy(desc(userActivityLog.createdAt))
+    .limit(limit);
+}
+
+export async function getUserActivityStats(userId: number): Promise<{
+  totalActivities: number;
+  successCount: number;
+  failedCount: number;
+  activityBreakdown: Record<string, number>;
+}> {
+  const db = await getDb();
+  if (!db) return { totalActivities: 0, successCount: 0, failedCount: 0, activityBreakdown: {} };
+
+  const logs = await getUserActivityLogs(userId, 1000);
+  
+  const stats = {
+    totalActivities: logs.length,
+    successCount: logs.filter(log => log.status === "success").length,
+    failedCount: logs.filter(log => log.status === "failed").length,
+    activityBreakdown: logs.reduce((acc, log) => {
+      acc[log.activityType] = (acc[log.activityType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+  };
+
+  return stats;
+}
+
+// User Feedback
+export async function createUserFeedback(feedbackData: InsertUserFeedback): Promise<UserFeedback> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(userFeedback).values(feedbackData);
+  const insertedId = Number(result[0].insertId);
+  
+  const inserted = await db.select().from(userFeedback).where(eq(userFeedback.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function getUserFeedback(userId: number, limit: number = 50): Promise<UserFeedback[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(userFeedback)
+    .where(eq(userFeedback.userId, userId))
+    .orderBy(desc(userFeedback.createdAt))
+    .limit(limit);
+}
+
+export async function getUnreadFeedbackCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const result = await db.select().from(userFeedback)
+    .where(eq(userFeedback.userId, userId))
+    .where(eq(userFeedback.isRead, false));
+  
+  return result.length;
+}
+
+export async function markFeedbackAsRead(feedbackId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(userFeedback).set({ isRead: true }).where(eq(userFeedback.id, feedbackId));
+}
+
+export async function getAllUsersFeedback(limit: number = 100): Promise<UserFeedback[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(userFeedback)
+    .orderBy(desc(userFeedback.createdAt))
+    .limit(limit);
 }

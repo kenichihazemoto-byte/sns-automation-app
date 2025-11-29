@@ -252,3 +252,42 @@ export const approvalHistory = mysqlTable("approval_history", {
 
 export type ApprovalHistory = typeof approvalHistory.$inferSelect;
 export type InsertApprovalHistory = typeof approvalHistory.$inferInsert;
+
+/**
+ * User activity log table
+ * Records all actions performed by users for tracking and skill improvement
+ */
+export const userActivityLog = mysqlTable("user_activity_log", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  activityType: mysqlEnum("activityType", [
+    "photo_fetch",
+    "post_generate",
+    "draft_create",
+    "schedule_create",
+  ]).notNull(),
+  details: text("details"), // JSON: additional information about the activity
+  status: mysqlEnum("status", ["success", "failed"]).default("success").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserActivityLog = typeof userActivityLog.$inferSelect;
+export type InsertUserActivityLog = typeof userActivityLog.$inferInsert;
+
+/**
+ * User feedback table
+ * Stores feedback from supervisors to help users improve their skills
+ */
+export const userFeedback = mysqlTable("user_feedback", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // User receiving the feedback
+  supervisorId: int("supervisorId").notNull(), // Admin providing the feedback
+  activityLogId: int("activityLogId"), // Optional reference to specific activity
+  feedbackType: mysqlEnum("feedbackType", ["praise", "suggestion", "correction"]).notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("isRead").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserFeedback = typeof userFeedback.$inferSelect;
+export type InsertUserFeedback = typeof userFeedback.$inferInsert;
