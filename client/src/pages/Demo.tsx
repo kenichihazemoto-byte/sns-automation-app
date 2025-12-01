@@ -37,6 +37,12 @@ export default function Demo() {
   const [showScheduleDialog, setShowScheduleDialog] = useState<boolean>(false);
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState<{
+    total: number;
+    completed: number;
+    failed: number;
+    uploading: boolean;
+  }>({ total: 0, completed: 0, failed: 0, uploading: false });
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -249,6 +255,9 @@ export default function Demo() {
 
     toast.info(`${files.length}枚の写真をアップロード中...`);
 
+    // 進捗状態を初期化
+    setUploadProgress({ total: files.length, completed: 0, failed: 0, uploading: true });
+
     const uploadedPhotos: any[] = [];
     let processedCount = 0;
     let errorCount = 0;
@@ -276,6 +285,7 @@ export default function Demo() {
           onSuccess: (data) => {
             uploadedPhotos.push(data);
             processedCount++;
+            setUploadProgress(prev => ({ ...prev, completed: processedCount }));
             
             if (processedCount + errorCount === totalFiles) {
               handleUploadComplete(uploadedPhotos);
@@ -285,6 +295,7 @@ export default function Demo() {
             console.error(`Failed to upload ${file.name}:`, error);
             toast.error(`${file.name}のアップロードに失敗しました`);
             errorCount++;
+            setUploadProgress(prev => ({ ...prev, failed: errorCount }));
             
             if (processedCount + errorCount === totalFiles) {
               handleUploadComplete(uploadedPhotos);
@@ -305,6 +316,9 @@ export default function Demo() {
       toast.error("一度にアップロードできるのは5枚までです");
       return;
     }
+
+    // 進捗状態を初期化
+    setUploadProgress({ total: files.length, completed: 0, failed: 0, uploading: true });
 
     const uploadedPhotos: any[] = [];
     let processedCount = 0;
@@ -344,6 +358,7 @@ export default function Demo() {
           onSuccess: (data) => {
             uploadedPhotos.push(data);
             processedCount++;
+            setUploadProgress(prev => ({ ...prev, completed: processedCount }));
             
             if (processedCount + errorCount === totalFiles) {
               handleUploadComplete(uploadedPhotos);
@@ -353,6 +368,7 @@ export default function Demo() {
             console.error(`Failed to upload ${file.name}:`, error);
             toast.error(`${file.name}のアップロードに失敗しました`);
             errorCount++;
+            setUploadProgress(prev => ({ ...prev, failed: errorCount }));
             
             if (processedCount + errorCount === totalFiles) {
               handleUploadComplete(uploadedPhotos);
@@ -365,6 +381,8 @@ export default function Demo() {
   };
 
   const handleUploadComplete = (uploadedPhotos: any[]) => {
+    setUploadProgress(prev => ({ ...prev, uploading: false }));
+    
     if (uploadedPhotos.length > 0) {
       setMultiplePhotos(uploadedPhotos);
       setSelectedImage(uploadedPhotos[0].photo);
@@ -1047,10 +1065,36 @@ export default function Demo() {
                 </div>
               </label>
             </div>
+
+            {/* アップロード進捗表示 */}
+            {uploadProgress.uploading && (
+              <div className="border rounded-lg p-4 bg-muted/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">アップロード中...</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uploadProgress.completed} / {uploadProgress.total}
+                  </span>
+                </div>
+                <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-primary h-full transition-all duration-300"
+                    style={{
+                      width: `${(uploadProgress.completed / uploadProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+                {uploadProgress.failed > 0 && (
+                  <p className="text-xs text-destructive mt-2">
+                    {uploadProgress.failed}件のアップロードに失敗しました
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 onClick={() => fetchPhotoMutation.mutate()}
-                disabled={fetchPhotoMutation.isPending}
+                disabled={fetchPhotoMutation.isPending || uploadProgress.uploading}
                 variant="outline"
                 className="flex-1"
               >
@@ -1068,7 +1112,7 @@ export default function Demo() {
               </Button>
               <Button
                 onClick={() => fetchMultiplePhotosMutation.mutate({ count: photoCount })}
-                disabled={fetchMultiplePhotosMutation.isPending}
+                disabled={fetchMultiplePhotosMutation.isPending || uploadProgress.uploading}
                 variant="outline"
                 className="flex-1"
               >
