@@ -59,7 +59,7 @@ export default function Demo() {
         activityType: "photo_upload",
         description: "上級者向けデモで写真をアップロードしました",
         status: "success",
-        metadata: JSON.stringify({ imageId: data.id, fileName: data.fileName }),
+        metadata: JSON.stringify({ imageId: data.photo.id, imageUrl: data.photo.url }),
       });
     },
     onError: (error) => {
@@ -623,7 +623,7 @@ export default function Demo() {
                             companyName,
                           }, {
                             onSuccess: (data) => {
-                              setBeforeImage(data);
+                              setBeforeImage(data.photo);
                               toast.success("施工前の写真をアップロードしました");
                             },
                           });
@@ -664,7 +664,7 @@ export default function Demo() {
                             companyName,
                           }, {
                             onSuccess: (data) => {
-                              setAfterImage(data);
+                              setAfterImage(data.photo);
                               toast.success("施工後の写真をアップロードしました");
                             },
                           });
@@ -722,7 +722,11 @@ export default function Demo() {
                 <Button
                   onClick={() => {
                     if (!beforeImage || !afterImage) {
-                      toast.error("施工前と施工後の両方の写真をアップロードしてください");
+                      toast.error("施工前と施工後の写真を両方アップロードしてください");
+                      return;
+                    }
+                    if (!beforeImage.url || !afterImage.url) {
+                      toast.error("写真URLが無効です。もう一度アップロードしてください");
                       return;
                     }
                     generateBeforeAfterPostMutation.mutate({
@@ -753,7 +757,11 @@ export default function Demo() {
                 <Button
                   onClick={() => {
                     if (!beforeImage || !afterImage) {
-                      toast.error("施工前と施工後の両方の写真をアップロードしてください");
+                      toast.error("施工前と施工後の写真を両方アップロードしてください");
+                      return;
+                    }
+                    if (!beforeImage.url || !afterImage.url) {
+                      toast.error("写真URLが無効です。もう一度アップロードしてください");
                       return;
                     }
                     generateAllPlatformsPostMutation.mutate({

@@ -43,6 +43,7 @@ export const appRouter = router({
 
     create: protectedProcedure
       .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
         platform: z.enum(["instagram", "x", "threads"]),
         accountName: z.string(),
         apiKey: z.string().optional(),
@@ -438,7 +439,7 @@ export const appRouter = router({
         const { url: imageUrl } = await storagePut(fileKey, buffer, 'image/jpeg');
 
         // AI画像分析
-        const analysis = await analyzeImage(imageUrl, companyName);
+        const analysis = await analyzeImage(imageUrl);
 
         return {
           photo: {
@@ -559,11 +560,13 @@ export const appRouter = router({
         // 画像を保存
         const imageId = await db.createImage({
           userId: ctx.user.id,
-          url: input.imageUrl,
-          source: "google_photos",
-          aiAnalysis: JSON.stringify(input.imageAnalysis),
-          category: input.imageAnalysis.category,
-          keywords: input.imageAnalysis.keywords.join(","),
+          cloudStorageConfigId: 0, // Google Photosの場合は0
+          originalUrl: input.imageUrl,
+          s3Url: input.imageUrl,
+          fileName: input.imageAnalysis.category || "photo",
+          analysisResult: JSON.stringify(input.imageAnalysis),
+          imageCategory: input.imageAnalysis.category,
+          imageStyle: input.imageAnalysis.style,
         });
 
         // 投稿スケジュールを作成
@@ -579,7 +582,7 @@ export const appRouter = router({
         const platforms = ["instagram", "x", "threads"] as const;
         for (const platform of platforms) {
           await db.createPostContent({
-            scheduleId,
+            postScheduleId: scheduleId,
             platform,
             caption: input.contents[platform].caption,
             hashtags: input.contents[platform].hashtags.join(","),
@@ -636,15 +639,15 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input }) => {
-        const { generateCarouselPost } = await import("./ai-service");
+        const { generateCombinedPost } = await import("./ai-service");
         
-        const carouselPost = await generateCarouselPost(
+        const combinedPost = await generateCombinedPost(
           input.imageAnalyses,
           input.companyName,
           input.platform
         );
 
-        return carouselPost;
+        return combinedPost;
       }),
 
     // 複数写真を取得して分析
@@ -826,7 +829,7 @@ export const appRouter = router({
           hashtags: input.hashtags.join(", "),
           targetAudience: input.targetAudience || null,
         });
-        return { success: true, id: result.insertId };
+        return { success: true, id: Number(result[0].insertId) };
       }),
 
     update: protectedProcedure
@@ -881,7 +884,12 @@ export const appRouter = router({
 
         const structure = JSON.parse(template.structure);
         const result = await aiService.generatePostFromTemplate({
-          templateStructure: structure,
+          template: {
+            name: template.name,
+            structure: structure,
+            tone: "friendly",
+            recommendedHashtags: template.hashtags.split(", "),
+          },
           imageAnalysis: input.imageAnalysis,
           platform: input.platform,
           companyName: template.targetAudience || "ハゼモト建設",
@@ -977,13 +985,13 @@ export const appRouter = router({
 
         // Create post content
         await db.createPostContent({
-          scheduleId: schedule.id,
+          postScheduleId: schedule,
           platform: draft.platform,
-          content: draft.postContent,
+          caption: draft.postContent,
           hashtags: draft.hashtags,
         });
 
-        return { success: true, scheduleId: schedule.id };
+        return { success: true, scheduleId: schedule };
       }),
 
     // Reject draft (for admins)
@@ -1138,7 +1146,7 @@ export const appRouter = router({
       .input(z.object({
         userId: z.number(),
         activityLogId: z.number().optional(),
-        feedbackType: z.enum(["praise", "suggestion", "correction", "reminder"]),
+        feedbackType: z.enum(["praise", "suggestion", "correction"]),
         message: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1147,7 +1155,7 @@ export const appRouter = router({
         }
         return await db.createUserFeedback({
           ...input,
-          createdBy: ctx.user.id,
+          supervisorId: ctx.user.id,
         });
       }),
 

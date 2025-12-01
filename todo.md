@@ -536,3 +536,38 @@
   - [x] TRPCErrorのimportを追加
   - [x] 正規表現パターンを修正して完全なURLを抽出
 - [ ] テストと動作確認
+
+## user_activity_logテーブルのDBエラー修正
+- [x] drizzle/schema.tsでuser_activity_logテーブルのスキーマを確認
+- [x] activityTypeのenumに実際に使用する値を追加
+- [x] pnpm db:pushでマイグレーション実行
+- [ ] 作業履歴記録が正常に動作することを確認
+
+## Googleフォト写真取得エラーの再調査
+- [ ] サーバーログで詳細なエラーメッセージを確認
+- [ ] fetchPhotosFromAlbum関数のデバッグログを追加
+- [ ] 実際に取得された画像URLを確認
+
+## ビフォーアフター投稿機能のエラー修正
+- [x] Demo.tsxのビフォーアフター機能のコードを確認
+- [x] 写真未選択時のバリデーションを追加
+- [x] エラーメッセージを分かりやすく表示
+- [ ] 写真選択UIの動作確認
+
+## ビフォーアフター機能の写真表示問題
+- [x] Demo.tsxの写真アップロード処理を確認
+- [x] beforeImage/afterImageのstate更新を修正（data.photoを保存）
+- [x] 画像URL生成処理を確認
+- [x] ビフォーアフター投稿文生成APIを確認
+- [x] プロンプトがビフォーアフター形式になっているか確認
+- [ ] 実際に写真をアップロードして投稿文生成をテスト
+
+## TypeScriptエラー修正
+- [x] user_activity_logテーブルのenum値を修正（post_schedule, post_publish, template_create, template_editを追加）
+- [x] post_schedulesテーブルのstatus enum値を修正（publishedを追加）
+- [x] imagesテーブルのフィールド修正（urlをs3Urlに変更）
+- [x] post_contentsテーブルのフィールド修正（scheduleIdをpostScheduleIdに変更）
+- [x] tsconfig.jsonの設定を修正（target: ES2020, downlevelIteration: true）
+- [x] クライアント側のTypeScriptエラー修正（4個）
+- [x] サーバー側のTypeScriptエラー修正（13個）
+- [x] TypeScriptコンパイルエラーがゼロになることを確認

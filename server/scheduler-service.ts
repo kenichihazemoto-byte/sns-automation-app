@@ -42,13 +42,14 @@ export async function executeScheduledPost(scheduleId: number) {
 
     // 画像をデータベースに保存
     const [insertedImage] = await db.insert(images).values({
-      url: photo.url,
-      sourceAlbum: album.title,
-      category: analysis.category,
-      style: analysis.style,
-      description: analysis.description,
-      keywords: analysis.keywords.join(','),
-      aiAnalysisResult: JSON.stringify(analysis),
+      userId: 1, // System user
+      cloudStorageConfigId: 1, // Default config
+      originalUrl: photo.url,
+      s3Url: photo.url,
+      fileName: photo.title || album.title || 'google-photo',
+      imageCategory: analysis.category,
+      imageStyle: analysis.style,
+      analysisResult: JSON.stringify(analysis),
     });
 
     const imageId = insertedImage.insertId;

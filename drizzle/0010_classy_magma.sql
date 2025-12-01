@@ -1,0 +1,1 @@
+ALTER TABLE `user_activity_log` MODIFY COLUMN `activityType` enum('photo_upload','photo_fetch','post_generation','post_generate','draft_create','draft_save','schedule_create','post_approval','post_rejection') NOT NULL;

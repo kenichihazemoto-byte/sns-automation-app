@@ -395,7 +395,7 @@ export default function ActivityLog() {
                         <Badge variant="outline">利用者 {log.userId}</Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{log.description}</p>
+                    <p className="text-sm text-muted-foreground">{log.details}</p>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>
                         {format(new Date(log.createdAt), "yyyy年MM月dd日 HH:mm", {
@@ -403,13 +403,13 @@ export default function ActivityLog() {
                         })}
                       </span>
                     </div>
-                    {log.metadata && (
+                    {log.details && (
                       <details className="text-xs text-muted-foreground">
                         <summary className="cursor-pointer hover:text-foreground">
                           詳細を表示
                         </summary>
                         <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
-                          {log.metadata}
+                          {log.details}
                         </pre>
                       </details>
                     )}

@@ -800,8 +800,7 @@ export async function getUnreadFeedbackCount(userId: number): Promise<number> {
   if (!db) return 0;
 
   const result = await db.select().from(userFeedback)
-    .where(eq(userFeedback.userId, userId))
-    .where(eq(userFeedback.isRead, false));
+    .where(and(eq(userFeedback.userId, userId), eq(userFeedback.isRead, false)));
   
   return result.length;
 }

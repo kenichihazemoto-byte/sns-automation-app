@@ -146,7 +146,7 @@ export default function Dashboard() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium capitalize">{post.platform}</p>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(post.publishedAt).toLocaleDateString("ja-JP")}
+                              {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString("ja-JP") : new Date(post.createdAt).toLocaleDateString("ja-JP")}
                             </p>
                           </div>
                         </div>

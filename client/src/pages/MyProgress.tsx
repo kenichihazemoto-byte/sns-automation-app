@@ -378,7 +378,7 @@ export default function MyProgress() {
                           {log.status === "success" ? "成功" : "失敗"}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">{log.description}</p>
+                      <p className="text-xs text-muted-foreground">{log.details}</p>
                       <div className="text-xs text-muted-foreground">
                         {format(new Date(log.createdAt), "MM月dd日 HH:mm", {
                           locale: ja,

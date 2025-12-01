@@ -1,0 +1,2 @@
+ALTER TABLE `post_schedules` MODIFY COLUMN `status` enum('draft','scheduled','active','pending','processing','completed','failed','cancelled','published') NOT NULL DEFAULT 'draft';--> statement-breakpoint
+ALTER TABLE `user_activity_log` MODIFY COLUMN `activityType` enum('photo_upload','photo_fetch','post_generation','post_generate','draft_create','draft_save','schedule_create','post_approval','post_rejection','post_schedule','post_publish','template_create','template_edit') NOT NULL;

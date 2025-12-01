@@ -85,10 +85,10 @@ export default function PostCalendar() {
   }, []);
 
   const handleEventDrop = useCallback(
-    ({ event, start, end }: { event: CalendarEvent; start: Date; end: Date }) => {
+    ({ event, start, end }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
       updateScheduleMutation.mutate({
         id: event.id,
-        scheduledAt: start.toISOString(),
+        scheduledAt: typeof start === 'string' ? start : start.toISOString(),
       });
     },
     [updateScheduleMutation]
@@ -196,10 +196,7 @@ export default function PostCalendar() {
                   view={view}
                   onView={(newView) => setView(newView as "month" | "week" | "day")}
                   onSelectEvent={handleSelectEvent}
-                  onEventDrop={handleEventDrop}
                   eventPropGetter={eventStyleGetter}
-                  draggableAccessor={() => true}
-                  resizable={false}
                   culture="ja"
                   messages={{
                     next: "次へ",

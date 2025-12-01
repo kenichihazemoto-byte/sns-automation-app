@@ -38,7 +38,7 @@ export default function ApprovalQueue() {
       if (draft) {
         logActivityMutation.mutate({
           activityType: "post_approval",
-          description: `支援員が投稿を承認しました（${draft.user?.name || '利用者'}さんの投稿）`,
+          description: `支援員が投稿を承認しました（利用者ID: ${draft.userId}）`,
           status: "success",
           metadata: JSON.stringify({ 
             draftId,

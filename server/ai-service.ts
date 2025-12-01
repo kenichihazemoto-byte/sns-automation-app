@@ -250,7 +250,7 @@ export interface GenerateReplyParams {
  * 写真ごとの個別コメントを生成する
  */
 export async function generateIndividualComment(
-  imageAnalysis: ImageAnalysis,
+  imageAnalysis: ImageAnalysisResult,
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -325,8 +325,8 @@ export async function generateIndividualComment(
 /**
  * 複数の写真をまとめた投稿文を生成する
  */
-export async function generateCarouselPost(
-  imageAnalyses: ImageAnalysis[],
+export async function generateCombinedPost(
+  imageAnalyses: ImageAnalysisResult[],
   companyName: string,
   platform: "instagram" | "x" | "threads"
 ): Promise<{ caption: string; hashtags: string[] }> {
@@ -346,7 +346,7 @@ export async function generateCarouselPost(
     `写真${index + 1}: ${analysis.category} - ${analysis.description} (スタイル: ${analysis.style})`
   ).join("\n");
 
-  const allKeywords = [...new Set(imageAnalyses.flatMap(a => a.keywords))];
+  const allKeywords = Array.from(new Set(imageAnalyses.flatMap(a => a.keywords)));
 
   const response = await invokeLLM({
     messages: [
@@ -521,11 +521,12 @@ ${platform}（最大${maxLength}文字）
     ]
   });
 
-  const generatedText = response.choices[0].message.content || "";
+  const messageContent = response.choices[0].message.content;
+  const generatedText = typeof messageContent === 'string' ? messageContent : "";
 
   // 本文とハッシュタグを分離
-  const contentMatch = generatedText.match(/本文:\s*(.+?)(?=ハッシュタグ:|$)/s);
-  const hashtagsMatch = generatedText.match(/ハッシュタグ:\s*(.+?)$/s);
+  const contentMatch = generatedText.match(/本文[:：]\s*(.+?)(?=ハッシュタグ[:：]|$)/s);
+  const hashtagsMatch = generatedText.match(/ハッシュタグ[:：]\s*(.+?)$/s);
 
   const content = contentMatch ? contentMatch[1].trim() : generatedText;
   const hashtags = hashtagsMatch ? hashtagsMatch[1].trim() : template.recommendedHashtags.slice(0, 10).join(", ");
@@ -743,7 +744,8 @@ ${template.recommendedHashtags.map(tag => `   - ${tag}`).join('\n')}
     ],
   });
 
-  const result = response.choices[0].message.content || '';
+  const messageContent = response.choices[0].message.content;
+  const result = typeof messageContent === 'string' ? messageContent : '';
 
   // 本文とハッシュタグを分離
   const parts = result.split(/ハッシュタグ[:：]/);

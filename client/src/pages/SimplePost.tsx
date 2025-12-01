@@ -46,7 +46,7 @@ export default function SimplePost() {
         activityType: "photo_upload",
         description: "かんたん投稿で写真を選択しました",
         status: "success",
-        metadata: JSON.stringify({ imageId: data.id, fileName: data.fileName }),
+        metadata: JSON.stringify({ imageUrl: data.url, fileName: data.fileName }),
       });
     },
     onError: (error) => {
@@ -75,7 +75,7 @@ export default function SimplePost() {
         status: "success",
         metadata: JSON.stringify({ 
           platforms: ["instagram", "x", "threads"],
-          imageId: selectedImage?.id 
+          imageUrl: selectedImage?.url 
         }),
       });
     },
@@ -269,7 +269,7 @@ export default function SimplePost() {
                 </div>
 
                 <Button
-                  onClick={() => fetchPhotoMutation.mutate({ companyName: "ハゼモト建設" })}
+                  onClick={() => fetchPhotoMutation.mutate()}
                   disabled={fetchPhotoMutation.isPending}
                   size="lg"
                   className="w-full"
@@ -316,8 +316,7 @@ export default function SimplePost() {
                 <Button
                   onClick={() =>
                     generatePostMutation.mutate({
-                      imageUrl: selectedImage.url,
-                      analysis: selectedImage.analysis,
+                      imageAnalysis: selectedImage.analysis,
                       companyName: "ハゼモト建設",
                     })
                   }

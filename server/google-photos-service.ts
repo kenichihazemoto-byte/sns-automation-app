@@ -116,14 +116,24 @@ export async function getRandomConstructionPhoto(): Promise<{
   photo: GooglePhotoItem;
   album: GooglePhotoAlbum;
 }> {
-  const album = selectRandomAlbum();
-  const photos = await fetchPhotosFromAlbum(album.url);
-  
-  if (photos.length === 0) {
-    throw new Error(`No photos found in album: ${album.title}`);
+  try {
+    const album = selectRandomAlbum();
+    console.log(`[GooglePhotos] Selected album: ${album.title} (${album.year})`);
+    
+    const photos = await fetchPhotosFromAlbum(album.url);
+    console.log(`[GooglePhotos] Fetched ${photos.length} photos from album`);
+    
+    if (photos.length === 0) {
+      throw new Error(`No photos found in album: ${album.title}`);
+    }
+    
+    const photo = selectRandomPhoto(photos);
+    console.log(`[GooglePhotos] Selected photo: ${photo.title}`);
+    console.log(`[GooglePhotos] Photo URL: ${photo.url.substring(0, 100)}...`);
+    
+    return { photo, album };
+  } catch (error) {
+    console.error(`[GooglePhotos] Error in getRandomConstructionPhoto:`, error);
+    throw error;
   }
-  
-  const photo = selectRandomPhoto(photos);
-  
-  return { photo, album };
 }

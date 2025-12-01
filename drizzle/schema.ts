@@ -103,7 +103,7 @@ export const postSchedules = mysqlTable("post_schedules", {
   companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
   scheduledAt: timestamp("scheduledAt").notNull(),
   cronExpression: varchar("cronExpression", { length: 100 }),
-  status: mysqlEnum("status", ["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled"]).default("draft").notNull(),
+  status: mysqlEnum("status", ["draft", "scheduled", "active", "pending", "processing", "completed", "failed", "cancelled", "published"]).default("draft").notNull(),
   lastExecutedAt: timestamp("lastExecutedAt"),
   // リマインダー通知用
   notificationSent: boolean("notificationSent").default(false).notNull(),
@@ -261,10 +261,19 @@ export const userActivityLog = mysqlTable("user_activity_log", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   activityType: mysqlEnum("activityType", [
+    "photo_upload",
     "photo_fetch",
+    "post_generation",
     "post_generate",
     "draft_create",
+    "draft_save",
     "schedule_create",
+    "post_approval",
+    "post_rejection",
+    "post_schedule",
+    "post_publish",
+    "template_create",
+    "template_edit",
   ]).notNull(),
   details: text("details"), // JSON: additional information about the activity
   status: mysqlEnum("status", ["success", "failed"]).default("success").notNull(),
