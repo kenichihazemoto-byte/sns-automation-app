@@ -305,7 +305,12 @@ export default function Demo() {
           companyName,
         }, {
           onSuccess: (data) => {
-            uploadedPhotos.push(data);
+            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis }
+            uploadedPhotos.push({
+              url: data.photo.url,
+              id: data.photo.id,
+              analysis: data.analysis,
+            });
             processedCount++;
             setUploadProgress(prev => ({ ...prev, completed: processedCount }));
             
@@ -378,7 +383,12 @@ export default function Demo() {
           companyName,
         }, {
           onSuccess: (data) => {
-            uploadedPhotos.push(data);
+            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis }
+            uploadedPhotos.push({
+              url: data.photo.url,
+              id: data.photo.id,
+              analysis: data.analysis,
+            });
             processedCount++;
             setUploadProgress(prev => ({ ...prev, completed: processedCount }));
             
@@ -407,7 +417,8 @@ export default function Demo() {
     
     if (uploadedPhotos.length > 0) {
       setMultiplePhotos(uploadedPhotos);
-      setSelectedImage(uploadedPhotos[0].photo);
+      // uploadedPhotosの各要素は { url, id, analysis } という構造
+      setSelectedImage(uploadedPhotos[0]);
       setAnalysis(uploadedPhotos[0].analysis);
       toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
     } else {
