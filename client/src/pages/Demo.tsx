@@ -471,7 +471,7 @@ export default function Demo() {
 
     savePostMutation.mutate({
       companyName,
-      imageUrl: selectedImage.photo.url,
+      imageUrl: selectedImage.url,
       imageAnalysis: analysis,
       contents,
       scheduledAt,
@@ -1058,7 +1058,7 @@ export default function Demo() {
                   <div
                     key={index}
                     className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
-                      selectedImage?.photo?.id === photo.photo.id ? "border-primary" : "border-transparent"
+                      selectedImage?.id === photo.id ? "border-primary" : "border-transparent"
                     }`}
                     onClick={() => {
                       setSelectedImage(photo);
@@ -1066,14 +1066,14 @@ export default function Demo() {
                     }}
                   >
                     <img
-                      src={photo.photo.url}
+                      src={photo.url}
                       alt={`写真 ${index + 1}`}
                       className="w-full h-32 object-cover"
                     />
                     <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
                       スコア: {photo.score?.toFixed(1) || 'N/A'}
                     </div>
-                    {selectedImage?.photo?.id === photo.photo.id && (
+                    {selectedImage?.id === photo.id && (
                       <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
                         <Check className="h-8 w-8 text-primary-foreground" />
                       </div>
@@ -1094,7 +1094,7 @@ export default function Demo() {
             <CardContent className="space-y-4">
               <div className="flex justify-center">
                 <img
-                  src={selectedImage.photo.url}
+                  src={selectedImage.url}
                   alt="Selected"
                   className="max-w-full max-h-96 object-contain rounded-lg"
                 />
@@ -1184,7 +1184,7 @@ export default function Demo() {
                     "全SNSの投稿文を生成"
                   )}
                 </Button>
-                <a href={selectedImage.photo.url} download className="flex-shrink-0">
+                <a href={selectedImage.url} download className="flex-shrink-0">
                   <Button variant="outline" size="icon">
                     <Download className="h-4 w-4" />
                   </Button>
@@ -1255,7 +1255,7 @@ export default function Demo() {
                     <CardTitle>写真 {index + 1} のコメント</CardTitle>
                     {multiplePhotos[index] && (
                       <img
-                        src={multiplePhotos[index].photo.url}
+                        src={multiplePhotos[index].url}
                         alt={`写真 ${index + 1}`}
                         className="w-full h-48 object-cover rounded-lg mt-2"
                       />
@@ -1311,7 +1311,7 @@ export default function Demo() {
                   {multiplePhotos.map((photo, index) => (
                     <img
                       key={index}
-                      src={photo.photo.url}
+                      src={photo.url}
                       alt={`写真 ${index + 1}`}
                       className="w-full h-24 object-cover rounded"
                     />

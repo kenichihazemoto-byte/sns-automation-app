@@ -453,15 +453,16 @@ export const appRouter = router({
         const googlePhotos = await import("./google-photos-service");
         const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
         
-        // デモ用のサンプル画像URLを使用してAI分析
-        // 実際の実装では、photo.urlを使用
-        const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
-        
-        const analysis = await aiService.analyzeImage(sampleImageUrl);
+        // 実際の写真URLを使用してAI分析
+        const analysis = await aiService.analyzeImage(photo.url);
         
         return {
-          photo,
-          album,
+          id: photo.url, // 一意のIDとしてURLを使用
+          url: photo.url,
+          thumbnailUrl: photo.thumbnailUrl,
+          fileName: photo.title || `${album.year}年竣工写真`,
+          albumTitle: album.title,
+          albumYear: album.year,
           analysis,
         };
       }),
@@ -644,12 +645,15 @@ export const appRouter = router({
 
         for (let i = 0; i < input.count; i++) {
           const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
-          const sampleImageUrl = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800";
-          const analysis = await aiService.analyzeImage(sampleImageUrl);
+          const analysis = await aiService.analyzeImage(photo.url);
           
           photos.push({
-            photo,
-            album,
+            id: photo.url,
+            url: photo.url,
+            thumbnailUrl: photo.thumbnailUrl,
+            fileName: photo.title || `${album.year}年竣工写真`,
+            albumTitle: album.title,
+            albumYear: album.year,
             analysis,
             score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
           });

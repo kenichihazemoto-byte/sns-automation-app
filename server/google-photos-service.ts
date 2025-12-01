@@ -45,42 +45,52 @@ export const HAZEMOTO_ALBUMS: GooglePhotoAlbum[] = [
 /**
  * Google フォト共有アルバムから画像URLを取得
  * 
- * デモ用に、サンプル画像URLを返します。
- * 実際の実装では、共有アルバムのHTMLをパースして画像URLを抽出します。
+ * 共有アルバムのHTMLをパースして実際の画像URLを抽出します。
  */
 export async function fetchPhotosFromAlbum(albumUrl: string): Promise<GooglePhotoItem[]> {
-  // デモ用: 実際の実装では、albumUrlにアクセスしてHTMLをパースし、画像URLを抽出
-  // ここでは、サンプルデータを返します
-  
   const album = HAZEMOTO_ALBUMS.find(a => a.url === albumUrl);
   if (!album) {
     throw new Error("Album not found");
   }
 
-  // デモ用のサンプル画像データ
-  // 実際の実装では、HTMLパースやAPIを使用して実際の画像URLを取得
-  const samplePhotos: GooglePhotoItem[] = [
-    {
-      url: "https://lh3.googleusercontent.com/sample1",
-      thumbnailUrl: "https://lh3.googleusercontent.com/sample1_thumb",
-      title: `${album.year}年 竣工物件 1`,
+  try {
+    // Googleフォト共有アルバムのHTMLを取得
+    const response = await fetch(albumUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch album: ${response.statusText}`);
+    }
+    
+    const html = await response.text();
+    
+    // HTMLから画像URLを抽出
+    // Googleフォトの共有アルバムには、画像が"https://lh3.googleusercontent.com/"で始まるURLとして埋め込まれている
+    const imageUrlPattern = /https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_-]+/g;
+    const matches = html.match(imageUrlPattern);
+    
+    if (!matches || matches.length === 0) {
+      console.warn(`No images found in album: ${albumUrl}`);
+      return [];
+    }
+    
+    // 重複を除去し、ユニークな画像URLのみを取得
+    const uniqueUrls = Array.from(new Set(matches));
+    
+    // GooglePhotoItem形式に変換
+    const photos: GooglePhotoItem[] = uniqueUrls.map((url, index) => ({
+      url: `${url}=w2048-h2048`, // 高解像度版
+      thumbnailUrl: `${url}=w400-h400`, // サムネイル
+      title: `${album.year}年 竣工物件 ${index + 1}`,
+      description: `${album.title}からの写真`,
       albumYear: album.year,
-    },
-    {
-      url: "https://lh3.googleusercontent.com/sample2",
-      thumbnailUrl: "https://lh3.googleusercontent.com/sample2_thumb",
-      title: `${album.year}年 竣工物件 2`,
-      albumYear: album.year,
-    },
-    {
-      url: "https://lh3.googleusercontent.com/sample3",
-      thumbnailUrl: "https://lh3.googleusercontent.com/sample3_thumb",
-      title: `${album.year}年 竣工物件 3`,
-      albumYear: album.year,
-    },
-  ];
-
-  return samplePhotos;
+    }));
+    
+    console.log(`Fetched ${photos.length} photos from album: ${album.title}`);
+    return photos;
+    
+  } catch (error) {
+    console.error(`Error fetching photos from album ${albumUrl}:`, error);
+    throw new Error(`Failed to fetch photos from album: ${error}`);
+  }
 }
 
 /**
