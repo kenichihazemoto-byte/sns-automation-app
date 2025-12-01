@@ -232,7 +232,7 @@ export default function Demo() {
     setIsDragging(false);
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -251,10 +251,16 @@ export default function Demo() {
 
     const uploadedPhotos: any[] = [];
     let processedCount = 0;
+    let errorCount = 0;
+    const totalFiles = files.length;
 
     files.forEach((file) => {
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name}は10MBを超えています`);
+        errorCount++;
+        if (processedCount + errorCount === totalFiles) {
+          handleUploadComplete(uploadedPhotos);
+        }
         return;
       }
 
@@ -271,13 +277,17 @@ export default function Demo() {
             uploadedPhotos.push(data);
             processedCount++;
             
-            if (processedCount === files.length) {
-              setMultiplePhotos(uploadedPhotos);
-              if (uploadedPhotos.length > 0) {
-                setSelectedImage(uploadedPhotos[0]);
-                setAnalysis(uploadedPhotos[0].analysis);
-              }
-              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
+            if (processedCount + errorCount === totalFiles) {
+              handleUploadComplete(uploadedPhotos);
+            }
+          },
+          onError: (error) => {
+            console.error(`Failed to upload ${file.name}:`, error);
+            toast.error(`${file.name}のアップロードに失敗しました`);
+            errorCount++;
+            
+            if (processedCount + errorCount === totalFiles) {
+              handleUploadComplete(uploadedPhotos);
             }
           },
         });
@@ -298,17 +308,27 @@ export default function Demo() {
 
     const uploadedPhotos: any[] = [];
     let processedCount = 0;
+    let errorCount = 0;
+    const totalFiles = files.length;
 
     Array.from(files).forEach((file) => {
       // ファイルサイズチェック (10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name}は10MBを超えています`);
+        errorCount++;
+        if (processedCount + errorCount === totalFiles) {
+          handleUploadComplete(uploadedPhotos);
+        }
         return;
       }
 
       // 画像ファイルかチェック
       if (!file.type.startsWith("image/")) {
         toast.error(`${file.name}は画像ファイルではありません`);
+        errorCount++;
+        if (processedCount + errorCount === totalFiles) {
+          handleUploadComplete(uploadedPhotos);
+        }
         return;
       }
 
@@ -325,19 +345,34 @@ export default function Demo() {
             uploadedPhotos.push(data);
             processedCount++;
             
-            if (processedCount === files.length) {
-              setMultiplePhotos(uploadedPhotos);
-              if (uploadedPhotos.length > 0) {
-                setSelectedImage(uploadedPhotos[0]);
-                setAnalysis(uploadedPhotos[0].analysis);
-              }
-              toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
+            if (processedCount + errorCount === totalFiles) {
+              handleUploadComplete(uploadedPhotos);
+            }
+          },
+          onError: (error) => {
+            console.error(`Failed to upload ${file.name}:`, error);
+            toast.error(`${file.name}のアップロードに失敗しました`);
+            errorCount++;
+            
+            if (processedCount + errorCount === totalFiles) {
+              handleUploadComplete(uploadedPhotos);
             }
           },
         });
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleUploadComplete = (uploadedPhotos: any[]) => {
+    if (uploadedPhotos.length > 0) {
+      setMultiplePhotos(uploadedPhotos);
+      setSelectedImage(uploadedPhotos[0].photo);
+      setAnalysis(uploadedPhotos[0].analysis);
+      toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
+    } else {
+      toast.error("写真のアップロードに失敗しました");
+    }
   };
 
   const handleGenerateAllContents = async () => {
