@@ -300,3 +300,20 @@ export const userFeedback = mysqlTable("user_feedback", {
 
 export type UserFeedback = typeof userFeedback.$inferSelect;
 export type InsertUserFeedback = typeof userFeedback.$inferInsert;
+
+/**
+ * Upload history table
+ * Stores sets of uploaded photos for reuse
+ */
+export const uploadHistory = mysqlTable("upload_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  companyName: text("companyName"),
+  title: varchar("title", { length: 255 }),
+  photoCount: int("photoCount").notNull(),
+  photoData: text("photoData").notNull(), // JSON array of photo objects
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UploadHistory = typeof uploadHistory.$inferSelect;
+export type InsertUploadHistory = typeof uploadHistory.$inferInsert;

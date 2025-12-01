@@ -792,6 +792,39 @@ export const appRouter = router({
           threads: results.find(r => r.platform === "threads"),
         };
       }),
+
+    // アップロード履歴を保存
+    saveUploadHistory: protectedProcedure
+      .input(z.object({
+        companyName: z.string().optional(),
+        title: z.string().optional(),
+        photoData: z.string(), // JSON string of photo array
+        photoCount: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createUploadHistory({
+          userId: ctx.user.id,
+          companyName: input.companyName || null,
+          title: input.title || null,
+          photoData: input.photoData,
+          photoCount: input.photoCount,
+        });
+        return { success: true, id };
+      }),
+
+    // アップロード履歴を取得
+    getUploadHistory: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getUploadHistoryByUserId(ctx.user.id);
+      }),
+
+    // アップロード履歴を削除
+    deleteUploadHistory: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteUploadHistory(input.id);
+        return { success: true };
+      }),
   }),
 
   // Custom Templates Management

@@ -28,6 +28,9 @@ import {
   InsertComment,
   Comment,
   draftPosts,
+  uploadHistory,
+  InsertUploadHistory,
+  UploadHistory,
   InsertDraftPost,
   DraftPost,
   approvalHistory,
@@ -819,4 +822,45 @@ export async function getAllUsersFeedback(limit: number = 100): Promise<UserFeed
   return await db.select().from(userFeedback)
     .orderBy(desc(userFeedback.createdAt))
     .limit(limit);
+}
+
+// ==================== Upload History ====================
+
+export async function createUploadHistory(data: InsertUploadHistory): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(uploadHistory).values(data);
+  return result[0].insertId;
+}
+
+export async function getUploadHistoryByUserId(userId: number): Promise<UploadHistory[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return await db
+    .select()
+    .from(uploadHistory)
+    .where(eq(uploadHistory.userId, userId))
+    .orderBy(desc(uploadHistory.createdAt));
+}
+
+export async function getUploadHistoryById(id: number): Promise<UploadHistory | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .select()
+    .from(uploadHistory)
+    .where(eq(uploadHistory.id, id))
+    .limit(1);
+
+  return result[0];
+}
+
+export async function deleteUploadHistory(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(uploadHistory).where(eq(uploadHistory.id, id));
 }

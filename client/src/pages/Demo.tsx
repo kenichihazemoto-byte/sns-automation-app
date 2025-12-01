@@ -43,12 +43,34 @@ export default function Demo() {
     failed: number;
     uploading: boolean;
   }>({ total: 0, completed: 0, failed: 0, uploading: false });
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
   
   // 作業履歴記録
   const logActivityMutation = trpc.activityLog.create.useMutation();
+
+  // アップロード履歴
+  const { data: uploadHistoryList } = trpc.demo.getUploadHistory.useQuery();
+  const saveUploadHistoryMutation = trpc.demo.saveUploadHistory.useMutation({
+    onSuccess: () => {
+      toast.success("アップロード履歴を保存しました");
+      utils.demo.getUploadHistory.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+  const deleteUploadHistoryMutation = trpc.demo.deleteUploadHistory.useMutation({
+    onSuccess: () => {
+      toast.success("履歴を削除しました");
+      utils.demo.getUploadHistory.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
 
   const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
     onSuccess: (data) => {
@@ -1133,38 +1155,188 @@ export default function Demo() {
         </Card>
         )}
 
+        {/* アップロード履歴一覧 */}
+        {!isBeforeAfterMode && uploadHistoryList && uploadHistoryList.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>アップロード履歴</CardTitle>
+              <CardDescription>過去に保存した写真セットを再利用できます</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {uploadHistoryList.map((history) => {
+                  const photos = JSON.parse(history.photoData);
+                  return (
+                    <div
+                      key={history.id}
+                      className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">
+                            {history.title || `${history.photoCount}枚の写真`}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(history.createdAt).toLocaleDateString("ja-JP", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setMultiplePhotos(photos);
+                              if (photos.length > 0) {
+                                setSelectedImage(photos[0]);
+                                setAnalysis(photos[0].analysis);
+                              }
+                              toast.success("履歴を読み込みました");
+                            }}
+                          >
+                            読み込む
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (confirm("この履歴を削除しますか？")) {
+                                deleteUploadHistoryMutation.mutate({ id: history.id });
+                              }
+                            }}
+                          >
+                            削除
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto">
+                        {photos.slice(0, 5).map((photo: any, index: number) => (
+                          <img
+                            key={index}
+                            src={photo.url}
+                            alt={`写真 ${index + 1}`}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        ))}
+                        {photos.length > 5 && (
+                          <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                            +{photos.length - 5}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {!isBeforeAfterMode && multiplePhotos.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>
-              <CardDescription>AIがスコア付けした結果です</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>
+                  <CardDescription>AIがスコア付けした結果です</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const title = prompt("履歴のタイトルを入力してください（任意）");
+                      saveUploadHistoryMutation.mutate({
+                        companyName,
+                        title: title || undefined,
+                        photoData: JSON.stringify(multiplePhotos),
+                        photoCount: multiplePhotos.length,
+                      });
+                    }}
+                    disabled={saveUploadHistoryMutation.isPending}
+                  >
+                    履歴を保存
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setMultiplePhotos([]);
+                      setSelectedImage(null);
+                      setAnalysis(null);
+                      toast.success("全ての写真を削除しました");
+                    }}
+                  >
+                    一括削除
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {multiplePhotos.map((photo, index) => (
                   <div
                     key={index}
-                    className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
+                    className={`relative group border-2 rounded-lg overflow-hidden ${
                       selectedImage?.id === photo.id ? "border-primary" : "border-transparent"
                     }`}
-                    onClick={() => {
-                      setSelectedImage(photo);
-                      setAnalysis(photo.analysis);
-                    }}
                   >
                     <img
                       src={photo.url}
                       alt={`写真 ${index + 1}`}
-                      className="w-full h-32 object-cover"
+                      className="w-full h-32 object-cover cursor-pointer"
+                      onClick={() => {
+                        setSelectedImage(photo);
+                        setAnalysis(photo.analysis);
+                      }}
                     />
                     <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
                       スコア: {photo.score?.toFixed(1) || 'N/A'}
                     </div>
                     {selectedImage?.id === photo.id && (
-                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center pointer-events-none">
                         <Check className="h-8 w-8 text-primary-foreground" />
                       </div>
                     )}
+                    {/* ホバー時のアクションボタン */}
+                    <div className="absolute bottom-2 left-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1 h-7 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEnlargedImage(photo.url);
+                        }}
+                      >
+                        拡大
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 w-7 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newPhotos = multiplePhotos.filter((_, i) => i !== index);
+                          setMultiplePhotos(newPhotos);
+                          if (selectedImage?.id === photo.id && newPhotos.length > 0) {
+                            setSelectedImage(newPhotos[0]);
+                            setAnalysis(newPhotos[0].analysis);
+                          } else if (newPhotos.length === 0) {
+                            setSelectedImage(null);
+                            setAnalysis(null);
+                          }
+                          toast.success("写真を削除しました");
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1587,6 +1759,29 @@ export default function Demo() {
                   予約投稿を保存
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 画像拡大表示ダイアログ */}
+      <Dialog open={enlargedImage !== null} onOpenChange={() => setEnlargedImage(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>画像プレビュー</DialogTitle>
+          </DialogHeader>
+          {enlargedImage && (
+            <div className="flex items-center justify-center">
+              <img
+                src={enlargedImage}
+                alt="拡大表示"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEnlargedImage(null)}>
+              閉じる
             </Button>
           </DialogFooter>
         </DialogContent>
