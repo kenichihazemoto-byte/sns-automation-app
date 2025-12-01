@@ -84,6 +84,7 @@ export const images = mysqlTable("images", {
   analysisResult: text("analysisResult"),
   imageCategory: varchar("imageCategory", { length: 100 }),
   imageStyle: varchar("imageStyle", { length: 100 }),
+  tags: text("tags"), // JSON array of tags extracted from AI analysis
   isUsed: boolean("isUsed").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -167,6 +168,9 @@ export const analytics = mysqlTable("analytics", {
   comments: int("comments").default(0).notNull(),
   shares: int("shares").default(0).notNull(),
   views: int("views").default(0).notNull(),
+  engagementRate: int("engagementRate").default(0).notNull(), // (likes + comments + shares) / views * 10000 (stored as basis points)
+  hourOfDay: int("hourOfDay"), // Hour when the post was published (0-23)
+  dayOfWeek: int("dayOfWeek"), // Day of week when published (0=Sunday, 6=Saturday)
   fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -312,6 +316,7 @@ export const uploadHistory = mysqlTable("upload_history", {
   title: varchar("title", { length: 255 }),
   photoCount: int("photoCount").notNull(),
   photoData: text("photoData").notNull(), // JSON array of photo objects
+  tags: text("tags"), // JSON array of tags for filtering
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

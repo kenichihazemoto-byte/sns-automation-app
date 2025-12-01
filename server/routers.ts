@@ -369,6 +369,46 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return await db.createAnalytics(input);
       }),
+
+    // Record engagement data with time information
+    recordEngagement: protectedProcedure
+      .input(z.object({
+        postHistoryId: z.number(),
+        likes: z.number().optional(),
+        comments: z.number().optional(),
+        shares: z.number().optional(),
+        views: z.number().optional(),
+        hourOfDay: z.number().min(0).max(23).optional(),
+        dayOfWeek: z.number().min(0).max(6).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.upsertAnalytics(input);
+        return { id, success: true };
+      }),
+
+    // Get analytics summary for the user
+    getSummary: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getAnalyticsSummary(ctx.user.id);
+      }),
+
+    // Get analytics by platform
+    getByPlatform: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getAnalyticsByPlatform(ctx.user.id);
+      }),
+
+    // Get analytics by hour of day
+    getByHourOfDay: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getAnalyticsByHourOfDay(ctx.user.id);
+      }),
+
+    // Get analytics by day of week
+    getByDayOfWeek: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getAnalyticsByDayOfWeek(ctx.user.id);
+      }),
   }),
 
   // Comments
@@ -800,6 +840,7 @@ export const appRouter = router({
         title: z.string().optional(),
         photoData: z.string(), // JSON string of photo array
         photoCount: z.number(),
+        tags: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const id = await db.createUploadHistory({
@@ -808,6 +849,7 @@ export const appRouter = router({
           title: input.title || null,
           photoData: input.photoData,
           photoCount: input.photoCount,
+          tags: input.tags ? JSON.stringify(input.tags) : null,
         });
         return { success: true, id };
       }),
@@ -1229,6 +1271,53 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.markFeedbackAsRead(input.feedbackId);
         return { success: true };
+      }),
+  }),
+
+  // Photo Tagging
+  photoTags: router({
+    // Extract tags from analysis result
+    extractTags: protectedProcedure
+      .input(z.object({
+        analysisResult: z.string(),
+      }))
+      .query(({ input }) => {
+        return db.extractTagsFromAnalysis(input.analysisResult);
+      }),
+
+    // Update tags for upload history
+    updateHistoryTags: protectedProcedure
+      .input(z.object({
+        historyId: z.number(),
+        tags: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateUploadHistoryTags(input.historyId, input.tags);
+        return { success: true };
+      }),
+
+    // Search upload history by tags
+    searchByTags: protectedProcedure
+      .input(z.object({
+        tags: z.array(z.string()),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.searchUploadHistoryByTags(ctx.user.id, input.tags);
+      }),
+  }),
+
+  // Optimal Posting Time
+  optimalTiming: router({
+    // Get optimal posting times based on historical data
+    getOptimalTimes: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getOptimalPostingTimes(ctx.user.id);
+      }),
+
+    // Suggest optimal posting time for a new post
+    suggestTime: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.suggestPostingTime(ctx.user.id);
       }),
   }),
 });

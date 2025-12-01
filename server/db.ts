@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -863,4 +863,583 @@ export async function deleteUploadHistory(id: number): Promise<void> {
   if (!db) throw new Error("Database not available");
 
   await db.delete(uploadHistory).where(eq(uploadHistory.id, id));
+}
+
+// ==================== Analytics ====================
+
+/**
+ * Create or update analytics record for a post
+ */
+export async function upsertAnalytics(data: InsertAnalytics): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Calculate engagement rate (basis points: 1% = 100)
+  const likes = data.likes || 0;
+  const comments = data.comments || 0;
+  const shares = data.shares || 0;
+  const views = data.views || 0;
+  const engagementRate = views > 0 
+    ? Math.round(((likes + comments + shares) / views) * 10000)
+    : 0;
+
+  const values = {
+    ...data,
+    engagementRate,
+  };
+
+  const result = await db.insert(analytics).values(values);
+  return result[0].insertId;
+}
+
+/**
+ * Get analytics summary for a user's posts
+ */
+export async function getAnalyticsSummary(userId: number): Promise<{
+  totalPosts: number;
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
+  totalViews: number;
+  avgEngagementRate: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalPosts: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      totalViews: 0,
+      avgEngagementRate: 0,
+    };
+  }
+
+  // Get all post history records for the user
+  const userPosts = await db
+    .select()
+    .from(postHistory)
+    .innerJoin(postSchedules, eq(postHistory.postScheduleId, postSchedules.id))
+    .where(eq(postSchedules.userId, userId));
+
+  if (userPosts.length === 0) {
+    return {
+      totalPosts: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      totalViews: 0,
+      avgEngagementRate: 0,
+    };
+  }
+
+  // Get analytics for all posts
+  const postHistoryIds = userPosts.map(p => p.post_history.id);
+  const analyticsRecords = await db
+    .select()
+    .from(analytics)
+    .where(sql`${analytics.postHistoryId} IN (${sql.join(postHistoryIds.map(id => sql`${id}`), sql`, `)})`);
+
+  const summary = analyticsRecords.reduce(
+    (acc, record) => ({
+      totalPosts: acc.totalPosts + 1,
+      totalLikes: acc.totalLikes + record.likes,
+      totalComments: acc.totalComments + record.comments,
+      totalShares: acc.totalShares + record.shares,
+      totalViews: acc.totalViews + record.views,
+      avgEngagementRate: acc.avgEngagementRate + record.engagementRate,
+    }),
+    {
+      totalPosts: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      totalViews: 0,
+      avgEngagementRate: 0,
+    }
+  );
+
+  if (summary.totalPosts > 0) {
+    summary.avgEngagementRate = Math.round(summary.avgEngagementRate / summary.totalPosts);
+  }
+
+  return summary;
+}
+
+/**
+ * Get analytics grouped by platform
+ */
+export async function getAnalyticsByPlatform(userId: number): Promise<{
+  platform: string;
+  totalPosts: number;
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
+  totalViews: number;
+  avgEngagementRate: number;
+}[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all post history records for the user
+  const userPosts = await db
+    .select()
+    .from(postHistory)
+    .innerJoin(postSchedules, eq(postHistory.postScheduleId, postSchedules.id))
+    .where(eq(postSchedules.userId, userId));
+
+  if (userPosts.length === 0) return [];
+
+  // Get analytics for all posts
+  const postHistoryIds = userPosts.map(p => p.post_history.id);
+  const analyticsRecords = await db
+    .select()
+    .from(analytics)
+    .where(sql`${analytics.postHistoryId} IN (${sql.join(postHistoryIds.map(id => sql`${id}`), sql`, `)})`);
+
+  // Group by platform
+  const platformMap = new Map<string, {
+    totalPosts: number;
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    totalViews: number;
+    avgEngagementRate: number;
+  }>();
+
+  for (const post of userPosts) {
+    const platform = post.post_history.platform;
+    const analyticsRecord = analyticsRecords.find(a => a.postHistoryId === post.post_history.id);
+
+    if (!analyticsRecord) continue;
+
+    const existing = platformMap.get(platform) || {
+      totalPosts: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      totalViews: 0,
+      avgEngagementRate: 0,
+    };
+
+    platformMap.set(platform, {
+      totalPosts: existing.totalPosts + 1,
+      totalLikes: existing.totalLikes + analyticsRecord.likes,
+      totalComments: existing.totalComments + analyticsRecord.comments,
+      totalShares: existing.totalShares + analyticsRecord.shares,
+      totalViews: existing.totalViews + analyticsRecord.views,
+      avgEngagementRate: existing.avgEngagementRate + analyticsRecord.engagementRate,
+    });
+  }
+
+  // Calculate averages and convert to array
+  return Array.from(platformMap.entries()).map(([platform, stats]) => ({
+    platform,
+    ...stats,
+    avgEngagementRate: stats.totalPosts > 0 ? Math.round(stats.avgEngagementRate / stats.totalPosts) : 0,
+  }));
+}
+
+/**
+ * Get analytics grouped by hour of day
+ */
+export async function getAnalyticsByHourOfDay(userId: number): Promise<{
+  hourOfDay: number;
+  totalPosts: number;
+  avgEngagementRate: number;
+}[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all post history records for the user
+  const userPosts = await db
+    .select()
+    .from(postHistory)
+    .innerJoin(postSchedules, eq(postHistory.postScheduleId, postSchedules.id))
+    .where(eq(postSchedules.userId, userId));
+
+  if (userPosts.length === 0) return [];
+
+  // Get analytics for all posts
+  const postHistoryIds = userPosts.map(p => p.post_history.id);
+  const analyticsRecords = await db
+    .select()
+    .from(analytics)
+    .where(sql`${analytics.postHistoryId} IN (${sql.join(postHistoryIds.map(id => sql`${id}`), sql`, `)})`)
+    .orderBy(analytics.hourOfDay);
+
+  // Group by hour of day
+  const hourMap = new Map<number, { totalPosts: number; avgEngagementRate: number }>();
+
+  for (const record of analyticsRecords) {
+    if (record.hourOfDay === null) continue;
+
+    const existing = hourMap.get(record.hourOfDay) || { totalPosts: 0, avgEngagementRate: 0 };
+    hourMap.set(record.hourOfDay, {
+      totalPosts: existing.totalPosts + 1,
+      avgEngagementRate: existing.avgEngagementRate + record.engagementRate,
+    });
+  }
+
+  // Calculate averages and convert to array
+  return Array.from(hourMap.entries()).map(([hourOfDay, stats]) => ({
+    hourOfDay,
+    totalPosts: stats.totalPosts,
+    avgEngagementRate: stats.totalPosts > 0 ? Math.round(stats.avgEngagementRate / stats.totalPosts) : 0,
+  }));
+}
+
+/**
+ * Get analytics grouped by day of week
+ */
+export async function getAnalyticsByDayOfWeek(userId: number): Promise<{
+  dayOfWeek: number;
+  totalPosts: number;
+  avgEngagementRate: number;
+}[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all post history records for the user
+  const userPosts = await db
+    .select()
+    .from(postHistory)
+    .innerJoin(postSchedules, eq(postHistory.postScheduleId, postSchedules.id))
+    .where(eq(postSchedules.userId, userId));
+
+  if (userPosts.length === 0) return [];
+
+  // Get analytics for all posts
+  const postHistoryIds = userPosts.map(p => p.post_history.id);
+  const analyticsRecords = await db
+    .select()
+    .from(analytics)
+    .where(sql`${analytics.postHistoryId} IN (${sql.join(postHistoryIds.map(id => sql`${id}`), sql`, `)})`)
+    .orderBy(analytics.dayOfWeek);
+
+  // Group by day of week
+  const dayMap = new Map<number, { totalPosts: number; avgEngagementRate: number }>();
+
+  for (const record of analyticsRecords) {
+    if (record.dayOfWeek === null) continue;
+
+    const existing = dayMap.get(record.dayOfWeek) || { totalPosts: 0, avgEngagementRate: 0 };
+    dayMap.set(record.dayOfWeek, {
+      totalPosts: existing.totalPosts + 1,
+      avgEngagementRate: existing.avgEngagementRate + record.engagementRate,
+    });
+  }
+
+  // Calculate averages and convert to array
+  return Array.from(dayMap.entries()).map(([dayOfWeek, stats]) => ({
+    dayOfWeek,
+    totalPosts: stats.totalPosts,
+    avgEngagementRate: stats.totalPosts > 0 ? Math.round(stats.avgEngagementRate / stats.totalPosts) : 0,
+  }));
+}
+
+// ==================== Photo Tagging ====================
+
+/**
+ * Extract tags from AI analysis
+ */
+export function extractTagsFromAnalysis(analysisResult: string): string[] {
+  const tags = new Set<string>();
+
+  // Also check plain text for keywords
+  const textLower = analysisResult.toLowerCase();
+  
+  // Category tags
+  if (textLower.includes('exterior') || textLower.includes('外観')) {
+    tags.add('外観');
+  }
+  if (textLower.includes('interior') || textLower.includes('内装')) {
+    tags.add('内装');
+  }
+  if (textLower.includes('before') || textLower.includes('after') || 
+      textLower.includes('ビフォーアフター') || textLower.includes('施工前') || textLower.includes('施工後')) {
+    tags.add('ビフォーアフター');
+  }
+  if (textLower.includes('renovation') || textLower.includes('リフォーム')) {
+    tags.add('リフォーム');
+  }
+  if (textLower.includes('new construction') || textLower.includes('新築')) {
+    tags.add('新築');
+  }
+  if (textLower.includes('完成')) {
+    tags.add('完成');
+  }
+
+  try {
+    // Try to parse as JSON first
+    const analysis = JSON.parse(analysisResult);
+
+    // Extract category-based tags
+    if (analysis.category) {
+      const category = analysis.category.toLowerCase();
+      if (category.includes('exterior') || category.includes('外観')) {
+        tags.add('外観');
+      }
+      if (category.includes('interior') || category.includes('内装')) {
+        tags.add('内装');
+      }
+      if (category.includes('bathroom') || category.includes('浴室')) {
+        tags.add('浴室');
+      }
+      if (category.includes('kitchen') || category.includes('キッチン')) {
+        tags.add('キッチン');
+      }
+      if (category.includes('living') || category.includes('リビング')) {
+        tags.add('リビング');
+      }
+      if (category.includes('bedroom') || category.includes('寝室')) {
+        tags.add('寝室');
+      }
+    }
+
+    // Extract style-based tags
+    if (analysis.style) {
+      const style = analysis.style.toLowerCase();
+      if (style.includes('modern') || style.includes('モダン')) {
+        tags.add('モダン');
+      }
+      if (style.includes('traditional') || style.includes('和風')) {
+        tags.add('和風');
+      }
+      if (style.includes('minimalist') || style.includes('シンプル')) {
+        tags.add('シンプル');
+      }
+      if (style.includes('luxury') || style.includes('高級')) {
+        tags.add('高級');
+      }
+    }
+
+    // Extract feature-based tags
+    if (analysis.features) {
+      const features = Array.isArray(analysis.features) 
+        ? analysis.features.join(' ').toLowerCase()
+        : analysis.features.toLowerCase();
+      
+      if (features.includes('wood') || features.includes('木材')) {
+        tags.add('木材');
+      }
+      if (features.includes('stone') || features.includes('石材')) {
+        tags.add('石材');
+      }
+      if (features.includes('glass') || features.includes('ガラス')) {
+        tags.add('ガラス');
+      }
+      if (features.includes('natural light') || features.includes('自然光')) {
+        tags.add('自然光');
+      }
+      if (features.includes('open space') || features.includes('開放的')) {
+        tags.add('開放的');
+      }
+    }
+
+    // Extract condition-based tags
+    if (analysis.description) {
+      const description = analysis.description.toLowerCase();
+      if (description.includes('before') || description.includes('施工前')) {
+        tags.add('施工前');
+      }
+      if (description.includes('after') || description.includes('施工後')) {
+        tags.add('施工後');
+      }
+      if (description.includes('renovation') || description.includes('リフォーム')) {
+        tags.add('リフォーム');
+      }
+      if (description.includes('new construction') || description.includes('新築')) {
+        tags.add('新築');
+      }
+    }
+
+  } catch (error) {
+    console.error('Failed to parse analysis result for tag extraction:', error);
+  }
+
+  return Array.from(tags);
+}
+
+/**
+ * Update tags for upload history
+ */
+export async function updateUploadHistoryTags(id: number, tags: string[]): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(uploadHistory)
+    .set({ tags: JSON.stringify(tags) })
+    .where(eq(uploadHistory.id, id));
+}
+
+/**
+ * Search upload history by tags
+ */
+export async function searchUploadHistoryByTags(userId: number, tags: string[]): Promise<UploadHistory[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get all upload history for the user
+  const allHistory = await db
+    .select()
+    .from(uploadHistory)
+    .where(eq(uploadHistory.userId, userId))
+    .orderBy(desc(uploadHistory.createdAt));
+
+  // Filter by tags
+  return allHistory.filter(history => {
+    if (!history.tags) return false;
+    
+    try {
+      const historyTags: string[] = JSON.parse(history.tags);
+      return tags.some(tag => historyTags.includes(tag));
+    } catch {
+      return false;
+    }
+  });
+}
+
+// ==================== Optimal Posting Time Suggestions ====================
+
+/**
+ * Get optimal posting times based on historical engagement data
+ */
+export async function getOptimalPostingTimes(userId: number): Promise<{
+  bestHours: { hour: number; score: number; avgEngagementRate: number; totalPosts: number }[];
+  bestDays: { day: number; score: number; avgEngagementRate: number; totalPosts: number }[];
+  recommendations: string[];
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      bestHours: [],
+      bestDays: [],
+      recommendations: [],
+    };
+  }
+
+  // Get analytics by hour and day
+  const hourData = await getAnalyticsByHourOfDay(userId);
+  const dayData = await getAnalyticsByDayOfWeek(userId);
+
+  // Calculate scores for each hour (engagement rate * post count)
+  const hourScores = hourData.map(h => ({
+    hour: h.hourOfDay,
+    score: h.avgEngagementRate * Math.log(h.totalPosts + 1), // Log scale for post count
+    avgEngagementRate: h.avgEngagementRate,
+    totalPosts: h.totalPosts,
+  })).sort((a, b) => b.score - a.score);
+
+  // Calculate scores for each day
+  const dayScores = dayData.map(d => ({
+    day: d.dayOfWeek,
+    score: d.avgEngagementRate * Math.log(d.totalPosts + 1),
+    avgEngagementRate: d.avgEngagementRate,
+    totalPosts: d.totalPosts,
+  })).sort((a, b) => b.score - a.score);
+
+  // Generate recommendations
+  const recommendations: string[] = [];
+  
+  if (hourScores.length > 0) {
+    const topHour = hourScores[0];
+    recommendations.push(
+      `最もエンゲージメント率が高い時間帯は${topHour.hour}時です（エンゲージメント率: ${(topHour.avgEngagementRate / 100).toFixed(2)}%）`
+    );
+  }
+
+  if (dayScores.length > 0) {
+    const dayNames = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
+    const topDay = dayScores[0];
+    recommendations.push(
+      `最もエンゲージメント率が高い曜日は${dayNames[topDay.day]}です（エンゲージメント率: ${(topDay.avgEngagementRate / 100).toFixed(2)}%）`
+    );
+  }
+
+  // Add time-based recommendations
+  if (hourScores.length >= 3) {
+    const morningHours = hourScores.filter(h => h.hour >= 6 && h.hour < 12);
+    const afternoonHours = hourScores.filter(h => h.hour >= 12 && h.hour < 18);
+    const eveningHours = hourScores.filter(h => h.hour >= 18 && h.hour < 24);
+
+    const bestPeriod = [
+      { name: "朝", hours: morningHours },
+      { name: "昼", hours: afternoonHours },
+      { name: "夜", hours: eveningHours },
+    ].sort((a, b) => {
+      const avgA = a.hours.reduce((sum, h) => sum + h.avgEngagementRate, 0) / (a.hours.length || 1);
+      const avgB = b.hours.reduce((sum, h) => sum + h.avgEngagementRate, 0) / (b.hours.length || 1);
+      return avgB - avgA;
+    })[0];
+
+    if (bestPeriod.hours.length > 0) {
+      recommendations.push(`${bestPeriod.name}の時間帯が最も効果的です`);
+    }
+  }
+
+  // Add weekday vs weekend recommendation
+  if (dayScores.length >= 3) {
+    const weekdayData = dayScores.filter(d => d.day >= 1 && d.day <= 5);
+    const weekendData = dayScores.filter(d => d.day === 0 || d.day === 6);
+
+    if (weekdayData.length > 0 && weekendData.length > 0) {
+      const weekdayAvg = weekdayData.reduce((sum, d) => sum + d.avgEngagementRate, 0) / weekdayData.length;
+      const weekendAvg = weekendData.reduce((sum, d) => sum + d.avgEngagementRate, 0) / weekendData.length;
+
+      if (weekendAvg > weekdayAvg * 1.1) {
+        recommendations.push("週末の投稿が平日よりも効果的です");
+      } else if (weekdayAvg > weekendAvg * 1.1) {
+        recommendations.push("平日の投稿が週末よりも効果的です");
+      }
+    }
+  }
+
+  return {
+    bestHours: hourScores.slice(0, 5),
+    bestDays: dayScores.slice(0, 3),
+    recommendations,
+  };
+}
+
+/**
+ * Suggest optimal posting time for a new post
+ */
+export async function suggestPostingTime(userId: number): Promise<{
+  suggestedHour: number;
+  suggestedDay: number;
+  confidence: number;
+  reason: string;
+}> {
+  const optimal = await getOptimalPostingTimes(userId);
+
+  if (optimal.bestHours.length === 0 || optimal.bestDays.length === 0) {
+    // Default suggestion if no data available
+    return {
+      suggestedHour: 12, // Noon
+      suggestedDay: 3, // Wednesday
+      confidence: 0,
+      reason: "過去のデータが不足しているため、デフォルトの時間帯（水曜日12時）を提案します",
+    };
+  }
+
+  const bestHour = optimal.bestHours[0];
+  const bestDay = optimal.bestDays[0];
+
+  // Calculate confidence based on data availability
+  const confidence = Math.min(
+    100,
+    Math.round((bestHour.totalPosts + bestDay.totalPosts) / 2 * 10)
+  );
+
+  const dayNames = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
+  const reason = `過去のデータから、${dayNames[bestDay.day]}の${bestHour.hour}時が最も高いエンゲージメント率（${(bestHour.avgEngagementRate / 100).toFixed(2)}%）を記録しています`;
+
+  return {
+    suggestedHour: bestHour.hour,
+    suggestedDay: bestDay.day,
+    confidence,
+    reason,
+  };
 }
