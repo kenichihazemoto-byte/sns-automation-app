@@ -527,3 +527,12 @@
   - [x] Demo.tsxの画像URL参照を修正
 - [ ] テストと動作確認
   - [ ] 写真が正しく表示されることを確認
+
+## getRandomPhotoWithAnalysisの500エラー修正
+- [x] サーバーログでエラー詳細を確認
+- [x] getRandomPhotoWithAnalysisのコードを修正
+  - [x] google-photos-service.tsに空配列チェックを追加
+  - [x] server/routers.tsにtry-catchとエラーハンドリングを追加
+  - [x] TRPCErrorのimportを追加
+  - [x] 正規表現パターンを修正して完全なURLを抽出
+- [ ] テストと動作確認

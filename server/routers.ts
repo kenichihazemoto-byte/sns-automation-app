@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -450,21 +451,33 @@ export const appRouter = router({
     // ランダムな竣工写真を取得してAI分析
     getRandomPhotoWithAnalysis: protectedProcedure
       .mutation(async () => {
-        const googlePhotos = await import("./google-photos-service");
-        const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
-        
-        // 実際の写真URLを使用してAI分析
-        const analysis = await aiService.analyzeImage(photo.url);
-        
-        return {
-          id: photo.url, // 一意のIDとしてURLを使用
-          url: photo.url,
-          thumbnailUrl: photo.thumbnailUrl,
-          fileName: photo.title || `${album.year}年竣工写真`,
-          albumTitle: album.title,
-          albumYear: album.year,
-          analysis,
-        };
+        try {
+          const googlePhotos = await import("./google-photos-service");
+          const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
+          
+          if (!photo || !photo.url) {
+            throw new Error("Failed to fetch photo from Google Photos");
+          }
+          
+          // 実際の写真URLを使用してAI分析
+          const analysis = await aiService.analyzeImage(photo.url);
+          
+          return {
+            id: photo.url, // 一意のIDとしてURLを使用
+            url: photo.url,
+            thumbnailUrl: photo.thumbnailUrl,
+            fileName: photo.title || `${album.year}年竣工写真`,
+            albumTitle: album.title,
+            albumYear: album.year,
+            analysis,
+          };
+        } catch (error) {
+          console.error("Error in getRandomPhotoWithAnalysis:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Googleフォトから写真を取得できませんでした: ${error instanceof Error ? error.message : "不明なエラー"}`,
+          });
+        }
       }),
 
     // AI投稿文生成デモ

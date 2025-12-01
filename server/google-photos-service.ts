@@ -64,7 +64,7 @@ export async function fetchPhotosFromAlbum(albumUrl: string): Promise<GooglePhot
     
     // HTMLから画像URLを抽出
     // Googleフォトの共有アルバムには、画像が"https://lh3.googleusercontent.com/"で始まるURLとして埋め込まれている
-    const imageUrlPattern = /https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_-]+/g;
+    const imageUrlPattern = /https:\/\/lh3\.googleusercontent\.com\/[^\s"'<>]+/g;
     const matches = html.match(imageUrlPattern);
     
     if (!matches || matches.length === 0) {
@@ -118,6 +118,11 @@ export async function getRandomConstructionPhoto(): Promise<{
 }> {
   const album = selectRandomAlbum();
   const photos = await fetchPhotosFromAlbum(album.url);
+  
+  if (photos.length === 0) {
+    throw new Error(`No photos found in album: ${album.title}`);
+  }
+  
   const photo = selectRandomPhoto(photos);
   
   return { photo, album };
