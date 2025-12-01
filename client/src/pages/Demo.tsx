@@ -1,16 +1,109 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock } from "lucide-react";
+import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+// Sortable Photo Item Component
+function SortablePhotoItem({ photo, index, selectedImage, onSelect, onEnlarge, onDelete }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: photo.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative group border-2 rounded-lg overflow-hidden ${
+        selectedImage?.id === photo.id ? "border-primary" : "border-transparent"
+      }`}
+    >
+      {/* ドラッグハンドル */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute top-2 left-2 bg-background/80 p-1 rounded cursor-move z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <GripVertical className="h-4 w-4" />
+      </div>
+      <img
+        src={photo.url}
+        alt={`写真 ${index + 1}`}
+        className="w-full h-32 object-cover cursor-pointer"
+        onClick={onSelect}
+      />
+      <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
+        スコア: {photo.score?.toFixed(1) || 'N/A'}
+      </div>
+      {selectedImage?.id === photo.id && (
+        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center pointer-events-none">
+          <Check className="h-8 w-8 text-primary-foreground" />
+        </div>
+      )}
+      {/* ホバー時のアクションボタン */}
+      <div className="absolute bottom-2 left-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1 h-7 text-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEnlarge();
+          }}
+        >
+          拡大
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="h-7 w-7 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          ×
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function Demo() {
   const [companyName, setCompanyName] = useState<"ハゼモト建設" | "クリニックアーキプロ">("ハゼモト建設");
@@ -35,6 +128,9 @@ export default function Demo() {
   const [allPlatformsPosts, setAllPlatformsPosts] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"instagram" | "x" | "threads">("instagram");
   const [showScheduleDialog, setShowScheduleDialog] = useState<boolean>(false);
+  const [showBatchScheduleDialog, setShowBatchScheduleDialog] = useState<boolean>(false);
+  const [batchScheduleDate, setBatchScheduleDate] = useState<string>("");
+  const [batchScheduleInterval, setBatchScheduleInterval] = useState<number>(1); // 時間間隔（時間単位）
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
   const [uploadProgress, setUploadProgress] = useState<{
@@ -44,6 +140,16 @@ export default function Demo() {
     uploading: boolean;
   }>({ total: 0, completed: 0, failed: 0, uploading: false });
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
+  const [historyDateFilter, setHistoryDateFilter] = useState<string>("");
+
+  // Drag and Drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
@@ -53,6 +159,19 @@ export default function Demo() {
 
   // アップロード履歴
   const { data: uploadHistoryList } = trpc.demo.getUploadHistory.useQuery();
+  
+  // フィルタリングされた履歴リスト
+  const filteredHistoryList = uploadHistoryList?.filter((history) => {
+    // タイトル検索
+    const matchesSearch = !historySearchQuery || 
+      (history.title && history.title.toLowerCase().includes(historySearchQuery.toLowerCase()));
+    
+    // 日付フィルタ
+    const matchesDate = !historyDateFilter || 
+      new Date(history.createdAt).toISOString().split('T')[0] === historyDateFilter;
+    
+    return matchesSearch && matchesDate;
+  });
   const saveUploadHistoryMutation = trpc.demo.saveUploadHistory.useMutation({
     onSuccess: () => {
       toast.success("アップロード履歴を保存しました");
@@ -423,6 +542,19 @@ export default function Demo() {
       toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
     } else {
       toast.error("写真のアップロードに失敗しました");
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setMultiplePhotos((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+      toast.success("写真の順序を変更しました");
     }
   };
 
@@ -1174,8 +1306,39 @@ export default function Demo() {
               <CardDescription>過去に保存した写真セットを再利用できます</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {uploadHistoryList.map((history) => {
+              {/* 検索・フィルタ */}
+              <div className="flex gap-2 mb-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="タイトルで検索..."
+                    value={historySearchQuery}
+                    onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="w-48">
+                  <Input
+                    type="date"
+                    value={historyDateFilter}
+                    onChange={(e) => setHistoryDateFilter(e.target.value)}
+                  />
+                </div>
+                {(historySearchQuery || historyDateFilter) && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      setHistorySearchQuery("");
+                      setHistoryDateFilter("");
+                    }}
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+              
+              {filteredHistoryList && filteredHistoryList.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredHistoryList.map((history) => {
                   const photos = JSON.parse(history.photoData);
                   return (
                     <div
@@ -1244,6 +1407,11 @@ export default function Demo() {
                   );
                 })}
               </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  検索結果がありません
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1289,50 +1457,28 @@ export default function Demo() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {multiplePhotos.map((photo, index) => (
-                  <div
-                    key={index}
-                    className={`relative group border-2 rounded-lg overflow-hidden ${
-                      selectedImage?.id === photo.id ? "border-primary" : "border-transparent"
-                    }`}
-                  >
-                    <img
-                      src={photo.url}
-                      alt={`写真 ${index + 1}`}
-                      className="w-full h-32 object-cover cursor-pointer"
-                      onClick={() => {
-                        setSelectedImage(photo);
-                        setAnalysis(photo.analysis);
-                      }}
-                    />
-                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
-                      スコア: {photo.score?.toFixed(1) || 'N/A'}
-                    </div>
-                    {selectedImage?.id === photo.id && (
-                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center pointer-events-none">
-                        <Check className="h-8 w-8 text-primary-foreground" />
-                      </div>
-                    )}
-                    {/* ホバー時のアクションボタン */}
-                    <div className="absolute bottom-2 left-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="flex-1 h-7 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEnlargedImage(photo.url);
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={multiplePhotos.map(p => p.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {multiplePhotos.map((photo, index) => (
+                      <SortablePhotoItem
+                        key={photo.id}
+                        photo={photo}
+                        index={index}
+                        selectedImage={selectedImage}
+                        onSelect={() => {
+                          setSelectedImage(photo);
+                          setAnalysis(photo.analysis);
                         }}
-                      >
-                        拡大
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-7 w-7 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onEnlarge={() => setEnlargedImage(photo.url)}
+                        onDelete={() => {
                           const newPhotos = multiplePhotos.filter((_, i) => i !== index);
                           setMultiplePhotos(newPhotos);
                           if (selectedImage?.id === photo.id && newPhotos.length > 0) {
@@ -1344,13 +1490,11 @@ export default function Demo() {
                           }
                           toast.success("写真を削除しました");
                         }}
-                      >
-                        ×
-                      </Button>
-                    </div>
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             </CardContent>
           </Card>
         )}
@@ -1491,6 +1635,18 @@ export default function Demo() {
                     ) : (
                       "カルーセル投稿を生成"
                     )}
+                  </Button>
+                </div>
+              )}
+              {multiplePhotos.length >= 2 && individualComments && (
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    onClick={() => setShowBatchScheduleDialog(true)}
+                    variant="default"
+                    className="flex-1"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    一括スケジュール設定
                   </Button>
                 </div>
               )}
@@ -1770,6 +1926,108 @@ export default function Demo() {
                   予約投稿を保存
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 一括スケジュールダイアログ */}
+      <Dialog open={showBatchScheduleDialog} onOpenChange={setShowBatchScheduleDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>一括スケジュール設定</DialogTitle>
+            <DialogDescription>
+              {multiplePhotos.length}枚の写真の投稿を一括でスケジュール設定します。指定した時間間隔で自動的に投稿されます。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* 開始日時 */}
+            <div className="space-y-2">
+              <Label htmlFor="batch-schedule-date">開始日時</Label>
+              <Input
+                id="batch-schedule-date"
+                type="datetime-local"
+                value={batchScheduleDate}
+                onChange={(e) => setBatchScheduleDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+              />
+            </div>
+
+            {/* 時間間隔 */}
+            <div className="space-y-2">
+              <Label htmlFor="batch-schedule-interval">投稿間隔（時間）</Label>
+              <Input
+                id="batch-schedule-interval"
+                type="number"
+                min="1"
+                max="24"
+                value={batchScheduleInterval}
+                onChange={(e) => setBatchScheduleInterval(parseInt(e.target.value) || 1)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {multiplePhotos.length}枚の写真が{batchScheduleInterval}時間ごとに投稿されます
+              </p>
+            </div>
+
+            {/* プレビュー */}
+            <div className="space-y-2">
+              <Label>投稿スケジュール</Label>
+              <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                {multiplePhotos.map((photo, index) => {
+                  const scheduleTime = batchScheduleDate ? new Date(new Date(batchScheduleDate).getTime() + index * batchScheduleInterval * 60 * 60 * 1000) : null;
+                  return (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold">投稿 {index + 1}:</span>
+                      <span className="text-muted-foreground">
+                        {scheduleTime ? scheduleTime.toLocaleString('ja-JP', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : '-'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBatchScheduleDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => {
+                if (!batchScheduleDate) {
+                  toast.error("開始日時を選択してください");
+                  return;
+                }
+
+                // 各写真に対してスケジュールを作成
+                multiplePhotos.forEach((photo, index) => {
+                  const scheduledAt = new Date(new Date(batchScheduleDate).getTime() + index * batchScheduleInterval * 60 * 60 * 1000);
+                  
+                  createScheduleMutation.mutate({
+                    companyName,
+                    scheduledAt,
+                    isBeforeAfter: false,
+                    beforeImageUrl: photo.url,
+                    afterImageUrl: undefined,
+                  });
+                });
+
+                toast.success(`${multiplePhotos.length}件の予約投稿を作成しました`);
+                setShowBatchScheduleDialog(false);
+              }}
+              disabled={!batchScheduleDate}
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              {multiplePhotos.length}件の予約投稿を作成
             </Button>
           </DialogFooter>
         </DialogContent>
