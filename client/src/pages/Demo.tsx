@@ -534,11 +534,16 @@ export default function Demo() {
   const handleUploadComplete = (uploadedPhotos: any[]) => {
     setUploadProgress(prev => ({ ...prev, uploading: false }));
     
-    if (uploadedPhotos.length > 0) {
+    if (uploadedPhotos && uploadedPhotos.length > 0) {
       setMultiplePhotos(uploadedPhotos);
       // uploadedPhotosの各要素は { url, id, analysis } という構造
-      setSelectedImage(uploadedPhotos[0]);
-      setAnalysis(uploadedPhotos[0].analysis);
+      const firstPhoto = uploadedPhotos[0];
+      if (firstPhoto) {
+        setSelectedImage(firstPhoto);
+        if (firstPhoto.analysis) {
+          setAnalysis(firstPhoto.analysis);
+        }
+      }
       toast.success(`${uploadedPhotos.length}枚の写真をアップロードしました`);
     } else {
       toast.error("写真のアップロードに失敗しました");

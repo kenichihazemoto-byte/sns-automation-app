@@ -645,3 +645,7 @@
   - [x] タグデータベーススキーマの設計
   - [x] タグ別フィルタリング機能
   - [ ] アップロード履歴でのタグ表示
+
+
+## バグ修正
+- [x] SimplePost.tsxの写真アップロードエラー修正（Cannot read properties of undefined (reading '0')）
