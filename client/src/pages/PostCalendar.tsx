@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, dateFnsLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { ja } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -12,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Instagram, Twitter, MessageSquare, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 const locales = {
   ja: ja,
@@ -24,6 +28,8 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
+
+const DnDCalendar = withDragAndDrop(Calendar);
 
 interface CalendarEvent extends BigCalendarEvent {
   id: number;
@@ -45,11 +51,11 @@ export default function PostCalendar() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const utils = trpc.useUtils();
-  const { data: scheduledPosts, isLoading } = trpc.scheduler.listScheduledPosts.useQuery();
+  const { data: scheduledPosts, isLoading } = trpc.posts.schedules.useQuery();
 
-  const updateScheduleMutation = trpc.scheduler.updateScheduledPost.useMutation({
+  const updateScheduleMutation = trpc.posts.updateSchedule.useMutation({
     onSuccess: () => {
-      utils.scheduler.listScheduledPosts.invalidate();
+      utils.posts.schedules.invalidate();
       toast.success("投稿スケジュールを更新しました");
     },
     onError: (error) => {
@@ -60,32 +66,28 @@ export default function PostCalendar() {
   const events: CalendarEvent[] = useMemo(() => {
     if (!scheduledPosts) return [];
 
-    return scheduledPosts
-      .filter((post) => {
-        if (platformFilter === "all") return true;
-        return post.platform === platformFilter;
-      })
-      .map((post) => ({
-        id: post.id,
-        title: `${post.platform} - ${post.companyName}`,
-        start: new Date(post.scheduledAt),
-        end: new Date(new Date(post.scheduledAt).getTime() + 60 * 60 * 1000), // 1時間後
-        resource: {
-          platform: post.platform,
-          status: post.status,
-          content: post.content,
-          companyName: post.companyName,
-        },
-      }));
+    return scheduledPosts.map((post) => ({
+      id: post.id,
+      title: `${post.companyName} - ${post.isBeforeAfter ? "ビフォーアフター" : "通常投稿"}`,
+      start: new Date(post.scheduledAt),
+      end: new Date(new Date(post.scheduledAt).getTime() + 60 * 60 * 1000), // 1時間後
+      resource: {
+        platform: "instagram", // デフォルト
+        status: post.status,
+        content: post.caption || "",
+        companyName: post.companyName,
+      },
+    }));
   }, [scheduledPosts, platformFilter]);
 
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+  const handleSelectEvent = useCallback((event: any) => {
     setSelectedEvent(event);
     setIsDialogOpen(true);
   }, []);
 
   const handleEventDrop = useCallback(
-    ({ event, start, end }: { event: CalendarEvent; start: Date | string; end: Date | string }) => {
+    (args: any) => {
+      const { event, start, end } = args;
       updateScheduleMutation.mutate({
         id: event.id,
         scheduledAt: typeof start === 'string' ? start : start.toISOString(),
@@ -94,25 +96,21 @@ export default function PostCalendar() {
     [updateScheduleMutation]
   );
 
-  const eventStyleGetter = (event: CalendarEvent) => {
+  const eventStyleGetter = (event: any) => {
     let backgroundColor = "#3b82f6"; // デフォルト: blue
 
-    switch (event.resource.platform) {
-      case "instagram":
-        backgroundColor = "#e11d48"; // rose
-        break;
-      case "x":
-        backgroundColor = "#0f172a"; // slate
-        break;
-      case "threads":
-        backgroundColor = "#8b5cf6"; // violet
-        break;
+    // 会社名別の色分け
+    if (event.resource.companyName === "ハゼモト建設") {
+      backgroundColor = "#10b981"; // green
+    } else if (event.resource.companyName === "クリニックアーキプロ") {
+      backgroundColor = "#f59e0b"; // orange
     }
 
-    if (event.resource.status === "posted") {
+    // ステータス別の調整
+    if (event.resource.status === "completed") {
       backgroundColor = "#22c55e"; // green
-    } else if (event.resource.status === "draft") {
-      backgroundColor = "#94a3b8"; // slate-400
+    } else if (event.resource.status === "failed" || event.resource.status === "cancelled") {
+      backgroundColor = "#ef4444"; // red
     }
 
     return {
@@ -188,15 +186,17 @@ export default function PostCalendar() {
               </div>
             ) : (
               <div style={{ height: "600px" }}>
-                <Calendar
+                <DnDCalendar
                   localizer={localizer}
                   events={events}
-                  startAccessor="start"
-                  endAccessor="end"
+                  startAccessor={(event: any) => event.start}
+                  endAccessor={(event: any) => event.end}
                   view={view}
                   onView={(newView) => setView(newView as "month" | "week" | "day")}
                   onSelectEvent={handleSelectEvent}
+                  onEventDrop={handleEventDrop}
                   eventPropGetter={eventStyleGetter}
+
                   culture="ja"
                   messages={{
                     next: "次へ",
@@ -225,24 +225,20 @@ export default function PostCalendar() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-rose-600"></div>
-                <span className="text-sm">Instagram</span>
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#10b981" }}></div>
+                <span className="text-sm">ハゼモト建設</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-slate-900"></div>
-                <span className="text-sm">X (Twitter)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-violet-600"></div>
-                <span className="text-sm">Threads</span>
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#f59e0b" }}></div>
+                <span className="text-sm">クリニックアーキプロ</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-green-500"></div>
-                <span className="text-sm">投稿済み</span>
+                <span className="text-sm">完了</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-slate-400"></div>
-                <span className="text-sm">下書き</span>
+                <div className="w-4 h-4 rounded bg-red-500"></div>
+                <span className="text-sm">失敗/キャンセル</span>
               </div>
             </div>
           </CardContent>

@@ -33,6 +33,7 @@ const menuItems = [
   { icon: Zap, label: "かんたん投稿", path: "/simple-post" },
   { icon: Sparkles, label: "AI投稿生成", path: "/demo" },
   { icon: Calendar, label: "予約投稿管理", path: "/scheduled" },
+  { icon: Calendar, label: "投稿カレンダー", path: "/calendar" },
   { icon: History, label: "投稿履歴", path: "/history" },
   { icon: BarChart3, label: "効果測定", path: "/analytics" },
   { icon: FileText, label: "テンプレート", path: "/templates" },
