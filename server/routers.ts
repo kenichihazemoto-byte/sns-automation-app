@@ -695,14 +695,18 @@ export const appRouter = router({
       .input(z.object({
         count: z.number().min(2).max(10).default(5),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const errors: Array<{ photoIndex: number; reason: string; details: string }> = [];
+        const MAX_RETRIES = 3; // 最大リトライ回数
+        const RETRY_DELAY = 1000; // リトライ間隔（ミリ秒）
         
         try {
           const googlePhotos = await import("./google-photos-service");
           const photos = [];
+          let attempts = 0;
+          const maxAttempts = input.count * 2; // 指定枚数の2倍まで試行
 
-          for (let i = 0; i < input.count; i++) {
+          while (photos.length < input.count && attempts < maxAttempts) {
             try {
               const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
               const analysis = await aiService.analyzeImage(photo.url);
@@ -717,10 +721,14 @@ export const appRouter = router({
                 analysis,
                 score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
               });
+              
+              attempts++;
             } catch (photoError) {
-              console.error(`Failed to fetch photo ${i + 1}:`, photoError);
+              attempts++;
+              console.error(`Failed to fetch photo (attempt ${attempts}):`, photoError);
               
               // エラーの種類を判定
+              let errorType = "unknown";
               let reason = "不明なエラー";
               let details = "";
               
@@ -728,15 +736,19 @@ export const appRouter = router({
                 const errorMessage = photoError.message.toLowerCase();
                 
                 if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
+                  errorType = "network";
                   reason = "ネットワークエラー";
                   details = "Google フォトへの接続に失敗しました。インターネット接続を確認してください。";
                 } else if (errorMessage.includes("album") || errorMessage.includes("not found")) {
+                  errorType = "album_access";
                   reason = "アルバムアクセスエラー";
                   details = "アルバムにアクセスできませんでした。アルバムが公開設定になっているか確認してください。";
                 } else if (errorMessage.includes("no photos") || errorMessage.includes("no images")) {
+                  errorType = "no_photos";
                   reason = "写真が見つからない";
                   details = "アルバムに写真が見つかりませんでした。";
                 } else if (errorMessage.includes("analyze") || errorMessage.includes("ai")) {
+                  errorType = "ai_analysis";
                   reason = "AI分析エラー";
                   details = "写真のAI分析に失敗しました。もう一度お試しください。";
                 } else {
@@ -744,11 +756,32 @@ export const appRouter = router({
                 }
               }
               
+              // エラーログをデータベースに保存
+              await db.createErrorLog({
+                userId: ctx.user.id,
+                errorType,
+                errorReason: reason,
+                errorDetails: details,
+                context: JSON.stringify({
+                  photoIndex: attempts,
+                  requestedCount: input.count,
+                  successCount: photos.length,
+                }),
+              });
+              
               errors.push({
-                photoIndex: i + 1,
+                photoIndex: attempts,
                 reason,
                 details,
               });
+              
+              // 一時的なエラー（ネットワーク、AI分析）の場合はリトライ
+              if (errorType === "network" || errorType === "ai_analysis") {
+                if (attempts < maxAttempts) {
+                  console.log(`Retrying after ${RETRY_DELAY}ms...`);
+                  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                }
+              }
             }
           }
 
@@ -758,8 +791,13 @@ export const appRouter = router({
 
           // スコアでソート
           photos.sort((a, b) => b.score - a.score);
+          
+          // 成功メッセージ
+          const message = photos.length < input.count 
+            ? `${photos.length}枚の写真を取得しました（${input.count - photos.length}枚は取得に失敗しました）`
+            : `${photos.length}枚の写真を取得しました`;
 
-          return { photos, errors };
+          return { photos, errors, message };
         } catch (error) {
           console.error("Error in getMultiplePhotosWithAnalysis:", error);
           throw new TRPCError({
@@ -1419,6 +1457,27 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await db.deleteFavoriteImage(input.id, ctx.user.id);
         return { success: true };
+      }),
+  }),
+  
+  // エラー統計
+  errorStats: router({
+    // エラーログ一覧を取得
+    getErrorLogs: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(1000).default(100),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getErrorLogsByUser(ctx.user.id, input.limit);
+      }),
+    
+    // エラー統計を取得
+    getStats: protectedProcedure
+      .input(z.object({
+        days: z.number().min(1).max(365).default(30),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getErrorStatsByUser(ctx.user.id, input.days);
       }),
   }),
 });

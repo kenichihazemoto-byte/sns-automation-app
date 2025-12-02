@@ -45,6 +45,9 @@ import {
   favoriteImages,
   InsertFavoriteImage,
   FavoriteImage,
+  errorLogs,
+  InsertErrorLog,
+  ErrorLog,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1529,4 +1532,77 @@ export async function updateFavoriteImage(
         eq(favoriteImages.userId, userId)
       )
     );
+}
+
+
+// ==================== エラーログ管理 ====================
+
+export async function createErrorLog(errorLog: InsertErrorLog) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create error log: database not available");
+    return null;
+  }
+
+  try {
+    const result = await db.insert(errorLogs).values(errorLog);
+    return result;
+  } catch (error) {
+    console.error("[Database] Failed to create error log:", error);
+    return null;
+  }
+}
+
+export async function getErrorLogsByUser(userId: number, limit: number = 100) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get error logs: database not available");
+    return [];
+  }
+
+  try {
+    const logs = await db
+      .select()
+      .from(errorLogs)
+      .where(eq(errorLogs.userId, userId))
+      .orderBy(desc(errorLogs.createdAt))
+      .limit(limit);
+    return logs;
+  } catch (error) {
+    console.error("[Database] Failed to get error logs:", error);
+    return [];
+  }
+}
+
+export async function getErrorStatsByUser(userId: number, days: number = 30) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get error stats: database not available");
+    return { totalErrors: 0, errorsByType: {} };
+  }
+
+  try {
+    const dateThreshold = new Date();
+    dateThreshold.setDate(dateThreshold.getDate() - days);
+
+    const logs = await db
+      .select()
+      .from(errorLogs)
+      .where(
+        sql`${errorLogs.userId} = ${userId} AND ${errorLogs.createdAt} >= ${dateThreshold}`
+      );
+
+    const errorsByType: Record<string, number> = {};
+    logs.forEach((log) => {
+      errorsByType[log.errorType] = (errorsByType[log.errorType] || 0) + 1;
+    });
+
+    return {
+      totalErrors: logs.length,
+      errorsByType,
+    };
+  } catch (error) {
+    console.error("[Database] Failed to get error stats:", error);
+    return { totalErrors: 0, errorsByType: {} };
+  }
 }

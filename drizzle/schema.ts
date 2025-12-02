@@ -343,3 +343,20 @@ export const favoriteImages = mysqlTable("favorite_images", {
 
 export type FavoriteImage = typeof favoriteImages.$inferSelect;
 export type InsertFavoriteImage = typeof favoriteImages.$inferInsert;
+
+/**
+ * エラーログテーブル
+ * 写真取得やAI分析のエラーを記録
+ */
+export const errorLogs = mysqlTable("errorLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  errorType: varchar("errorType", { length: 100 }).notNull(), // "network", "album_access", "no_photos", "ai_analysis", "unknown"
+  errorReason: varchar("errorReason", { length: 255 }).notNull(),
+  errorDetails: text("errorDetails"),
+  context: text("context"), // JSON string with additional context (e.g., photo index, album info)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ErrorLog = typeof errorLogs.$inferSelect;
+export type InsertErrorLog = typeof errorLogs.$inferInsert;

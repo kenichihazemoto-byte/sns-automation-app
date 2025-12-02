@@ -20,6 +20,7 @@ import SimplePost from "./pages/SimplePost";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import ActivityLog from "./pages/ActivityLog";
 import MyProgress from "./pages/MyProgress";
+import ErrorStats from "./pages/ErrorStats";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ function Router() {
       <Route path={"/cloud-storage"} component={CloudStorage} />
       <Route path={"/calendar"} component={PostCalendar} />
       <Route path={"/analytics"} component={Analytics} />
+      <Route path={"/error-stats"} component={ErrorStats} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
