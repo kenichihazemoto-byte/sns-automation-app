@@ -241,6 +241,27 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    deleteMultipleSchedules: protectedProcedure
+      .input(z.object({ ids: z.array(z.number()) }))
+      .mutation(async ({ input }) => {
+        for (const id of input.ids) {
+          await db.deletePostSchedule(id);
+        }
+        return { success: true, count: input.ids.length };
+      }),
+
+    updateMultipleSchedules: protectedProcedure
+      .input(z.object({
+        ids: z.array(z.number()),
+        scheduledAt: z.date(),
+      }))
+      .mutation(async ({ input }) => {
+        for (const id of input.ids) {
+          await db.updatePostSchedule(id, { scheduledAt: input.scheduledAt });
+        }
+        return { success: true, count: input.ids.length };
+      }),
+
     upcomingSchedules: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ input }) => {

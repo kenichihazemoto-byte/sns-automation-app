@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2 } from "lucide-react";
+import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,8 +17,21 @@ export default function ScheduledPosts() {
   const [showEditDialog, setShowEditDialog] = useState<boolean>(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [showDetailDialog, setShowDetailDialog] = useState<boolean>(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState<boolean>(false);
+  const [showBulkEditDialog, setShowBulkEditDialog] = useState<boolean>(false);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
+  const [bulkEditDate, setBulkEditDate] = useState<string>("");
+  const [bulkEditTime, setBulkEditTime] = useState<string>("");
+  
+  // フィルタリング用のstate
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [dateFromFilter, setDateFromFilter] = useState<string>("");
+  const [dateToFilter, setDateToFilter] = useState<string>("");
+  
+  // 一括操作用のstate
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const utils = trpc.useUtils();
   const { data: schedules, isLoading } = trpc.posts.schedules.useQuery();
@@ -48,6 +61,98 @@ export default function ScheduledPosts() {
       toast.error(`エラー: ${error.message}`);
     },
   });
+
+  const deleteMultipleSchedulesMutation = trpc.posts.deleteMultipleSchedules.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count}件の予約投稿を削除しました`);
+      setSelectedIds([]);
+      setShowBulkDeleteDialog(false);
+      utils.posts.schedules.invalidate();
+      utils.posts.upcomingSchedules.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  const updateMultipleSchedulesMutation = trpc.posts.updateMultipleSchedules.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count}件の予約投稿を更新しました`);
+      setSelectedIds([]);
+      setShowBulkEditDialog(false);
+      setBulkEditDate("");
+      setBulkEditTime("");
+      utils.posts.schedules.invalidate();
+      utils.posts.upcomingSchedules.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
+
+  // フィルタリングロジック
+  const filteredSchedules = useMemo(() => {
+    if (!schedules) return [];
+    
+    return schedules.filter((schedule: any) => {
+      // ステータスフィルタ
+      if (statusFilter !== "all" && schedule.status !== statusFilter) {
+        return false;
+      }
+      
+      // 会社名フィルタ
+      if (companyFilter !== "all" && schedule.companyName !== companyFilter) {
+        return false;
+      }
+      
+      // 日付範囲フィルタ
+      const scheduleDate = new Date(schedule.scheduledAt);
+      if (dateFromFilter) {
+        const fromDate = new Date(dateFromFilter);
+        if (scheduleDate < fromDate) return false;
+      }
+      if (dateToFilter) {
+        const toDate = new Date(dateToFilter);
+        toDate.setHours(23, 59, 59, 999);
+        if (scheduleDate > toDate) return false;
+      }
+      
+      return true;
+    });
+  }, [schedules, statusFilter, companyFilter, dateFromFilter, dateToFilter]);
+
+  // 会社名の一覧を取得
+  const companyNames = useMemo(() => {
+    if (!schedules) return [];
+    const names = new Set(schedules.map((s: any) => s.companyName));
+    return Array.from(names);
+  }, [schedules]);
+
+  // フィルタをクリア
+  const clearFilters = () => {
+    setStatusFilter("all");
+    setCompanyFilter("all");
+    setDateFromFilter("");
+    setDateToFilter("");
+  };
+
+  // 一括選択/解除
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredSchedules.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredSchedules.map((s: any) => s.id));
+    }
+  };
+
+  // 個別選択
+  const toggleSelect = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(sid => sid !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
 
   const handleEdit = (schedule: any) => {
     setSelectedSchedule(schedule);
@@ -194,21 +299,138 @@ export default function ScheduledPosts() {
         {/* 全ての予約投稿 */}
         <Card>
           <CardHeader>
-            <CardTitle>全ての予約投稿</CardTitle>
-            <CardDescription>
-              過去の予約投稿も含めて表示しています
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>全ての予約投稿</CardTitle>
+                <CardDescription>
+                  過去の予約投稿も含めて表示しています ({filteredSchedules.length}件)
+                </CardDescription>
+              </div>
+              {selectedIds.length > 0 && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBulkEditDialog(true)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    {selectedIds.length}件を編集
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {selectedIds.length}件を削除
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* フィルタリングUI */}
+            <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-4">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <span className="font-medium">フィルター</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>ステータス</Label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-md"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">すべて</option>
+                    <option value="scheduled">予約済み</option>
+                    <option value="completed">完了</option>
+                    <option value="failed">失敗</option>
+                    <option value="cancelled">キャンセル</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>会社名</Label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-md"
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                  >
+                    <option value="all">すべて</option>
+                    {companyNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>開始日</Label>
+                  <Input
+                    type="date"
+                    value={dateFromFilter}
+                    onChange={(e) => setDateFromFilter(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>終了日</Label>
+                  <Input
+                    type="date"
+                    value={dateToFilter}
+                    onChange={(e) => setDateToFilter(e.target.value)}
+                  />
+                </div>
+              </div>
+              {(statusFilter !== "all" || companyFilter !== "all" || dateFromFilter || dateToFilter) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  フィルタをクリア
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            {schedules && schedules.length > 0 ? (
+            {/* 一括選択ボタン */}
+            {filteredSchedules.length > 0 && (
+              <div className="mb-4 flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                >
+                  {selectedIds.length === filteredSchedules.length ? (
+                    <><CheckSquare className="h-4 w-4 mr-2" />全解除</>
+                  ) : (
+                    <><Square className="h-4 w-4 mr-2" />全選択</>
+                  )}
+                </Button>
+                {selectedIds.length > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.length}件選択中
+                  </span>
+                )}
+              </div>
+            )}
+
+            {filteredSchedules.length > 0 ? (
               <div className="space-y-4">
-                {schedules.map((schedule: any) => (
+                {filteredSchedules.map((schedule: any) => (
                   <div
                     key={schedule.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                    onClick={() => handleViewDetail(schedule)}
+                    className="flex items-center gap-4 p-4 border rounded-lg hover:bg-accent/50 transition-colors"
                   >
-                    <div className="flex-1 space-y-2">
+                    {/* チェックボックス */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(schedule.id)}
+                        onChange={() => toggleSelect(schedule.id)}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2 cursor-pointer" onClick={() => handleViewDetail(schedule)}>
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">
@@ -364,6 +586,112 @@ export default function ScheduledPosts() {
                 </>
               ) : (
                 "削除"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 一括削除ダイアログ */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>一括削除の確認</DialogTitle>
+            <DialogDescription>
+              {selectedIds.length}件の予約投稿を削除してもよろしいですか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkDeleteDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteMultipleSchedulesMutation.mutate({ ids: selectedIds });
+              }}
+              disabled={deleteMultipleSchedulesMutation.isPending}
+            >
+              {deleteMultipleSchedulesMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  削除中...
+                </>
+              ) : (
+                `${selectedIds.length}件を削除`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 一括編集ダイアログ */}
+      <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>一括日時変更</DialogTitle>
+            <DialogDescription>
+              {selectedIds.length}件の予約投稿の日時を変更します
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-edit-date">投稿予定日</Label>
+              <Input
+                id="bulk-edit-date"
+                type="date"
+                value={bulkEditDate}
+                onChange={(e) => setBulkEditDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bulk-edit-time">投稿予定時刻</Label>
+              <Input
+                id="bulk-edit-time"
+                type="time"
+                value={bulkEditTime}
+                onChange={(e) => setBulkEditTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkEditDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => {
+                if (!bulkEditDate || !bulkEditTime) {
+                  toast.error("日付と時刻を選択してください");
+                  return;
+                }
+
+                const scheduledAt = new Date(`${bulkEditDate}T${bulkEditTime}`);
+                
+                updateMultipleSchedulesMutation.mutate({
+                  ids: selectedIds,
+                  scheduledAt,
+                });
+              }}
+              disabled={!bulkEditDate || !bulkEditTime || updateMultipleSchedulesMutation.isPending}
+            >
+              {updateMultipleSchedulesMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  更新中...
+                </>
+              ) : (
+                `${selectedIds.length}件を更新`
               )}
             </Button>
           </DialogFooter>
