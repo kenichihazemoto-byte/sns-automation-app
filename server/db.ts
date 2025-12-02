@@ -1606,3 +1606,137 @@ export async function getErrorStatsByUser(userId: number, days: number = 30) {
     return { totalErrors: 0, errorsByType: {} };
   }
 }
+
+/**
+ * 写真取得の成功率を計算
+ * 
+ * @param userId ユーザーID
+ * @param days 集計期間（日数）
+ * @returns 成功率と詳細統計
+ */
+export async function getPhotoFetchSuccessRate(userId: number, days: number = 7) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get photo fetch success rate: database not available");
+    return {
+      successRate: 0,
+      totalAttempts: 0,
+      successCount: 0,
+      failureCount: 0,
+      errorsByType: {},
+      recentErrors: [],
+    };
+  }
+
+  try {
+    const dateThreshold = new Date();
+    dateThreshold.setDate(dateThreshold.getDate() - days);
+
+    // 期間内のエラーログを取得（写真取得関連のみ）
+    const errorLogsData = await db
+      .select()
+      .from(errorLogs)
+      .where(
+        sql`${errorLogs.userId} = ${userId} AND ${errorLogs.createdAt} >= ${dateThreshold}`
+      );
+
+    // エラー種別ごとの集計
+    const errorsByType: Record<string, number> = {};
+    errorLogsData.forEach((log) => {
+      errorsByType[log.errorType] = (errorsByType[log.errorType] || 0) + 1;
+    });
+
+    // 期間内の作業ログを取得（写真関連のみ）
+    const activityLogsData = await db
+      .select()
+      .from(userActivityLog)
+      .where(
+        sql`${userActivityLog.userId} = ${userId} 
+        AND ${userActivityLog.createdAt} >= ${dateThreshold}
+        AND ${userActivityLog.activityType} IN ('photo_upload', 'photo_analysis', 'post_generation')`
+      );
+
+    // 成功・失敗のカウント
+    const successCount = activityLogsData.filter(log => log.status === 'success').length;
+    const failureCount = activityLogsData.filter(log => log.status === 'failed').length;
+    const totalAttempts = successCount + failureCount;
+
+    // 成功率を計算（0〜100）
+    const successRate = totalAttempts > 0 ? (successCount / totalAttempts) * 100 : 0;
+
+    // 最近のエラー（最大10件）
+    const recentErrors = errorLogsData
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10)
+      .map(log => ({
+        errorType: log.errorType,
+        reason: log.errorReason,
+        details: log.errorDetails,
+        createdAt: log.createdAt,
+      }));
+
+    return {
+      successRate: Math.round(successRate * 100) / 100, // 小数点2桁
+      totalAttempts,
+      successCount,
+      failureCount,
+      errorsByType,
+      recentErrors,
+    };
+  } catch (error) {
+    console.error("[Database] Failed to get photo fetch success rate:", error);
+    return {
+      successRate: 0,
+      totalAttempts: 0,
+      successCount: 0,
+      failureCount: 0,
+      errorsByType: {},
+      recentErrors: [],
+    };
+  }
+}
+
+/**
+ * 写真取得の成功率履歴を記録
+ * 
+ * @param userId ユーザーID
+ * @param successRate 成功率（0〜100）
+ * @param totalAttempts 総試行回数
+ * @param successCount 成功回数
+ * @param failureCount 失敗回数
+ */
+export async function recordPhotoFetchSuccessRate(
+  userId: number,
+  successRate: number,
+  totalAttempts: number,
+  successCount: number,
+  failureCount: number
+) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot record photo fetch success rate: database not available");
+    return null;
+  }
+
+  try {
+    // 作業ログに記録（統計情報として）
+    await db.insert(userActivityLog).values({
+      userId,
+      activityType: 'photo_fetch',
+      status: 'success',
+      details: JSON.stringify({
+        type: 'success_rate_snapshot',
+        successRate,
+        totalAttempts,
+        successCount,
+        failureCount,
+        timestamp: new Date().toISOString(),
+      }),
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to record photo fetch success rate:", error);
+    return null;
+  }
+}

@@ -698,7 +698,32 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const errors: Array<{ photoIndex: number; reason: string; details: string }> = [];
         const MAX_RETRIES = 3; // 最大リトライ回数
-        const RETRY_DELAY = 1000; // リトライ間隔（ミリ秒）
+        const BASE_RETRY_DELAY = 1000; // 基本リトライ間隔（ミリ秒）
+        const MAX_RETRY_DELAY = 10000; // 最大リトライ間隔（ミリ秒）
+        const FETCH_TIMEOUT = 30000; // フェッチタイムアウト（30秒）
+        
+        /**
+         * 指数バックオフで待機時間を計算
+         */
+        const calculateBackoffDelay = (retryCount: number): number => {
+          const delay = BASE_RETRY_DELAY * Math.pow(2, retryCount);
+          return Math.min(delay, MAX_RETRY_DELAY);
+        };
+        
+        /**
+         * タイムアウト付きで写真を取得
+         */
+        const fetchPhotoWithTimeout = async (timeoutMs: number) => {
+          return Promise.race([
+            (async () => {
+              const googlePhotos = await import("./google-photos-service");
+              return await googlePhotos.getRandomConstructionPhoto();
+            })(),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Fetch timeout')), timeoutMs)
+            )
+          ]);
+        };
         
         try {
           const googlePhotos = await import("./google-photos-service");
@@ -707,82 +732,94 @@ export const appRouter = router({
           const maxAttempts = input.count * 2; // 指定枚数の2倍まで試行
 
           while (photos.length < input.count && attempts < maxAttempts) {
-            try {
-              const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
-              const analysis = await aiService.analyzeImage(photo.url);
-              
-              photos.push({
-                id: photo.url,
-                url: photo.url,
-                thumbnailUrl: photo.thumbnailUrl || photo.url,
-                fileName: photo.title || `${album.year}年端工写真`,
-                albumTitle: album.title,
-                albumYear: album.year,
-                analysis,
-                score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
-              });
-              
-              attempts++;
-            } catch (photoError) {
-              attempts++;
-              console.error(`Failed to fetch photo (attempt ${attempts}):`, photoError);
-              
-              // エラーの種類を判定
-              let errorType = "unknown";
-              let reason = "不明なエラー";
-              let details = "";
-              
-              if (photoError instanceof Error) {
-                const errorMessage = photoError.message.toLowerCase();
+            let retryCount = 0;
+            let success = false;
+            
+            while (!success && retryCount <= MAX_RETRIES) {
+              try {
+                // タイムアウト付きで写真を取得
+                const { photo, album } = await fetchPhotoWithTimeout(FETCH_TIMEOUT);
+                const analysis = await aiService.analyzeImage(photo.url);
                 
-                if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
-                  errorType = "network";
-                  reason = "ネットワークエラー";
-                  details = "Google フォトへの接続に失敗しました。インターネット接続を確認してください。";
-                } else if (errorMessage.includes("album") || errorMessage.includes("not found")) {
-                  errorType = "album_access";
-                  reason = "アルバムアクセスエラー";
-                  details = "アルバムにアクセスできませんでした。アルバムが公開設定になっているか確認してください。";
-                } else if (errorMessage.includes("no photos") || errorMessage.includes("no images")) {
-                  errorType = "no_photos";
-                  reason = "写真が見つからない";
-                  details = "アルバムに写真が見つかりませんでした。";
-                } else if (errorMessage.includes("analyze") || errorMessage.includes("ai")) {
-                  errorType = "ai_analysis";
-                  reason = "AI分析エラー";
-                  details = "写真のAI分析に失敗しました。もう一度お試しください。";
+                photos.push({
+                  id: photo.url,
+                  url: photo.url,
+                  thumbnailUrl: photo.thumbnailUrl || photo.url,
+                  fileName: photo.title || `${album.year}年端工写真`,
+                  albumTitle: album.title,
+                  albumYear: album.year,
+                  analysis,
+                  score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
+                });
+                
+                success = true;
+                console.log(`[PhotoFetch] Successfully fetched photo ${photos.length}/${input.count}`);
+              } catch (photoError) {
+                retryCount++;
+                console.error(`[PhotoFetch] Failed to fetch photo (attempt ${attempts + 1}, retry ${retryCount}/${MAX_RETRIES}):`, photoError);
+                
+                // 最後のリトライでなければ、指数バックオフで待機
+                if (retryCount <= MAX_RETRIES) {
+                  const backoffDelay = calculateBackoffDelay(retryCount - 1);
+                  console.log(`[PhotoFetch] Waiting ${backoffDelay}ms before retry...`);
+                  await new Promise(resolve => setTimeout(resolve, backoffDelay));
                 } else {
-                  details = photoError.message;
-                }
-              }
-              
-              // エラーログをデータベースに保存
-              await db.createErrorLog({
-                userId: ctx.user.id,
-                errorType,
-                errorReason: reason,
-                errorDetails: details,
-                context: JSON.stringify({
-                  photoIndex: attempts,
-                  requestedCount: input.count,
-                  successCount: photos.length,
-                }),
-              });
-              
-              errors.push({
-                photoIndex: attempts,
-                reason,
-                details,
-              });
-              
-              // 一時的なエラー（ネットワーク、AI分析）の場合はリトライ
-              if (errorType === "network" || errorType === "ai_analysis") {
-                if (attempts < maxAttempts) {
-                  console.log(`Retrying after ${RETRY_DELAY}ms...`);
-                  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                  // 最大リトライ回数に達した場合、エラーを記録
+                  let errorType = "unknown";
+                  let reason = "不明なエラー";
+                  let details = "";
+                  
+                  if (photoError instanceof Error) {
+                    const errorMessage = photoError.message.toLowerCase();
+                    
+                    if (errorMessage.includes("timeout")) {
+                      errorType = "timeout";
+                      reason = "タイムアウト";
+                      details = "写真の取得に時間がかかりすぎました。ネットワークが不安定な可能性があります。";
+                    } else if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
+                      errorType = "network";
+                      reason = "ネットワークエラー";
+                      details = "Google フォトへの接続に失敗しました。インターネット接続を確認してください。";
+                    } else if (errorMessage.includes("album") || errorMessage.includes("not found")) {
+                      errorType = "album_access";
+                      reason = "アルバムアクセスエラー";
+                      details = "アルバムにアクセスできませんでした。アルバムが公開設定になっているか確認してください。";
+                    } else if (errorMessage.includes("no photos") || errorMessage.includes("no images")) {
+                      errorType = "no_photos";
+                      reason = "写真が見つからない";
+                      details = "アルバムに写真が見つかりませんでした。";
+                    } else if (errorMessage.includes("analyze") || errorMessage.includes("ai")) {
+                      errorType = "ai_analysis";
+                      reason = "AI分析エラー";
+                      details = "写真のAI分析に失敗しました。もう一度お試しください。";
+                    } else {
+                      details = photoError.message;
+                    }
+                  }
+                  
+                  // エラーログをデータベースに保存
+                  await db.createErrorLog({
+                    userId: ctx.user.id,
+                    errorType,
+                    errorReason: reason,
+                    errorDetails: details,
+                    context: JSON.stringify({
+                      photoIndex: attempts,
+                      requestedCount: input.count,
+                      successCount: photos.length,
+                    }),
+                  });
+                  
+                  errors.push({
+                    photoIndex: attempts,
+                    reason,
+                    details,
+                  });
                 }
               }
             }
+            
+            attempts++;
           }
 
           if (photos.length === 0) {
@@ -1478,6 +1515,34 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return await db.getErrorStatsByUser(ctx.user.id, input.days);
+      }),
+    
+    // 写真取得の成功率を取得
+    getPhotoFetchSuccessRate: protectedProcedure
+      .input(z.object({
+        days: z.number().min(1).max(90).default(7),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getPhotoFetchSuccessRate(ctx.user.id, input.days);
+      }),
+    
+    // 写真取得の成功率を記録
+    recordPhotoFetchSuccessRate: protectedProcedure
+      .input(z.object({
+        successRate: z.number().min(0).max(100),
+        totalAttempts: z.number().min(0),
+        successCount: z.number().min(0),
+        failureCount: z.number().min(0),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.recordPhotoFetchSuccessRate(
+          ctx.user.id,
+          input.successRate,
+          input.totalAttempts,
+          input.successCount,
+          input.failureCount
+        );
+        return { success: true };
       }),
   }),
 });

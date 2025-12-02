@@ -43,9 +43,65 @@ export const HAZEMOTO_ALBUMS: GooglePhotoAlbum[] = [
 ];
 
 /**
+ * 画像URLの検証
+ */
+function isValidImageUrl(url: string): boolean {
+  // 基本的なURL形式チェック
+  if (!url || typeof url !== 'string') return false;
+  
+  // lh3.googleusercontent.comドメインのチェック
+  if (!url.startsWith('https://lh3.googleusercontent.com/')) return false;
+  
+  // 最小限の長さチェック（ドメイン + パス）
+  if (url.length < 50) return false;
+  
+  // 無効な文字が含まれていないかチェック
+  if (url.includes('<') || url.includes('>') || url.includes('"') || url.includes("'")) return false;
+  
+  return true;
+}
+
+/**
+ * 複数のパターンで画像URLを抽出（フォールバック機構）
+ */
+function extractImageUrls(html: string): string[] {
+  const allUrls: string[] = [];
+  
+  // パターン1: 最も一般的なパターン（=で終わるまで）
+  const pattern1 = /https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_-]+(?:=[a-z0-9-]+)?/g;
+  const matches1 = html.match(pattern1);
+  if (matches1) {
+    allUrls.push(...matches1);
+  }
+  
+  // パターン2: より長いパス（スラッシュを含む）
+  const pattern2 = /https:\/\/lh3\.googleusercontent\.com\/[a-zA-Z0-9_\/-]+/g;
+  const matches2 = html.match(pattern2);
+  if (matches2) {
+    allUrls.push(...matches2);
+  }
+  
+  // パターン3: クエリパラメータを含む完全なURL
+  const pattern3 = /https:\/\/lh3\.googleusercontent\.com\/[^\s"'<>]+/g;
+  const matches3 = html.match(pattern3);
+  if (matches3) {
+    allUrls.push(...matches3);
+  }
+  
+  // 重複を除去し、検証済みのURLのみを返す
+  const uniqueUrls = Array.from(new Set(allUrls));
+  const validUrls = uniqueUrls.filter(isValidImageUrl);
+  
+  console.log(`[GooglePhotos] Extracted ${allUrls.length} URLs, ${uniqueUrls.length} unique, ${validUrls.length} valid`);
+  
+  return validUrls;
+}
+
+/**
  * Google フォト共有アルバムから画像URLを取得
  * 
  * 共有アルバムのHTMLをパースして実際の画像URLを抽出します。
+ * 複数のパターンでフォールバックし、取得成功率を向上させます。
  */
 export async function fetchPhotosFromAlbum(albumUrl: string): Promise<GooglePhotoItem[]> {
   const album = HAZEMOTO_ALBUMS.find(a => a.url === albumUrl);
@@ -55,40 +111,45 @@ export async function fetchPhotosFromAlbum(albumUrl: string): Promise<GooglePhot
 
   try {
     // Googleフォト共有アルバムのHTMLを取得
-    const response = await fetch(albumUrl);
+    const response = await fetch(albumUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    
     if (!response.ok) {
       throw new Error(`Failed to fetch album: ${response.statusText}`);
     }
     
     const html = await response.text();
     
-    // HTMLから画像URLを抽出
-    // Googleフォトの共有アルバムには、画像が"https://lh3.googleusercontent.com/"で始まるURLとして埋め込まれている
-    const imageUrlPattern = /https:\/\/lh3\.googleusercontent\.com\/[^\s"'<>]+/g;
-    const matches = html.match(imageUrlPattern);
+    // 複数のパターンで画像URLを抽出
+    const imageUrls = extractImageUrls(html);
     
-    if (!matches || matches.length === 0) {
-      console.warn(`No images found in album: ${albumUrl}`);
+    if (imageUrls.length === 0) {
+      console.warn(`[GooglePhotos] No images found in album: ${albumUrl}`);
       return [];
     }
     
-    // 重複を除去し、ユニークな画像URLのみを取得
-    const uniqueUrls = Array.from(new Set(matches));
-    
     // GooglePhotoItem形式に変換
-    const photos: GooglePhotoItem[] = uniqueUrls.map((url, index) => ({
-      url: `${url}=w2048-h2048`, // 高解像度版
-      thumbnailUrl: `${url}=w400-h400`, // サムネイル
-      title: `${album.year}年 竣工物件 ${index + 1}`,
-      description: `${album.title}からの写真`,
-      albumYear: album.year,
-    }));
+    const photos: GooglePhotoItem[] = imageUrls.map((url, index) => {
+      // URLからサイズパラメータを除去（既に含まれている場合）
+      const baseUrl = url.split('=')[0];
+      
+      return {
+        url: `${baseUrl}=w2048-h2048`, // 高解像度版
+        thumbnailUrl: `${baseUrl}=w400-h400`, // サムネイル
+        title: `${album.year}年 竣工物件 ${index + 1}`,
+        description: `${album.title}からの写真`,
+        albumYear: album.year,
+      };
+    });
     
-    console.log(`Fetched ${photos.length} photos from album: ${album.title}`);
+    console.log(`[GooglePhotos] Successfully fetched ${photos.length} photos from album: ${album.title}`);
     return photos;
     
   } catch (error) {
-    console.error(`Error fetching photos from album ${albumUrl}:`, error);
+    console.error(`[GooglePhotos] Error fetching photos from album ${albumUrl}:`, error);
     throw new Error(`Failed to fetch photos from album: ${error}`);
   }
 }
