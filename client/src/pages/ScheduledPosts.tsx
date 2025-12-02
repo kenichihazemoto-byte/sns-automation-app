@@ -16,6 +16,7 @@ export default function ScheduledPosts() {
   const [selectedSchedule, setSelectedSchedule] = useState<any>(null);
   const [showEditDialog, setShowEditDialog] = useState<boolean>(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [showDetailDialog, setShowDetailDialog] = useState<boolean>(false);
   const [editDate, setEditDate] = useState<string>("");
   const [editTime, setEditTime] = useState<string>("");
 
@@ -59,6 +60,24 @@ export default function ScheduledPosts() {
   const handleDelete = (schedule: any) => {
     setSelectedSchedule(schedule);
     setShowDeleteDialog(true);
+  };
+
+  const handleViewDetail = (schedule: any) => {
+    setSelectedSchedule(schedule);
+    setShowDetailDialog(true);
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    switch (platform) {
+      case "instagram":
+        return <Instagram className="h-4 w-4" />;
+      case "x":
+        return <Twitter className="h-4 w-4" />;
+      case "threads":
+        return <MessageSquare className="h-4 w-4" />;
+      default:
+        return null;
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -113,7 +132,8 @@ export default function ScheduledPosts() {
                 {upcomingSchedules.map((schedule: any) => (
                   <div
                     key={schedule.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                    onClick={() => handleViewDetail(schedule)}
                   >
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
@@ -138,18 +158,24 @@ export default function ScheduledPosts() {
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEdit(schedule)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(schedule);
+                        }}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(schedule)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(schedule);
+                        }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -179,7 +205,8 @@ export default function ScheduledPosts() {
                 {schedules.map((schedule: any) => (
                   <div
                     key={schedule.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                    onClick={() => handleViewDetail(schedule)}
                   >
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
@@ -339,6 +366,146 @@ export default function ScheduledPosts() {
                 "削除"
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 詳細表示モーダル */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>予約投稿の詳細</DialogTitle>
+            <DialogDescription>
+              投稿内容と画像を確認できます
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedSchedule && (
+            <div className="space-y-6 py-4">
+              {/* 基本情報 */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg">基本情報</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground">会社名</Label>
+                    <p className="font-medium">{selectedSchedule.companyName}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">投稿予定日時</Label>
+                    <p className="font-medium">
+                      {format(new Date(selectedSchedule.scheduledAt), "yyyy年MM月dd日 HH:mm", { locale: ja })}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">ステータス</Label>
+                    <div className="mt-1">{getStatusBadge(selectedSchedule.status)}</div>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">投稿タイプ</Label>
+                    <div className="mt-1">
+                      {selectedSchedule.isBeforeAfter ? (
+                        <Badge variant="secondary">ビフォーアフター</Badge>
+                      ) : (
+                        <Badge variant="outline">通常投稿</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 画像プレビュー */}
+              {(selectedSchedule.imageId || selectedSchedule.beforeImageUrl || selectedSchedule.afterImageUrl) && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-lg">画像プレビュー</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedSchedule.beforeImageUrl && (
+                      <div>
+                        <Label className="text-muted-foreground mb-2 block">ビフォー</Label>
+                        <img
+                          src={selectedSchedule.beforeImageUrl}
+                          alt="ビフォー"
+                          className="w-full h-auto rounded-lg border"
+                        />
+                      </div>
+                    )}
+                    {selectedSchedule.afterImageUrl && (
+                      <div>
+                        <Label className="text-muted-foreground mb-2 block">アフター</Label>
+                        <img
+                          src={selectedSchedule.afterImageUrl}
+                          alt="アフター"
+                          className="w-full h-auto rounded-lg border"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* プラットフォーム別投稿内容 */}
+              {selectedSchedule.contents && selectedSchedule.contents.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">プラットフォーム別投稿内容</h3>
+                  {selectedSchedule.contents.map((content: any, index: number) => (
+                    <Card key={index}>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          {getPlatformIcon(content.platform)}
+                          {content.platform === "instagram" && "Instagram"}
+                          {content.platform === "x" && "X (Twitter)"}
+                          {content.platform === "threads" && "Threads"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <Label className="text-muted-foreground text-xs">投稿文</Label>
+                          <p className="mt-1 whitespace-pre-wrap text-sm">{content.caption}</p>
+                        </div>
+                        {content.hashtags && (
+                          <div>
+                            <Label className="text-muted-foreground text-xs">ハッシュタグ</Label>
+                            <p className="mt-1 text-sm text-blue-600">{content.hashtags}</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDetailDialog(false)}
+            >
+              閉じる
+            </Button>
+            {selectedSchedule && selectedSchedule.status !== "completed" && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDetailDialog(false);
+                    handleEdit(selectedSchedule);
+                  }}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  編集
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setShowDetailDialog(false);
+                    handleDelete(selectedSchedule);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  削除
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
