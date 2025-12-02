@@ -254,13 +254,28 @@ export async function createPostSchedule(schedule: InsertPostSchedule): Promise<
   return insertedId;
 }
 
-export async function getPostSchedulesByUserId(userId: number): Promise<PostSchedule[]> {
+export async function getPostSchedulesByUserId(userId: number): Promise<any[]> {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(postSchedules)
+  // post_schedulesとpost_contentsをJOINして投稿内容も取得
+  const schedules = await db.select().from(postSchedules)
     .where(eq(postSchedules.userId, userId))
     .orderBy(desc(postSchedules.scheduledAt));
+  
+  // 各スケジュールに対して投稿内容を取得
+  const schedulesWithContents = await Promise.all(
+    schedules.map(async (schedule) => {
+      const contents = await db.select().from(postContents)
+        .where(eq(postContents.postScheduleId, schedule.id));
+      return {
+        ...schedule,
+        contents,
+      };
+    })
+  );
+  
+  return schedulesWithContents;
 }
 
 export async function updatePostScheduleStatus(id: number, status: "pending" | "processing" | "published" | "failed" | "cancelled"): Promise<void> {
@@ -294,18 +309,32 @@ export async function deletePostSchedule(id: number): Promise<void> {
   await db.delete(postSchedules).where(eq(postSchedules.id, id));
 }
 
-export async function getUpcomingPostSchedules(limit: number = 10): Promise<PostSchedule[]> {
+export async function getUpcomingPostSchedules(limit: number = 10): Promise<any[]> {
   const db = await getDb();
   if (!db) return [];
 
   const now = new Date();
-  return await db.select().from(postSchedules)
+  const schedules = await db.select().from(postSchedules)
     .where(and(
       eq(postSchedules.status, "scheduled"),
       gte(postSchedules.scheduledAt, now)
     ))
     .orderBy(asc(postSchedules.scheduledAt))
     .limit(limit);
+  
+  // 各スケジュールに対して投稿内容を取得
+  const schedulesWithContents = await Promise.all(
+    schedules.map(async (schedule) => {
+      const contents = await db.select().from(postContents)
+        .where(eq(postContents.postScheduleId, schedule.id));
+      return {
+        ...schedule,
+        contents,
+      };
+    })
+  );
+  
+  return schedulesWithContents;
 }
 
 export async function getPendingReminderSchedules(): Promise<PostSchedule[]> {

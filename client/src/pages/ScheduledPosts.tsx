@@ -129,6 +129,14 @@ export default function ScheduledPosts() {
                           <Badge variant="secondary">ビフォーアフター</Badge>
                         )}
                       </div>
+                      {schedule.contents && schedule.contents.length > 0 && (
+                        <div className="text-sm text-muted-foreground mt-2">
+                          <p className="line-clamp-2">{schedule.contents[0].caption}</p>
+                          {schedule.contents[0].hashtags && (
+                            <p className="text-xs text-blue-600 mt-1">{schedule.contents[0].hashtags}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -190,6 +198,14 @@ export default function ScheduledPosts() {
                           <Badge variant="secondary">通知送信済み</Badge>
                         )}
                       </div>
+                      {schedule.contents && schedule.contents.length > 0 && (
+                        <div className="text-sm text-muted-foreground mt-2">
+                          <p className="line-clamp-2">{schedule.contents[0].caption}</p>
+                          {schedule.contents[0].hashtags && (
+                            <p className="text-xs text-blue-600 mt-1">{schedule.contents[0].hashtags}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button

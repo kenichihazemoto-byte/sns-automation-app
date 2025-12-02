@@ -206,36 +206,7 @@ export default function Demo() {
     },
   });
 
-  const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation({
-    onSuccess: (data) => {
-      setSelectedImage(data);
-      setAnalysis(data.analysis);
-      setContents(null);
-      setIndividualComments(null);
-      setCarouselPost(null);
-      setMultiplePhotos([]);
-      toast.success("写真をアップロードし、AI分析が完了しました");
-      
-      // 作業履歴を記録
-      logActivityMutation.mutate({
-        activityType: "photo_upload",
-        description: "上級者向けデモで写真をアップロードしました",
-        status: "success",
-        metadata: JSON.stringify({ imageId: data.photo.id, imageUrl: data.photo.url }),
-      });
-    },
-    onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
-      
-      // エラーも記録
-      logActivityMutation.mutate({
-        activityType: "photo_upload",
-        description: "写真のアップロードに失敗しました",
-        status: "failed",
-        metadata: JSON.stringify({ error: error.message }),
-      });
-    },
-  });
+  const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation();
 
   const fetchPhotoMutation = trpc.demo.getRandomPhotoWithAnalysis.useMutation({
     onSuccess: (data) => {
@@ -451,11 +422,16 @@ export default function Demo() {
           companyName,
         }, {
           onSuccess: (data) => {
-            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis }
+            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis, thumbnailUrl, fileName, albumTitle, albumYear, score }
             uploadedPhotos.push({
               url: data.photo.url,
               id: data.photo.id,
+              thumbnailUrl: data.photo.url,
+              fileName: file.name,
+              albumTitle: "アップロード",
+              albumYear: new Date().getFullYear(),
               analysis: data.analysis,
+              score: 0,
             });
             processedCount++;
             setUploadProgress(prev => ({ ...prev, completed: processedCount }));
@@ -529,11 +505,16 @@ export default function Demo() {
           companyName,
         }, {
           onSuccess: (data) => {
-            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis }
+            // データ構造を変換: { photo: {url, id}, analysis } → { url, id, analysis, thumbnailUrl, fileName, albumTitle, albumYear, score }
             uploadedPhotos.push({
               url: data.photo.url,
               id: data.photo.id,
+              thumbnailUrl: data.photo.url,
+              fileName: file.name,
+              albumTitle: "アップロード",
+              albumYear: new Date().getFullYear(),
               analysis: data.analysis,
+              score: 0,
             });
             processedCount++;
             setUploadProgress(prev => ({ ...prev, completed: processedCount }));
