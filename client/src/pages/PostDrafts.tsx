@@ -147,25 +147,55 @@ export default function PostDrafts() {
                     )
                   )}
 
-                  {/* プラットフォームバッジ */}
-                  <div className="flex gap-2 flex-wrap">
+                  {/* 投稿内容プレビュー */}
+                  <div className="space-y-2">
                     {draft.instagramContent && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <Instagram className="w-3 h-3" />
-                        Instagram
-                      </Badge>
+                      <div className="border-l-2 border-pink-500 pl-2">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Instagram className="w-3 h-3 text-pink-500" />
+                          <span className="text-xs font-semibold text-pink-500">Instagram</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {draft.instagramContent}
+                        </p>
+                        {draft.instagramHashtags && (
+                          <p className="text-xs text-blue-600 mt-1 line-clamp-1">
+                            {draft.instagramHashtags}
+                          </p>
+                        )}
+                      </div>
                     )}
                     {draft.xContent && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <Twitter className="w-3 h-3" />
-                        X
-                      </Badge>
+                      <div className="border-l-2 border-black pl-2">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Twitter className="w-3 h-3" />
+                          <span className="text-xs font-semibold">X</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {draft.xContent}
+                        </p>
+                        {draft.xHashtags && (
+                          <p className="text-xs text-blue-600 mt-1 line-clamp-1">
+                            {draft.xHashtags}
+                          </p>
+                        )}
+                      </div>
                     )}
                     {draft.threadsContent && (
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <MessageCircle className="w-3 h-3" />
-                        Threads
-                      </Badge>
+                      <div className="border-l-2 border-gray-700 pl-2">
+                        <div className="flex items-center gap-1 mb-1">
+                          <MessageCircle className="w-3 h-3 text-gray-700" />
+                          <span className="text-xs font-semibold text-gray-700">Threads</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {draft.threadsContent}
+                        </p>
+                        {draft.threadsHashtags && (
+                          <p className="text-xs text-blue-600 mt-1 line-clamp-1">
+                            {draft.threadsHashtags}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 
