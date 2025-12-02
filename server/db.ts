@@ -48,6 +48,12 @@ import {
   errorLogs,
   InsertErrorLog,
   ErrorLog,
+  postTemplates,
+  InsertPostTemplate,
+  PostTemplate,
+  postDrafts,
+  InsertPostDraft,
+  PostDraft,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1841,4 +1847,81 @@ export async function deletePostTemplate(id: number) {
   
   const { postTemplates } = await import("../drizzle/schema");
   await db.delete(postTemplates).where(eq(postTemplates.id, id));
+}
+
+
+// ========================================
+// Post Drafts
+// ========================================
+
+export async function getPostDraftsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select().from(postDrafts)
+    .where(eq(postDrafts.userId, userId))
+    .orderBy(desc(postDrafts.updatedAt));
+  return result;
+}
+
+export async function getPostDraftById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(postDrafts)
+    .where(and(eq(postDrafts.id, id), eq(postDrafts.userId, userId)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createPostDraft(draft: {
+  userId: number;
+  companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  title?: string;
+  isBeforeAfter?: boolean;
+  beforeImageUrl?: string;
+  afterImageUrl?: string;
+  imageUrl?: string;
+  instagramContent?: string;
+  instagramHashtags?: string;
+  xContent?: string;
+  xHashtags?: string;
+  threadsContent?: string;
+  threadsHashtags?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result: any = await db.insert(postDrafts).values(draft);
+  return Number(result.insertId);
+}
+
+export async function updatePostDraft(id: number, userId: number, updates: {
+  title?: string;
+  companyName?: "ハゼモト建設" | "クリニックアーキプロ";
+  isBeforeAfter?: boolean;
+  beforeImageUrl?: string;
+  afterImageUrl?: string;
+  imageUrl?: string;
+  instagramContent?: string;
+  instagramHashtags?: string;
+  xContent?: string;
+  xHashtags?: string;
+  threadsContent?: string;
+  threadsHashtags?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(postDrafts)
+    .set(updates)
+    .where(and(eq(postDrafts.id, id), eq(postDrafts.userId, userId)));
+}
+
+export async function deletePostDraft(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(postDrafts)
+    .where(and(eq(postDrafts.id, id), eq(postDrafts.userId, userId)));
 }

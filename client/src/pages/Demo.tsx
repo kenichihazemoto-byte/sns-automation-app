@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   DndContext,
@@ -125,27 +125,38 @@ export default function Demo() {
 
   // テンプレート適用ハンドラー
   const handleApplyTemplate = (template: any) => {
-    // contentsオブジェクトを作成
-    const newContents = {
+    console.log("[handleApplyTemplate] template:", template);
+    
+    // allPlatformsPostsの形式に合わせて設定
+    const newPosts = {
       instagram: {
-        caption: template.instagramCaption || "",
+        content: template.instagramCaption || "",
         hashtags: template.instagramHashtags || "",
+        platform: "instagram" as const,
       },
       x: {
-        caption: template.xCaption || "",
+        content: template.xCaption || "",
         hashtags: template.xHashtags || "",
+        platform: "x" as const,
       },
       threads: {
-        caption: template.threadsCaption || "",
+        content: template.threadsCaption || "",
         hashtags: template.threadsHashtags || "",
+        platform: "threads" as const,
       },
     };
-    setContents(newContents);
+    
+    console.log("[handleApplyTemplate] newPosts:", newPosts);
+    setAllPlatformsPosts(newPosts);
+    setContents(null); // contentsをクリア
+    setBeforeAfterPost(null); // 単一プラットフォーム結果をクリア
 
     // デフォルト投稿時刻を適用
     if (template.defaultPostTime) {
       setScheduleTime(template.defaultPostTime);
     }
+    
+    toast.success("テンプレートを適用しました");
   };
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -180,9 +191,20 @@ export default function Demo() {
     uploading: boolean;
   }>({ total: 0, completed: 0, failed: 0, uploading: false });
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
-  const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
-  const [historyDateFilter, setHistoryDateFilter] = useState<string>("");
+
   const [selectedPhotosForCarousel, setSelectedPhotosForCarousel] = useState<Set<string>>(new Set());
+  const [showSaveDraftDialog, setShowSaveDraftDialog] = useState<boolean>(false);
+  const [draftTitle, setDraftTitle] = useState<string>("");
+  const [currentDraftId, setCurrentDraftId] = useState<number | null>(null);
+
+  // URLパラメータから下書きIDを取得
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const draftId = params.get('draftId');
+    if (draftId) {
+      setCurrentDraftId(Number(draftId));
+    }
+  }, []);
 
   // Drag and Drop sensors
   const sensors = useSensors(
@@ -198,39 +220,84 @@ export default function Demo() {
   // 作業履歴記録
   const logActivityMutation = trpc.activityLog.create.useMutation();
 
-  // アップロード履歴
-  const { data: uploadHistoryList } = trpc.demo.getUploadHistory.useQuery();
-  
-  // フィルタリングされた履歴リスト
-  const filteredHistoryList = uploadHistoryList?.filter((history) => {
-    // タイトル検索
-    const matchesSearch = !historySearchQuery || 
-      (history.title && history.title.toLowerCase().includes(historySearchQuery.toLowerCase()));
-    
-    // 日付フィルタ
-    const matchesDate = !historyDateFilter || 
-      new Date(history.createdAt).toISOString().split('T')[0] === historyDateFilter;
-    
-    return matchesSearch && matchesDate;
-  });
-  const saveUploadHistoryMutation = trpc.demo.saveUploadHistory.useMutation({
-    onSuccess: () => {
-      toast.success("アップロード履歴を保存しました");
-      utils.demo.getUploadHistory.invalidate();
+  // 下書き保存
+  const saveDraftMutation = trpc.postDrafts.create.useMutation({
+    onSuccess: (data) => {
+      toast.success("下書きを保存しました");
+      setShowSaveDraftDialog(false);
+      setDraftTitle("");
+      setCurrentDraftId(data.id);
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
+      toast.error(`下書き保存に失敗しました: ${error.message}`);
     },
   });
-  const deleteUploadHistoryMutation = trpc.demo.deleteUploadHistory.useMutation({
+
+  // 下書き更新
+  const updateDraftMutation = trpc.postDrafts.update.useMutation({
     onSuccess: () => {
-      toast.success("履歴を削除しました");
-      utils.demo.getUploadHistory.invalidate();
+      toast.success("下書きを更新しました");
+      setShowSaveDraftDialog(false);
+      setDraftTitle("");
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
+      toast.error(`下書き更新に失敗しました: ${error.message}`);
     },
   });
+
+  // 下書き読み込み
+  const { data: loadedDraft } = trpc.postDrafts.get.useQuery(
+    { id: currentDraftId! },
+    { enabled: !!currentDraftId }
+  );
+
+  // 下書きデータが読み込まれたら状態を更新
+  useEffect(() => {
+    if (loadedDraft) {
+      // 会社名を設定
+      setCompanyName(loadedDraft.companyName);
+      setDraftTitle(loadedDraft.title || "");
+      
+      // ビフォーアフターモードの場合
+      if (loadedDraft.isBeforeAfter) {
+        setIsBeforeAfterMode(true);
+        if (loadedDraft.beforeImageUrl) {
+          setBeforeImage({ url: loadedDraft.beforeImageUrl });
+        }
+        if (loadedDraft.afterImageUrl) {
+          setAfterImage({ url: loadedDraft.afterImageUrl });
+        }
+      } else {
+        setIsBeforeAfterMode(false);
+        if (loadedDraft.imageUrl) {
+          setSelectedImage({ url: loadedDraft.imageUrl });
+        }
+      }
+      
+      // 投稿内容を設定
+      setAllPlatformsPosts({
+        instagram: {
+          content: loadedDraft.instagramContent || "",
+          hashtags: loadedDraft.instagramHashtags || "",
+          platform: "instagram" as const,
+        },
+        x: {
+          content: loadedDraft.xContent || "",
+          hashtags: loadedDraft.xHashtags || "",
+          platform: "x" as const,
+        },
+        threads: {
+          content: loadedDraft.threadsContent || "",
+          hashtags: loadedDraft.threadsHashtags || "",
+          platform: "threads" as const,
+        },
+      });
+      
+      toast.success("下書きを読み込みました");
+    }
+  }, [loadedDraft]);
+
+
 
   const uploadImageMutation = trpc.demo.uploadAndAnalyzeImage.useMutation();
 
@@ -413,10 +480,7 @@ export default function Demo() {
       toast.error("画像ファイルをドロップしてください");
       return;
     }
-    if (files.length > 5) {
-      toast.error("最大5枚まで選択できます");
-      return;
-    }
+
 
     toast.info(`${files.length}枚の写真をアップロード中...`);
 
@@ -486,11 +550,7 @@ export default function Demo() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // 最大5枚までの制限
-    if (files.length > 5) {
-      toast.error("一度にアップロードできるのは5枚までです");
-      return;
-    }
+
 
     // 進捗状態を初期化
     setUploadProgress({ total: files.length, completed: 0, failed: 0, uploading: true });
@@ -1264,6 +1324,14 @@ export default function Demo() {
                             コピー
                           </Button>
                           <Button
+                            onClick={() => setShowSaveDraftDialog(true)}
+                            variant="outline"
+                            className="flex-1"
+                          >
+                            <Save className="mr-2 h-4 w-4" />
+                            下書き保存
+                          </Button>
+                          <Button
                             onClick={() => setShowScheduleDialog(true)}
                             variant="default"
                             className="flex-1"
@@ -1312,7 +1380,7 @@ export default function Demo() {
               >
                 <Upload className="h-12 w-12 text-muted-foreground" />
                 <div>
-                  <p className="text-lg font-semibold">写真を選択（最大5枚）</p>
+                  <p className="text-lg font-semibold">写真を選択</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     クリックしてファイルを選択、またはドラッグ&ドロップ
                   </p>
@@ -1390,123 +1458,7 @@ export default function Demo() {
         </Card>
         )}
 
-        {/* アップロード履歴一覧 */}
-        {!isBeforeAfterMode && uploadHistoryList && uploadHistoryList.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>アップロード履歴</CardTitle>
-              <CardDescription>過去に保存した写真セットを再利用できます</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* 検索・フィルタ */}
-              <div className="flex gap-2 mb-4">
-                <div className="flex-1">
-                  <Input
-                    placeholder="タイトルで検索..."
-                    value={historySearchQuery}
-                    onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  />
-                </div>
-                <div className="w-48">
-                  <Input
-                    type="date"
-                    value={historyDateFilter}
-                    onChange={(e) => setHistoryDateFilter(e.target.value)}
-                  />
-                </div>
-                {(historySearchQuery || historyDateFilter) && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      setHistorySearchQuery("");
-                      setHistoryDateFilter("");
-                    }}
-                  >
-                    ×
-                  </Button>
-                )}
-              </div>
-              
-              {filteredHistoryList && filteredHistoryList.length > 0 ? (
-                <div className="space-y-3">
-                  {filteredHistoryList.map((history) => {
-                  const photos = JSON.parse(history.photoData);
-                  return (
-                    <div
-                      key={history.id}
-                      className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-sm">
-                            {history.title || `${history.photoCount}枚の写真`}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(history.createdAt).toLocaleDateString("ja-JP", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setMultiplePhotos(photos);
-                              if (photos.length > 0) {
-                                setSelectedImage(photos[0]);
-                                setAnalysis(photos[0].analysis);
-                              }
-                              toast.success("履歴を読み込みました");
-                            }}
-                          >
-                            読み込む
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              if (confirm("この履歴を削除しますか？")) {
-                                deleteUploadHistoryMutation.mutate({ id: history.id });
-                              }
-                            }}
-                          >
-                            削除
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto">
-                        {photos.slice(0, 5).map((photo: any, index: number) => (
-                          <img
-                            key={index}
-                            src={photo.url}
-                            alt={`写真 ${index + 1}`}
-                            className="w-16 h-16 object-cover rounded"
-                          />
-                        ))}
-                        {photos.length > 5 && (
-                          <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
-                            +{photos.length - 5}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  検索結果がありません
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
+
 
         {!isBeforeAfterMode && multiplePhotos.length > 0 && (
           <Card>
@@ -1516,36 +1468,18 @@ export default function Demo() {
                   <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>
                   <CardDescription>AIがスコア付けした結果です</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const title = prompt("履歴のタイトルを入力してください（任意）");
-                      saveUploadHistoryMutation.mutate({
-                        companyName,
-                        title: title || undefined,
-                        photoData: JSON.stringify(multiplePhotos),
-                        photoCount: multiplePhotos.length,
-                      });
-                    }}
-                    disabled={saveUploadHistoryMutation.isPending}
-                  >
-                    履歴を保存
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      setMultiplePhotos([]);
-                      setSelectedImage(null);
-                      setAnalysis(null);
-                      toast.success("全ての写真を削除しました");
-                    }}
-                  >
-                    一括削除
-                  </Button>
-                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setMultiplePhotos([]);
+                    setSelectedImage(null);
+                    setAnalysis(null);
+                    toast.success("全ての写真を削除しました");
+                  }}
+                >
+                  一括削除
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -1983,6 +1917,87 @@ export default function Demo() {
           </Card>
         )}
       </div>
+
+      {/* 下書き保存ダイアログ */}
+      <Dialog open={showSaveDraftDialog} onOpenChange={setShowSaveDraftDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>下書きを保存</DialogTitle>
+            <DialogDescription>
+              投稿内容を下書きとして保存します。後で編集を再開できます。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="draft-title">タイトル（任意）</Label>
+              <Input
+                id="draft-title"
+                type="text"
+                placeholder="例: 新築工事の投稿"
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowSaveDraftDialog(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              onClick={() => {
+                const draftData: any = {
+                  companyName,
+                  title: draftTitle || undefined,
+                  isBeforeAfter: isBeforeAfterMode,
+                };
+
+                // 画像を追加
+                if (isBeforeAfterMode) {
+                  if (beforeImage?.url) draftData.beforeImageUrl = beforeImage.url;
+                  if (afterImage?.url) draftData.afterImageUrl = afterImage.url;
+                } else {
+                  if (selectedImage?.url) draftData.imageUrl = selectedImage.url;
+                }
+
+                // 投稿内容を追加
+                if (allPlatformsPosts) {
+                  draftData.instagramContent = allPlatformsPosts.instagram?.content;
+                  draftData.instagramHashtags = allPlatformsPosts.instagram?.hashtags;
+                  draftData.xContent = allPlatformsPosts.x?.content;
+                  draftData.xHashtags = allPlatformsPosts.x?.hashtags;
+                  draftData.threadsContent = allPlatformsPosts.threads?.content;
+                  draftData.threadsHashtags = allPlatformsPosts.threads?.hashtags;
+                }
+
+                // 新規保存または更新
+                if (currentDraftId) {
+                  updateDraftMutation.mutate({ id: currentDraftId, ...draftData });
+                } else {
+                  saveDraftMutation.mutate(draftData);
+                }
+              }}
+              disabled={saveDraftMutation.isPending || updateDraftMutation.isPending}
+            >
+              {(saveDraftMutation.isPending || updateDraftMutation.isPending) ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {currentDraftId ? "更新" : "保存"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 予約投稿ダイアログ */}
       <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>

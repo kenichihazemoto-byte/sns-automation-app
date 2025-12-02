@@ -1567,6 +1567,71 @@ export const appRouter = router({
       }),
   }),
 
+  // Post Drafts Management
+  postDrafts: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getPostDraftsByUserId(ctx.user.id);
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return await db.getPostDraftById(input.id, ctx.user.id);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        title: z.string().optional(),
+        isBeforeAfter: z.boolean().optional(),
+        beforeImageUrl: z.string().optional(),
+        afterImageUrl: z.string().optional(),
+        imageUrl: z.string().optional(),
+        instagramContent: z.string().optional(),
+        instagramHashtags: z.string().optional(),
+        xContent: z.string().optional(),
+        xHashtags: z.string().optional(),
+        threadsContent: z.string().optional(),
+        threadsHashtags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const draftId = await db.createPostDraft({
+          userId: ctx.user.id,
+          ...input,
+        });
+        return { success: true, id: draftId };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]).optional(),
+        isBeforeAfter: z.boolean().optional(),
+        beforeImageUrl: z.string().optional(),
+        afterImageUrl: z.string().optional(),
+        imageUrl: z.string().optional(),
+        instagramContent: z.string().optional(),
+        instagramHashtags: z.string().optional(),
+        xContent: z.string().optional(),
+        xHashtags: z.string().optional(),
+        threadsContent: z.string().optional(),
+        threadsHashtags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...updates } = input;
+        await db.updatePostDraft(id, ctx.user.id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deletePostDraft(input.id, ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
   // Post Templates Management
   postTemplates: router({
     list: protectedProcedure.query(async ({ ctx }) => {

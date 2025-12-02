@@ -285,6 +285,33 @@ export type PostTemplate = typeof postTemplates.$inferSelect;
 export type InsertPostTemplate = typeof postTemplates.$inferInsert;
 
 /**
+ * Post drafts table
+ * Stores draft posts that users can save and edit before scheduling
+ */
+export const postDrafts = mysqlTable("post_drafts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
+  title: varchar("title", { length: 255 }),
+  isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
+  beforeImageUrl: text("beforeImageUrl"),
+  afterImageUrl: text("afterImageUrl"),
+  imageUrl: text("imageUrl"), // For regular posts
+  // プラットフォーム別投稿内容
+  instagramContent: text("instagramContent"),
+  instagramHashtags: text("instagramHashtags"),
+  xContent: text("xContent"),
+  xHashtags: text("xHashtags"),
+  threadsContent: text("threadsContent"),
+  threadsHashtags: text("threadsHashtags"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PostDraft = typeof postDrafts.$inferSelect;
+export type InsertPostDraft = typeof postDrafts.$inferInsert;
+
+/**
  * User activity log table
  * Records all actions performed by users for tracking and skill improvement
  */

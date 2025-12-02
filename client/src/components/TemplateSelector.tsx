@@ -20,10 +20,16 @@ export default function TemplateSelector({ companyName, onApplyTemplate }: Templ
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   // テンプレート一覧を取得
-  const { data: templates, isLoading } = trpc.postTemplates.list.useQuery();
+  const { data: templates, isLoading, error } = trpc.postTemplates.list.useQuery();
+
+  // デバッグログ
+  console.log("[TemplateSelector] companyName:", companyName);
+  console.log("[TemplateSelector] templates:", templates);
+  console.log("[TemplateSelector] error:", error);
 
   // 会社名でフィルタリング
   const filteredTemplates = templates?.filter(t => t.companyName === companyName) || [];
+  console.log("[TemplateSelector] filteredTemplates:", filteredTemplates);
 
   const handleApply = () => {
     if (!selectedTemplateId) {
@@ -46,11 +52,22 @@ export default function TemplateSelector({ companyName, onApplyTemplate }: Templ
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-center text-destructive py-4">
+        <p className="mb-2">エラーが発生しました</p>
+        <p className="text-sm">{error.message}</p>
+      </div>
+    );
+  }
+
   if (filteredTemplates.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-4">
         <p className="mb-2">この会社のテンプレートがありません</p>
         <p className="text-sm">テンプレート管理ページで作成してください</p>
+        <p className="text-xs mt-2">会社名: {companyName}</p>
+        <p className="text-xs">全テンプレート数: {templates?.length || 0}</p>
       </div>
     );
   }
