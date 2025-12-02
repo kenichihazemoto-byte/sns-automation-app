@@ -16,6 +16,7 @@ import ScheduledPosts from "./pages/ScheduledPosts";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import Templates from "./pages/Templates";
+import PostTemplates from "./pages/PostTemplates";
 import SimplePost from "./pages/SimplePost";
 import ApprovalQueue from "./pages/ApprovalQueue";
 import ActivityLog from "./pages/ActivityLog";
@@ -37,6 +38,7 @@ function Router() {
       <Route path={"/settings"} component={Settings} />
       <Route path={"/help"} component={Help} />
       <Route path={"/templates"} component={Templates} />
+      <Route path={"/post-templates"} component={PostTemplates} />
       <Route path={"/sns-accounts"} component={SnsAccounts} />
       <Route path={"/cloud-storage"} component={CloudStorage} />
       <Route path={"/calendar"} component={PostCalendar} />

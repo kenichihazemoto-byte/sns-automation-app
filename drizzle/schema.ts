@@ -258,6 +258,33 @@ export type ApprovalHistory = typeof approvalHistory.$inferSelect;
 export type InsertApprovalHistory = typeof approvalHistory.$inferInsert;
 
 /**
+ * Post templates table
+ * Stores reusable post templates with predefined settings
+ */
+export const postTemplates = mysqlTable("post_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
+  isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
+  // プラットフォーム別投稿文テンプレート
+  instagramCaption: text("instagramCaption"),
+  instagramHashtags: text("instagramHashtags"),
+  xCaption: text("xCaption"),
+  xHashtags: text("xHashtags"),
+  threadsCaption: text("threadsCaption"),
+  threadsHashtags: text("threadsHashtags"),
+  // デフォルト投稿時刻（HH:MM形式）
+  defaultPostTime: varchar("defaultPostTime", { length: 5 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PostTemplate = typeof postTemplates.$inferSelect;
+export type InsertPostTemplate = typeof postTemplates.$inferInsert;
+
+/**
  * User activity log table
  * Records all actions performed by users for tracking and skill improvement
  */

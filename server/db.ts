@@ -1769,3 +1769,76 @@ export async function recordPhotoFetchSuccessRate(
     return null;
   }
 }
+
+
+// ========================================
+// Post Templates
+// ========================================
+
+export async function getPostTemplatesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { postTemplates } = await import("../drizzle/schema");
+  const result = await db.select().from(postTemplates).where(eq(postTemplates.userId, userId));
+  return result;
+}
+
+export async function getPostTemplateById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const { postTemplates } = await import("../drizzle/schema");
+  const result = await db.select().from(postTemplates).where(eq(postTemplates.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createPostTemplate(template: {
+  userId: number;
+  name: string;
+  description?: string;
+  companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  isBeforeAfter?: boolean;
+  instagramCaption?: string;
+  instagramHashtags?: string;
+  xCaption?: string;
+  xHashtags?: string;
+  threadsCaption?: string;
+  threadsHashtags?: string;
+  defaultPostTime?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { postTemplates } = await import("../drizzle/schema");
+  const result: any = await db.insert(postTemplates).values(template);
+  return Number(result.insertId);
+}
+
+export async function updatePostTemplate(id: number, updates: {
+  name?: string;
+  description?: string;
+  companyName?: "ハゼモト建設" | "クリニックアーキプロ";
+  isBeforeAfter?: boolean;
+  instagramCaption?: string;
+  instagramHashtags?: string;
+  xCaption?: string;
+  xHashtags?: string;
+  threadsCaption?: string;
+  threadsHashtags?: string;
+  defaultPostTime?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { postTemplates } = await import("../drizzle/schema");
+  await db.update(postTemplates).set(updates).where(eq(postTemplates.id, id));
+}
+
+export async function deletePostTemplate(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const { postTemplates } = await import("../drizzle/schema");
+  await db.delete(postTemplates).where(eq(postTemplates.id, id));
+}

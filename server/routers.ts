@@ -1566,6 +1566,69 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // Post Templates Management
+  postTemplates: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getPostTemplatesByUserId(ctx.user.id);
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPostTemplateById(input.id);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        isBeforeAfter: z.boolean().optional(),
+        instagramCaption: z.string().optional(),
+        instagramHashtags: z.string().optional(),
+        xCaption: z.string().optional(),
+        xHashtags: z.string().optional(),
+        threadsCaption: z.string().optional(),
+        threadsHashtags: z.string().optional(),
+        defaultPostTime: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const templateId = await db.createPostTemplate({
+          userId: ctx.user.id,
+          ...input,
+        });
+        return { success: true, id: templateId };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]).optional(),
+        isBeforeAfter: z.boolean().optional(),
+        instagramCaption: z.string().optional(),
+        instagramHashtags: z.string().optional(),
+        xCaption: z.string().optional(),
+        xHashtags: z.string().optional(),
+        threadsCaption: z.string().optional(),
+        threadsHashtags: z.string().optional(),
+        defaultPostTime: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await db.updatePostTemplate(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deletePostTemplate(input.id);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

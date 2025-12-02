@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical, Edit } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import TemplateSelector from "@/components/TemplateSelector";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -121,6 +122,31 @@ function SortablePhotoItem({ photo, index, selectedImage, onSelect, onEnlarge, o
 
 export default function Demo() {
   const [companyName, setCompanyName] = useState<"ハゼモト建設" | "クリニックアーキプロ">("ハゼモト建設");
+
+  // テンプレート適用ハンドラー
+  const handleApplyTemplate = (template: any) => {
+    // contentsオブジェクトを作成
+    const newContents = {
+      instagram: {
+        caption: template.instagramCaption || "",
+        hashtags: template.instagramHashtags || "",
+      },
+      x: {
+        caption: template.xCaption || "",
+        hashtags: template.xHashtags || "",
+      },
+      threads: {
+        caption: template.threadsCaption || "",
+        hashtags: template.threadsHashtags || "",
+      },
+    };
+    setContents(newContents);
+
+    // デフォルト投稿時刻を適用
+    if (template.defaultPostTime) {
+      setScheduleTime(template.defaultPostTime);
+    }
+  };
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
   const [contents, setContents] = useState<any>(null);
@@ -786,6 +812,17 @@ export default function Demo() {
                 <SelectItem value="クリニックアーキプロ">クリニックアーキプロ（医療関係者向け）</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        {/* テンプレート選択 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>テンプレート選択</CardTitle>
+            <CardDescription>保存したテンプレートを適用できます</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TemplateSelector companyName={companyName} onApplyTemplate={handleApplyTemplate} />
           </CardContent>
         </Card>
 
