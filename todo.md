@@ -649,3 +649,8 @@
 
 ## バグ修正
 - [x] SimplePost.tsxの写真アップロードエラー修正（Cannot read properties of undefined (reading '0')）
+- [x] 「5枚取得 & AI分析」ボタンのエラー修正（確認済み：正常動作）
+
+
+## UI改善
+- [x] 選択された画像の直下に「この画像を確定する」ボタンを追加

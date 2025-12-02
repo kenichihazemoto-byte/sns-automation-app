@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
@@ -1517,6 +1517,26 @@ export default function Demo() {
                   alt="Selected"
                   className="max-w-full max-h-96 object-contain rounded-lg"
                 />
+              </div>
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleGenerateAllContents}
+                  disabled={generateAllContentsMutation.isPending || !analysis || (useTemplate && !selectedTemplate)}
+                  size="lg"
+                  className="w-full max-w-md"
+                >
+                  {generateAllContentsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-5 w-5" />
+                      この画像を確定して投稿文を生成
+                    </>
+                  )}
+                </Button>
               </div>
               {analysis && (
                 <div className="space-y-2">
