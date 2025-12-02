@@ -696,29 +696,46 @@ export const appRouter = router({
         count: z.number().min(2).max(10).default(5),
       }))
       .mutation(async ({ input }) => {
-        const googlePhotos = await import("./google-photos-service");
-        const photos = [];
+        try {
+          const googlePhotos = await import("./google-photos-service");
+          const photos = [];
 
-        for (let i = 0; i < input.count; i++) {
-          const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
-          const analysis = await aiService.analyzeImage(photo.url);
-          
-          photos.push({
-            id: photo.url,
-            url: photo.url,
-            thumbnailUrl: photo.thumbnailUrl,
-            fileName: photo.title || `${album.year}年竣工写真`,
-            albumTitle: album.title,
-            albumYear: album.year,
-            analysis,
-            score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
+          for (let i = 0; i < input.count; i++) {
+            try {
+              const { photo, album } = await googlePhotos.getRandomConstructionPhoto();
+              const analysis = await aiService.analyzeImage(photo.url);
+              
+              photos.push({
+                id: photo.url,
+                url: photo.url,
+                thumbnailUrl: photo.thumbnailUrl || photo.url,
+                fileName: photo.title || `${album.year}年端工写真`,
+                albumTitle: album.title,
+                albumYear: album.year,
+                analysis,
+                score: Math.random() * 100, // 仮のスコア（実際はAIが評価）
+              });
+            } catch (photoError) {
+              console.error(`Failed to fetch photo ${i + 1}:`, photoError);
+              // エラーが発生しても続行
+            }
+          }
+
+          if (photos.length === 0) {
+            throw new Error("写真の取得に失敗しました。もう一度お試しください。");
+          }
+
+          // スコアでソート
+          photos.sort((a, b) => b.score - a.score);
+
+          return photos;
+        } catch (error) {
+          console.error("Error in getMultiplePhotosWithAnalysis:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "写真の取得に失敗しました",
           });
         }
-
-        // スコアでソート
-        photos.sort((a, b) => b.score - a.score);
-
-        return photos;
       }),
 
     // テンプレート一覧を取得
