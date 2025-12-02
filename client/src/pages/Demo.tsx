@@ -254,16 +254,28 @@ export default function Demo() {
 
   const fetchMultiplePhotosMutation = trpc.demo.getMultiplePhotosWithAnalysis.useMutation({
     onSuccess: (data) => {
-      setMultiplePhotos(data);
+      setMultiplePhotos(data.photos);
       // 最もスコアが高い写真を自動選択
-      if (data.length > 0) {
-        setSelectedImage(data[0]);
-        setAnalysis(data[0].analysis);
+      if (data.photos.length > 0) {
+        setSelectedImage(data.photos[0]);
+        setAnalysis(data.photos[0].analysis);
         setContents(null);
         setIndividualComments(null);
         setCarouselPost(null);
       }
-      toast.success(`${data.length}枚の写真を取得し、AI分析が完了しました`);
+      
+      // 成功メッセージ
+      toast.success(`${data.photos.length}枚の写真を取得し、AI分析が完了しました`);
+      
+      // エラーがあれば詳細を表示
+      if (data.errors && data.errors.length > 0) {
+        data.errors.forEach((error) => {
+          toast.error(
+            `写真${error.photoIndex}の取得失敗: ${error.reason}\n${error.details}`,
+            { duration: 5000 }
+          );
+        });
+      }
     },
     onError: (error) => {
       toast.error(`エラー: ${error.message}`);

@@ -696,6 +696,8 @@ export const appRouter = router({
         count: z.number().min(2).max(10).default(5),
       }))
       .mutation(async ({ input }) => {
+        const errors: Array<{ photoIndex: number; reason: string; details: string }> = [];
+        
         try {
           const googlePhotos = await import("./google-photos-service");
           const photos = [];
@@ -717,7 +719,36 @@ export const appRouter = router({
               });
             } catch (photoError) {
               console.error(`Failed to fetch photo ${i + 1}:`, photoError);
-              // エラーが発生しても続行
+              
+              // エラーの種類を判定
+              let reason = "不明なエラー";
+              let details = "";
+              
+              if (photoError instanceof Error) {
+                const errorMessage = photoError.message.toLowerCase();
+                
+                if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
+                  reason = "ネットワークエラー";
+                  details = "Google フォトへの接続に失敗しました。インターネット接続を確認してください。";
+                } else if (errorMessage.includes("album") || errorMessage.includes("not found")) {
+                  reason = "アルバムアクセスエラー";
+                  details = "アルバムにアクセスできませんでした。アルバムが公開設定になっているか確認してください。";
+                } else if (errorMessage.includes("no photos") || errorMessage.includes("no images")) {
+                  reason = "写真が見つからない";
+                  details = "アルバムに写真が見つかりませんでした。";
+                } else if (errorMessage.includes("analyze") || errorMessage.includes("ai")) {
+                  reason = "AI分析エラー";
+                  details = "写真のAI分析に失敗しました。もう一度お試しください。";
+                } else {
+                  details = photoError.message;
+                }
+              }
+              
+              errors.push({
+                photoIndex: i + 1,
+                reason,
+                details,
+              });
             }
           }
 
@@ -728,7 +759,7 @@ export const appRouter = router({
           // スコアでソート
           photos.sort((a, b) => b.score - a.score);
 
-          return photos;
+          return { photos, errors };
         } catch (error) {
           console.error("Error in getMultiplePhotosWithAnalysis:", error);
           throw new TRPCError({
