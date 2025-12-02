@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical, Edit } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Sortable Photo Item Component
-function SortablePhotoItem({ photo, index, selectedImage, onSelect, onEnlarge, onDelete }: any) {
+function SortablePhotoItem({ photo, index, selectedImage, onSelect, onEnlarge, onDelete, isSelected, onToggleSelect }: any) {
   const {
     attributes,
     listeners,
@@ -54,11 +54,25 @@ function SortablePhotoItem({ photo, index, selectedImage, onSelect, onEnlarge, o
         selectedImage?.id === photo.id ? "border-primary" : "border-transparent"
       }`}
     >
+      {/* チェックボックス */}
+      {onToggleSelect && (
+        <div className="absolute top-2 left-2 z-20">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className="h-5 w-5 cursor-pointer"
+          />
+        </div>
+      )}
       {/* ドラッグハンドル */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute top-2 left-2 bg-background/80 p-1 rounded cursor-move z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-2 left-10 bg-background/80 p-1 rounded cursor-move z-10 opacity-0 group-hover:opacity-100 transition-opacity"
       >
         <GripVertical className="h-4 w-4" />
       </div>
@@ -142,6 +156,7 @@ export default function Demo() {
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
   const [historyDateFilter, setHistoryDateFilter] = useState<string>("");
+  const [selectedPhotosForCarousel, setSelectedPhotosForCarousel] = useState<Set<string>>(new Set());
 
   // Drag and Drop sensors
   const sensors = useSensors(
@@ -1143,14 +1158,56 @@ export default function Demo() {
 
                         {/* 投稿文 */}
                         <div className="border rounded-lg p-4">
-                          <h3 className="font-semibold mb-2">生成された投稿文</h3>
-                          <p className="whitespace-pre-wrap text-sm">{currentPost.content}</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold">生成された投稿文</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newPosts = { ...allPlatformsPosts };
+                                newPosts[activeTab] = { ...currentPost };
+                                setAllPlatformsPosts(newPosts);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <textarea
+                            value={currentPost.content}
+                            onChange={(e) => {
+                              const newPosts = { ...allPlatformsPosts };
+                              newPosts[activeTab] = { ...currentPost, content: e.target.value };
+                              setAllPlatformsPosts(newPosts);
+                            }}
+                            className="w-full min-h-[200px] p-2 border rounded text-sm resize-y"
+                          />
                         </div>
 
                         {/* ハッシュタグ */}
                         <div className="border rounded-lg p-4">
-                          <h3 className="font-semibold mb-2">ハッシュタグ</h3>
-                          <p className="text-sm text-muted-foreground">{currentPost.hashtags}</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold">ハッシュタグ</h3>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newPosts = { ...allPlatformsPosts };
+                                newPosts[activeTab] = { ...currentPost };
+                                setAllPlatformsPosts(newPosts);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <textarea
+                            value={currentPost.hashtags}
+                            onChange={(e) => {
+                              const newPosts = { ...allPlatformsPosts };
+                              newPosts[activeTab] = { ...currentPost, hashtags: e.target.value };
+                              setAllPlatformsPosts(newPosts);
+                            }}
+                            className="w-full min-h-[80px] p-2 border rounded text-sm resize-y"
+                          />
                         </div>
 
                         {/* 文字数超過警告 */}
@@ -1495,11 +1552,68 @@ export default function Demo() {
                           }
                           toast.success("写真を削除しました");
                         }}
+                        isSelected={selectedPhotosForCarousel.has(photo.id)}
+                        onToggleSelect={() => {
+                          const newSelected = new Set(selectedPhotosForCarousel);
+                          if (newSelected.has(photo.id)) {
+                            newSelected.delete(photo.id);
+                          } else {
+                            newSelected.add(photo.id);
+                          }
+                          setSelectedPhotosForCarousel(newSelected);
+                        }}
                       />
                     ))}
                   </div>
                 </SortableContext>
               </DndContext>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 選択した写真でカルーセル投稿を生成 */}
+        {!isBeforeAfterMode && selectedPhotosForCarousel.size >= 2 && (
+          <Card className="border-primary">
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-center">
+                  <p className="text-lg font-semibold">{selectedPhotosForCarousel.size}枚の写真を選択中</p>
+                  <p className="text-sm text-muted-foreground">カルーセル投稿を生成できます</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      const selectedPhotosArray = multiplePhotos.filter(p => selectedPhotosForCarousel.has(p.id));
+                      const imageAnalyses = selectedPhotosArray.map(photo => photo.analysis);
+                      generateCarouselPostMutation.mutate({
+                        companyName,
+                        platform: "instagram",
+                        imageAnalyses,
+                      });
+                    }}
+                    disabled={generateCarouselPostMutation.isPending}
+                    size="lg"
+                  >
+                    {generateCarouselPostMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="mr-2 h-5 w-5" />
+                        選択した写真でカルーセル投稿を生成
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedPhotosForCarousel(new Set())}
+                  >
+                    選択をクリア
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

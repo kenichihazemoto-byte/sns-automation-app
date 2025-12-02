@@ -1320,6 +1320,59 @@ export const appRouter = router({
         return await db.suggestPostingTime(ctx.user.id);
       }),
   }),
+
+  // Favorite Images Router
+  favoriteImages: router({
+    list: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getFavoriteImages(ctx.user.id, input.companyName);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        imageUrl: z.string(),
+        score: z.number().optional(),
+        analysis: z.string().optional(),
+        tags: z.string().optional(),
+        title: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await db.createFavoriteImage({
+          userId: ctx.user.id,
+          ...input,
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        notes: z.string().optional(),
+        tags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateFavoriteImage(input.id, ctx.user.id, {
+          title: input.title,
+          notes: input.notes,
+          tags: input.tags,
+        });
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deleteFavoriteImage(input.id, ctx.user.id);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -322,3 +322,24 @@ export const uploadHistory = mysqlTable("upload_history", {
 
 export type UploadHistory = typeof uploadHistory.$inferSelect;
 export type InsertUploadHistory = typeof uploadHistory.$inferInsert;
+
+/**
+ * Favorite images table
+ * Stores user's favorite images with AI analysis for later reuse
+ */
+export const favoriteImages = mysqlTable("favorite_images", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
+  imageUrl: text("imageUrl").notNull(),
+  score: int("score"), // AI score (0-100)
+  analysis: text("analysis"), // JSON string of AI analysis
+  tags: text("tags"), // Comma-separated tags
+  title: text("title"), // Optional user-defined title
+  notes: text("notes"), // Optional user notes
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FavoriteImage = typeof favoriteImages.$inferSelect;
+export type InsertFavoriteImage = typeof favoriteImages.$inferInsert;

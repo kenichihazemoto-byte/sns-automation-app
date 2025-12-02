@@ -42,6 +42,9 @@ import {
   userFeedback,
   InsertUserFeedback,
   UserFeedback,
+  favoriteImages,
+  InsertFavoriteImage,
+  FavoriteImage,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1442,4 +1445,88 @@ export async function suggestPostingTime(userId: number): Promise<{
     confidence,
     reason,
   };
+}
+
+
+// ===== Favorite Images Functions =====
+
+export async function createFavoriteImage(data: {
+  userId: number;
+  companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  imageUrl: string;
+  score?: number;
+  analysis?: string;
+  tags?: string;
+  title?: string;
+  notes?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(favoriteImages).values({
+    userId: data.userId,
+    companyName: data.companyName,
+    imageUrl: data.imageUrl,
+    score: data.score,
+    analysis: data.analysis,
+    tags: data.tags,
+    title: data.title,
+    notes: data.notes,
+  });
+
+  return result;
+}
+
+export async function getFavoriteImages(userId: number, companyName?: "ハゼモト建設" | "クリニックアーキプロ") {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (companyName) {
+    const results = await db.select().from(favoriteImages)
+      .where(and(
+        eq(favoriteImages.userId, userId),
+        eq(favoriteImages.companyName, companyName)
+      ))
+      .orderBy(desc(favoriteImages.createdAt));
+    return results;
+  } else {
+    const results = await db.select().from(favoriteImages)
+      .where(eq(favoriteImages.userId, userId))
+      .orderBy(desc(favoriteImages.createdAt));
+    return results;
+  }
+}
+
+export async function deleteFavoriteImage(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(favoriteImages).where(
+    and(
+      eq(favoriteImages.id, id),
+      eq(favoriteImages.userId, userId)
+    )
+  );
+}
+
+export async function updateFavoriteImage(
+  id: number,
+  userId: number,
+  data: {
+    title?: string;
+    notes?: string;
+    tags?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(favoriteImages)
+    .set(data)
+    .where(
+      and(
+        eq(favoriteImages.id, id),
+        eq(favoriteImages.userId, userId)
+      )
+    );
 }
