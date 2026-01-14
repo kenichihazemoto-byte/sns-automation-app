@@ -2003,6 +2003,8 @@ export async function getDataSourcesByTemplateId(templateId: number) {
       userId: dataSources.userId,
       name: dataSources.name,
       provider: dataSources.provider,
+      accessToken: dataSources.accessToken,
+      refreshToken: dataSources.refreshToken,
       albumId: dataSources.albumId,
       folderId: dataSources.folderId,
       folderPath: dataSources.folderPath,

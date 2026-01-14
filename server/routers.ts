@@ -1874,6 +1874,165 @@ export const appRouter = router({
         await db.updateTemplateDataSourcePriority(input.templateId, input.dataSourceId, input.priority);
         return { success: true };
       }),
+
+    // Google フォトのアルバム一覧を取得
+    getGooglePhotosAlbums: protectedProcedure
+      .input(z.object({
+        dataSourceId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dataSource = await db.getDataSourceById(input.dataSourceId);
+        if (!dataSource || dataSource.provider !== "google_photos") {
+          throw new Error("Invalid data source");
+        }
+
+        if (!dataSource.accessToken) {
+          throw new Error("Access token not found");
+        }
+
+        // Google Photos APIでアルバム一覧を取得
+        const response = await fetch(
+          "https://photoslibrary.googleapis.com/v1/albums",
+          {
+            headers: {
+              Authorization: `Bearer ${dataSource.accessToken}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch albums from Google Photos");
+        }
+
+        const data = await response.json();
+        return data.albums || [];
+      }),
+
+    // 指定したアルバムから写真を取得
+    getPhotosFromAlbum: protectedProcedure
+      .input(z.object({
+        dataSourceId: z.number(),
+        albumId: z.string(),
+        pageSize: z.number().default(20),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dataSource = await db.getDataSourceById(input.dataSourceId);
+        if (!dataSource || dataSource.provider !== "google_photos") {
+          throw new Error("Invalid data source");
+        }
+
+        if (!dataSource.accessToken) {
+          throw new Error("Access token not found");
+        }
+
+        // Google Photos APIでアルバム内の写真を取得
+        const response = await fetch(
+          "https://photoslibrary.googleapis.com/v1/mediaItems:search",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${dataSource.accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              albumId: input.albumId,
+              pageSize: input.pageSize,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch photos from album");
+        }
+
+        const data = await response.json();
+        return data.mediaItems || [];
+      }),
+
+    // テンプレートに紐付けられた接続先から写真を取得（フォールバック対応）
+    getPhotosFromTemplate: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        pageSize: z.number().default(20),
+      }))
+      .query(async ({ ctx, input }) => {
+        // テンプレートに紐付けられた接続先を優先順位順に取得
+        const dataSources = await db.getDataSourcesByTemplateId(input.templateId);
+        
+        if (!dataSources || dataSources.length === 0) {
+          throw new Error("No data sources linked to this template");
+        }
+
+        const errors: string[] = [];
+
+        // 優先順位順に試行
+        for (const dataSource of dataSources) {
+          try {
+            if (!dataSource.isActive) {
+              errors.push(`Data source ${dataSource.name} is inactive`);
+              continue;
+            }
+
+            if (dataSource.provider === "google_photos") {
+              if (!dataSource.accessToken) {
+                errors.push(`Data source ${dataSource.name} has no access token`);
+                continue;
+              }
+
+              // Google Photos APIで写真を取得
+              const url = dataSource.albumId
+                ? "https://photoslibrary.googleapis.com/v1/mediaItems:search"
+                : "https://photoslibrary.googleapis.com/v1/mediaItems";
+
+              const options: RequestInit = {
+                headers: {
+                  Authorization: `Bearer ${dataSource.accessToken}`,
+                  "Content-Type": "application/json",
+                },
+              };
+
+              if (dataSource.albumId) {
+                options.method = "POST";
+                options.body = JSON.stringify({
+                  albumId: dataSource.albumId,
+                  pageSize: input.pageSize,
+                });
+              }
+
+              const response = await fetch(url, options);
+
+              if (!response.ok) {
+                errors.push(`Data source ${dataSource.name} failed: ${response.statusText}`);
+                continue;
+              }
+
+              const data = await response.json();
+              const photos = data.mediaItems || [];
+
+              if (photos.length > 0) {
+                return {
+                  photos,
+                  dataSource: {
+                    id: dataSource.id,
+                    name: dataSource.name,
+                    provider: dataSource.provider,
+                  },
+                  fallbackLog: errors,
+                };
+              } else {
+                errors.push(`Data source ${dataSource.name} returned no photos`);
+              }
+            } else {
+              errors.push(`Data source ${dataSource.name} provider not supported yet`);
+            }
+          } catch (error: any) {
+            errors.push(`Data source ${dataSource.name} error: ${error.message}`);
+          }
+        }
+
+        // すべての接続先が失敗した場合
+        throw new Error(`All data sources failed. Errors: ${errors.join(", ")}`);
+      }),
   }),
 });
 
