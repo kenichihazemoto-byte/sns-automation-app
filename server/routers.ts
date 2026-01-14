@@ -1630,6 +1630,79 @@ export const appRouter = router({
         await db.deletePostDraft(input.id, ctx.user.id);
         return { success: true };
       }),
+
+    // 複数画像から一括で投稿を生成して下書き保存
+    generateBulkFromImages: protectedProcedure
+      .input(z.object({
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
+        images: z.array(z.object({
+          url: z.string(),
+          analysis: z.object({
+            category: z.string(),
+            style: z.string(),
+            description: z.string(),
+            keywords: z.array(z.string()),
+          }),
+          fileName: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { companyName, images } = input;
+        const createdDrafts = [];
+
+        for (const image of images) {
+          try {
+            // 各プラットフォーム向けに投稿文を生成
+            const [instagramPost, xPost, threadsPost] = await Promise.all([
+              aiService.generatePostContent({
+                platform: "instagram",
+                imageAnalysis: image.analysis,
+                companyName,
+              }),
+              aiService.generatePostContent({
+                platform: "x",
+                imageAnalysis: image.analysis,
+                companyName,
+              }),
+              aiService.generatePostContent({
+                platform: "threads",
+                imageAnalysis: image.analysis,
+                companyName,
+              }),
+            ]);
+
+            // 下書きとして保存
+            const draftId = await db.createPostDraft({
+              userId: ctx.user.id,
+              companyName,
+              title: `${image.analysis.category} - ${new Date().toLocaleDateString("ja-JP")}`,
+              isBeforeAfter: false,
+              imageUrl: image.url,
+              instagramContent: instagramPost.caption,
+              instagramHashtags: instagramPost.hashtags.join(", "),
+              xContent: xPost.caption,
+              xHashtags: xPost.hashtags.join(", "),
+              threadsContent: threadsPost.caption,
+              threadsHashtags: threadsPost.hashtags.join(", "),
+            });
+
+            createdDrafts.push({
+              id: draftId,
+              imageUrl: image.url,
+              title: `${image.analysis.category} - ${new Date().toLocaleDateString("ja-JP")}`,
+            });
+          } catch (error) {
+            console.error(`Failed to generate post for image ${image.url}:`, error);
+            // エラーが発生しても続行
+          }
+        }
+
+        return {
+          success: true,
+          createdCount: createdDrafts.length,
+          drafts: createdDrafts,
+        };
+      }),
   }),
 
   // Post Templates Management

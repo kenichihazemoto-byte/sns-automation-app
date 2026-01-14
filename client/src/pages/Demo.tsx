@@ -426,10 +426,22 @@ export default function Demo() {
     onSuccess: (data) => {
       setAllPlatformsPosts(data);
       setBeforeAfterPost(null); // 一括生成時は単一プラットフォーム結果をクリア
-      toast.success("すべてのプラットフォーム向けの投稿文を生成しました");
+      toast.success("全プラットフォーム向けの投稿文を生成しました");
+      logActivityMutation.mutate({ activityType: "post_generation", description: `全プラットフォーム向け投稿生成: ${companyName}`, status: "success" });
+    },
+  });
+
+  // 複数画像から一括で投稿を生成して下書き保存
+  const generateBulkPostsMutation = trpc.postDrafts.generateBulkFromImages.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.createdCount}件の投稿を下書き保存しました`);
+      setMultiplePhotos([]);
+      setSelectedImage(null);
+      setAnalysis(null);
+      logActivityMutation.mutate({ activityType: "post_generation", description: `一括投稿生成: ${companyName}, ${data.createdCount}件`, status: "success" });
     },
     onError: (error) => {
-      toast.error(`エラー: ${error.message}`);
+      toast.error(`一括生成に失敗しました: ${error.message}`);
     },
   });
 
@@ -1468,18 +1480,47 @@ export default function Demo() {
                   <CardTitle>取得した写真（{multiplePhotos.length}枚）</CardTitle>
                   <CardDescription>AIがスコア付けした結果です</CardDescription>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setMultiplePhotos([]);
-                    setSelectedImage(null);
-                    setAnalysis(null);
-                    toast.success("全ての写真を削除しました");
-                  }}
-                >
-                  一括削除
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      generateBulkPostsMutation.mutate({
+                        companyName,
+                        images: multiplePhotos.map(photo => ({
+                          url: photo.url,
+                          analysis: photo.analysis,
+                          fileName: photo.fileName,
+                        })),
+                      });
+                    }}
+                    disabled={generateBulkPostsMutation.isPending}
+                  >
+                    {generateBulkPostsMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        全て下書き保存
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setMultiplePhotos([]);
+                      setSelectedImage(null);
+                      setAnalysis(null);
+                      toast.success("全ての写真を削除しました");
+                    }}
+                  >
+                    一括削除
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
