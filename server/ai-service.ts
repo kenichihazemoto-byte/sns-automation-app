@@ -1,6 +1,6 @@
 import { invokeLLM } from "./_core/llm";
 import { getTemplateById } from "../shared/templates";
-import { getSystemPrompt, getCompanyProfile } from "../shared/companyProfiles";
+import { getSystemPrompt, getCompanyProfile, type CompanyName } from "../shared/companyProfiles";
 
 /**
  * AI画像分析サービス
@@ -777,4 +777,102 @@ ${template.recommendedHashtags.map(tag => `   - ${tag}`).join('\n')}
     content,
     hashtags,
   };
+}
+
+/**
+ * テンプレート内の変数を抽出
+ * 例: "今回は{場所}に完成した..." → ["場所"]
+ */
+export function extractTemplateVariables(templateText: string): string[] {
+  const regex = /\{([^}]+)\}/g;
+  const variables: string[] = [];
+  let match;
+  
+  while ((match = regex.exec(templateText)) !== null) {
+    if (!variables.includes(match[1])) {
+      variables.push(match[1]);
+    }
+  }
+  
+  return variables;
+}
+
+/**
+ * 画像分析結果から変数の値を自動生成
+ */
+export async function generateTemplateVariables(
+  imageUrl: string,
+  variables: string[],
+  companyName: CompanyName
+): Promise<Record<string, string>> {
+  const companyProfile = getCompanyProfile(companyName);
+  const systemPrompt = getSystemPrompt(companyName);
+  
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `この画像を分析して、以下の変数に適切な値を設定してください：\n${variables.map(v => `- {${v}}`).join('\n')}\n\n各変数には、画像の内容に基づいた具体的で自然な表現を入れてください。`,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageUrl,
+              detail: "high",
+            },
+          },
+        ],
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "template_variables",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: variables.reduce((acc, variable) => {
+            acc[variable] = {
+              type: "string",
+              description: `${variable}に入れる具体的な値`,
+            };
+            return acc;
+          }, {} as Record<string, any>),
+          required: variables,
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content || typeof content !== 'string') {
+    throw new Error("Failed to generate template variables");
+  }
+
+  return JSON.parse(content);
+}
+
+/**
+ * テンプレート内の変数を置換
+ */
+export function replaceTemplateVariables(
+  templateText: string,
+  variables: Record<string, unknown>
+): string {
+  let result = templateText;
+  
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    result = result.replace(regex, String(value));
+  }
+  
+  return result;
 }
