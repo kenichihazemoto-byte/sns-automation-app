@@ -1,5 +1,6 @@
 import { invokeLLM } from "./_core/llm";
 import { getTemplateById } from "../shared/templates";
+import { getSystemPrompt, getCompanyProfile } from "../shared/companyProfiles";
 
 /**
  * AI画像分析サービス
@@ -137,11 +138,15 @@ export async function generatePostContent(
         keywords: ["患者様体験", "医療環境", "機能性", "クリニック設計", "プロフェッショナル", "信頼"]
       };
 
+  // 会社のキャラクター設定を取得
+  const companyProfile = getCompanyProfile(companyName);
+  const systemPrompt = getSystemPrompt(companyName);
+
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。
+        content: `${systemPrompt}
 
 ターゲット: ${targetAudience.name}
 ターゲットの詳細: ${targetAudience.description}
@@ -266,11 +271,15 @@ export async function generateIndividualComment(
         keywords: ["患者様体験", "医療環境", "機能性"]
       };
 
+  // 会社のキャラクター設定を取得
+  const systemPrompt = getSystemPrompt(companyName as "ハゼモト建設" | "クリニックアーキプロ");
+
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。
+        content: `${systemPrompt}
+
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
@@ -408,11 +417,16 @@ export async function generateCommentReply(
 ): Promise<string> {
   const { commentContent, postContext, companyName } = params;
 
+  // 会社のキャラクター設定を取得
+  const systemPrompt = getSystemPrompt(companyName);
+
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のカスタマーサポート担当者です。SNSのコメントに対して、親切で丁寧な返信を作成してください。`,
+        content: `${systemPrompt}
+
+SNSのコメントに対して、親切で丁寧な返信を作成してください。`,
       },
       {
         role: "user",
@@ -464,10 +478,15 @@ export async function generatePostFromTemplate(params: {
 }): Promise<{ content: string; hashtags: string }> {
   const { template, imageAnalysis, platform, companyName } = params;
 
+  // 会社のキャラクター設定を取得
+  const systemPrompt = getSystemPrompt(companyName as "ハゼモト建設" | "クリニックアーキプロ");
+
   // プラットフォーム別の文字数制限
   const maxLength = platform === "x" ? 280 : platform === "threads" ? 500 : 2200;
 
-  const prompt = `あなたはSNS投稿文のプロフェッショナルライターです。
+  const prompt = `${systemPrompt}
+
+あなたはSNS投稿文のプロフェッショナルライターです。
 
 【会社情報】
 会社名: ${companyName}
@@ -512,7 +531,9 @@ ${platform}（最大${maxLength}文字）
     messages: [
       {
         role: "system",
-        content: "あなたはSNS投稿文のプロフェッショナルライターです。テンプレートに従って、魅力的で効果的な投稿文を生成します。"
+        content: `${systemPrompt}
+
+テンプレートに従って、魅力的で効果的な投稿文を生成します。`
       },
       {
         role: "user",
