@@ -23,6 +23,7 @@ import ActivityLog from "./pages/ActivityLog";
 import MyProgress from "./pages/MyProgress";
 import ErrorStats from "./pages/ErrorStats";
 import PostDrafts from "./pages/PostDrafts";
+import DataSources from "./pages/DataSources";
 
 function Router() {
   return (
@@ -45,7 +46,8 @@ function Router() {
       <Route path={"/calendar"} component={PostCalendar} />
       <Route path={"/analytics"} component={Analytics} />
       <Route path={"/error-stats"} component={ErrorStats} />
-      <Route path={"/drafts"} component={PostDrafts} />
+      <Route path="/post-drafts" component={PostDrafts} />
+      <Route path="/data-sources" component={DataSources} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

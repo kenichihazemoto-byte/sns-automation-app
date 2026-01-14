@@ -1788,6 +1788,93 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // Data Sources Management
+  dataSources: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getDataSourcesByUserId(ctx.user.id);
+    }),
+
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        provider: z.enum(["google_photos", "dropbox", "onedrive", "local"]),
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        albumId: z.string().optional(),
+        folderId: z.string().optional(),
+        folderPath: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.createDataSource({
+          userId: ctx.user.id,
+          ...input,
+        });
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        albumId: z.string().optional(),
+        folderId: z.string().optional(),
+        folderPath: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...updates } = input;
+        await db.updateDataSource(id, updates);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deleteDataSource(input.id);
+        return { success: true };
+      }),
+
+    getByTemplateId: protectedProcedure
+      .input(z.object({ templateId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return await db.getDataSourcesByTemplateId(input.templateId);
+      }),
+
+    linkToTemplate: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        dataSourceId: z.number(),
+        priority: z.number().default(0),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.linkTemplateToDataSource(input.templateId, input.dataSourceId, input.priority);
+        return { success: true };
+      }),
+
+    unlinkFromTemplate: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        dataSourceId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.unlinkTemplateFromDataSource(input.templateId, input.dataSourceId);
+        return { success: true };
+      }),
+
+    updatePriority: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        dataSourceId: z.number(),
+        priority: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateTemplateDataSourcePriority(input.templateId, input.dataSourceId, input.priority);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

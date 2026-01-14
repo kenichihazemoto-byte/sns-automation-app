@@ -54,6 +54,12 @@ import {
   postDrafts,
   InsertPostDraft,
   PostDraft,
+  dataSources,
+  InsertDataSource,
+  DataSource,
+  templateDataSources,
+  InsertTemplateDataSource,
+  TemplateDataSource,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1924,4 +1930,119 @@ export async function deletePostDraft(id: number, userId: number) {
   
   await db.delete(postDrafts)
     .where(and(eq(postDrafts.id, id), eq(postDrafts.userId, userId)));
+}
+
+// ========================================
+// Data Sources Management
+// ========================================
+
+export async function createDataSource(dataSource: InsertDataSource) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(dataSources).values(dataSource);
+  return result;
+}
+
+export async function getDataSourcesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select().from(dataSources).where(eq(dataSources.userId, userId));
+  return result;
+}
+
+export async function getDataSourceById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(dataSources).where(eq(dataSources.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateDataSource(id: number, updates: Partial<InsertDataSource>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(dataSources).set(updates).where(eq(dataSources.id, id));
+}
+
+export async function deleteDataSource(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Delete associated template_data_sources first
+  await db.delete(templateDataSources).where(eq(templateDataSources.dataSourceId, id));
+  // Then delete the data source
+  await db.delete(dataSources).where(eq(dataSources.id, id));
+}
+
+// ========================================
+// Template Data Sources Management
+// ========================================
+
+export async function linkTemplateToDataSource(templateId: number, dataSourceId: number, priority: number = 0) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(templateDataSources).values({
+    templateId,
+    dataSourceId,
+    priority,
+  });
+  return result;
+}
+
+export async function getDataSourcesByTemplateId(templateId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db
+    .select({
+      id: dataSources.id,
+      userId: dataSources.userId,
+      name: dataSources.name,
+      provider: dataSources.provider,
+      albumId: dataSources.albumId,
+      folderId: dataSources.folderId,
+      folderPath: dataSources.folderPath,
+      isActive: dataSources.isActive,
+      lastSyncedAt: dataSources.lastSyncedAt,
+      priority: templateDataSources.priority,
+    })
+    .from(templateDataSources)
+    .innerJoin(dataSources, eq(templateDataSources.dataSourceId, dataSources.id))
+    .where(eq(templateDataSources.templateId, templateId))
+    .orderBy(templateDataSources.priority);
+  
+  return result;
+}
+
+export async function unlinkTemplateFromDataSource(templateId: number, dataSourceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db
+    .delete(templateDataSources)
+    .where(
+      and(
+        eq(templateDataSources.templateId, templateId),
+        eq(templateDataSources.dataSourceId, dataSourceId)
+      )
+    );
+}
+
+export async function updateTemplateDataSourcePriority(templateId: number, dataSourceId: number, priority: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db
+    .update(templateDataSources)
+    .set({ priority })
+    .where(
+      and(
+        eq(templateDataSources.templateId, templateId),
+        eq(templateDataSources.dataSourceId, dataSourceId)
+      )
+    );
 }

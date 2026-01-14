@@ -312,6 +312,48 @@ export type PostDraft = typeof postDrafts.$inferSelect;
 export type InsertPostDraft = typeof postDrafts.$inferInsert;
 
 /**
+ * Data sources table
+ * Stores configuration for various photo data sources (Google Photos, Dropbox, OneDrive, etc.)
+ */
+export const dataSources = mysqlTable("data_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // User-friendly name for the source
+  provider: mysqlEnum("provider", ["google_photos", "dropbox", "onedrive", "local"]).notNull(),
+  // Connection credentials (encrypted)
+  accessToken: text("accessToken"),
+  refreshToken: text("refreshToken"),
+  tokenExpiresAt: timestamp("tokenExpiresAt"),
+  // Provider-specific settings
+  albumId: varchar("albumId", { length: 255 }), // For Google Photos
+  folderId: varchar("folderId", { length: 255 }), // For Dropbox/OneDrive
+  folderPath: text("folderPath"), // For local or path-based sources
+  // Status
+  isActive: boolean("isActive").default(true).notNull(),
+  lastSyncedAt: timestamp("lastSyncedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DataSource = typeof dataSources.$inferSelect;
+export type InsertDataSource = typeof dataSources.$inferInsert;
+
+/**
+ * Template data sources table
+ * Links templates to their photo data sources with priority ordering
+ */
+export const templateDataSources = mysqlTable("template_data_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  templateId: int("templateId").notNull(),
+  dataSourceId: int("dataSourceId").notNull(),
+  priority: int("priority").default(0).notNull(), // Lower number = higher priority (0 is highest)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TemplateDataSource = typeof templateDataSources.$inferSelect;
+export type InsertTemplateDataSource = typeof templateDataSources.$inferInsert;
+
+/**
  * User activity log table
  * Records all actions performed by users for tracking and skill improvement
  */
