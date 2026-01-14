@@ -1140,6 +1140,22 @@ export const appRouter = router({
           hashtags: template.hashtags,
         };
       }),
+
+    linkDataSources: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        dataSourceIds: z.array(z.number()),
+      }))
+      .mutation(async ({ input }) => {
+        await db.linkTemplateDataSources(input.templateId, input.dataSourceIds);
+        return { success: true };
+      }),
+
+    getLinkedDataSources: protectedProcedure
+      .input(z.object({ templateId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getDataSourcesByTemplateId(input.templateId);
+      }),
   }),
 
   // Scheduler Management

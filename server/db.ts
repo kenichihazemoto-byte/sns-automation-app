@@ -2020,6 +2020,26 @@ export async function getDataSourcesByTemplateId(templateId: number) {
   return result;
 }
 
+export async function linkTemplateDataSources(templateId: number, dataSourceIds: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 既存の紐付けを削除
+  await db
+    .delete(templateDataSources)
+    .where(eq(templateDataSources.templateId, templateId));
+  
+  // 新しい紐付けを追加（優先順位は配列の順序）
+  if (dataSourceIds.length > 0) {
+    const values = dataSourceIds.map((dataSourceId, index) => ({
+      templateId,
+      dataSourceId,
+      priority: index,
+    }));
+    await db.insert(templateDataSources).values(values);
+  }
+}
+
 export async function unlinkTemplateFromDataSource(templateId: number, dataSourceId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

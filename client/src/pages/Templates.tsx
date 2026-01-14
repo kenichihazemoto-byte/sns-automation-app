@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, Copy } from "lucide-react";
+import { Plus, Edit, Trash2, Copy, X, GripVertical } from "lucide-react";
 import { POST_TEMPLATES } from "@shared/templates";
 
 export default function Templates() {
@@ -24,12 +26,22 @@ export default function Templates() {
     hashtags: "",
     targetAudience: "",
   });
+  const [selectedDataSources, setSelectedDataSources] = useState<Array<{ id: number; name: string; priority: number }>>([]);
+  const [currentDataSourceId, setCurrentDataSourceId] = useState<string>("");
 
   const utils = trpc.useUtils();
   const { data: customTemplates, isLoading } = trpc.customTemplates.list.useQuery();
+  const { data: dataSources } = trpc.dataSources.list.useQuery();
 
   const createMutation = trpc.customTemplates.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      // テンプレート作成後、接続先を紐付け
+      if (selectedDataSources.length > 0 && result.id) {
+        await linkDataSourcesMutation.mutateAsync({
+          templateId: result.id,
+          dataSourceIds: selectedDataSources.map(ds => ds.id),
+        });
+      }
       toast.success("テンプレートを作成しました");
       utils.customTemplates.list.invalidate();
       setIsCreateDialogOpen(false);
@@ -41,7 +53,14 @@ export default function Templates() {
   });
 
   const updateMutation = trpc.customTemplates.update.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      // テンプレート更新後、接続先を更新
+      if (editingTemplate && selectedDataSources.length > 0) {
+        await linkDataSourcesMutation.mutateAsync({
+          templateId: editingTemplate.id,
+          dataSourceIds: selectedDataSources.map(ds => ds.id),
+        });
+      }
       toast.success("テンプレートを更新しました");
       utils.customTemplates.list.invalidate();
       setEditingTemplate(null);
@@ -62,6 +81,12 @@ export default function Templates() {
     },
   });
 
+  const linkDataSourcesMutation = trpc.customTemplates.linkDataSources.useMutation({
+    onError: (error) => {
+      toast.error(`接続先の紐付けエラー: ${error.message}`);
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -73,6 +98,8 @@ export default function Templates() {
       hashtags: "",
       targetAudience: "",
     });
+    setSelectedDataSources([]);
+    setCurrentDataSourceId("");
   };
 
   const handleCreate = () => {
@@ -112,7 +139,7 @@ export default function Templates() {
     });
   };
 
-  const handleEdit = (template: any) => {
+  const handleEdit = async (template: any) => {
     const structure = JSON.parse(template.structure);
     setFormData({
       name: template.name,
@@ -124,6 +151,24 @@ export default function Templates() {
       hashtags: template.hashtags,
       targetAudience: template.targetAudience || "",
     });
+    
+    // テンプレートに紐付けられた接続先を取得
+    try {
+      const linkedDataSources = await utils.client.customTemplates.getLinkedDataSources.query({
+        templateId: template.id,
+      });
+      setSelectedDataSources(
+        linkedDataSources.map((ds: any, index: number) => ({
+          id: ds.id,
+          name: ds.name,
+          priority: index,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load linked data sources:", error);
+      setSelectedDataSources([]);
+    }
+    
     setEditingTemplate(template);
   };
 
@@ -149,6 +194,138 @@ export default function Templates() {
       deleteMutation.mutate({ id });
     }
   };
+
+  const handleAddDataSource = () => {
+    if (!currentDataSourceId) return;
+    
+    const dataSource = dataSources?.find(ds => ds.id === parseInt(currentDataSourceId));
+    if (!dataSource) return;
+    
+    // 既に追加されているか確認
+    if (selectedDataSources.some(ds => ds.id === dataSource.id)) {
+      toast.error("この接続先は既に追加されています");
+      return;
+    }
+    
+    setSelectedDataSources([
+      ...selectedDataSources,
+      {
+        id: dataSource.id,
+        name: dataSource.name,
+        priority: selectedDataSources.length,
+      },
+    ]);
+    setCurrentDataSourceId("");
+  };
+
+  const handleRemoveDataSource = (id: number) => {
+    setSelectedDataSources(
+      selectedDataSources
+        .filter(ds => ds.id !== id)
+        .map((ds, index) => ({ ...ds, priority: index }))
+    );
+  };
+
+  const handleMovePriority = (id: number, direction: "up" | "down") => {
+    const index = selectedDataSources.findIndex(ds => ds.id === id);
+    if (index === -1) return;
+    
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === selectedDataSources.length - 1) return;
+    
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    const newList = [...selectedDataSources];
+    [newList[index], newList[newIndex]] = [newList[newIndex], newList[index]];
+    
+    setSelectedDataSources(
+      newList.map((ds, i) => ({ ...ds, priority: i }))
+    );
+  };
+
+  const renderDataSourceSelector = () => (
+    <div className="space-y-4">
+      <div>
+        <Label>写真データ接続先</Label>
+        <p className="text-sm text-muted-foreground mb-2">
+          このテンプレートで使用する写真の取得元を選択してください。複数選択可能で、優先順位を設定できます。
+        </p>
+        <div className="flex gap-2">
+          <Select value={currentDataSourceId} onValueChange={setCurrentDataSourceId}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="接続先を選択" />
+            </SelectTrigger>
+            <SelectContent>
+              {dataSources?.map((ds) => (
+                <SelectItem key={ds.id} value={ds.id.toString()}>
+                  {ds.name} ({ds.provider})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleAddDataSource}
+            disabled={!currentDataSourceId}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {selectedDataSources.length > 0 && (
+        <div className="space-y-2">
+          <Label>選択された接続先（優先順位順）</Label>
+          <div className="space-y-2">
+            {selectedDataSources.map((ds, index) => (
+              <div
+                key={ds.id}
+                className="flex items-center gap-2 p-2 border rounded-md bg-muted/50"
+              >
+                <div className="flex flex-col gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-6 p-0"
+                    onClick={() => handleMovePriority(ds.id, "up")}
+                    disabled={index === 0}
+                  >
+                    ▲
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-6 p-0"
+                    onClick={() => handleMovePriority(ds.id, "down")}
+                    disabled={index === selectedDataSources.length - 1}
+                  >
+                    ▼
+                  </Button>
+                </div>
+                <Badge variant="outline" className="font-mono">
+                  {index + 1}
+                </Badge>
+                <span className="flex-1">{ds.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveDataSource(ds.id)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            優先順位1から順に写真を取得します。取得に失敗した場合、次の接続先にフォールバックします。
+          </p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <DashboardLayout>
@@ -242,6 +419,9 @@ export default function Templates() {
                     placeholder="例: ハゼモト建設"
                   />
                 </div>
+
+                {renderDataSourceSelector()}
+
                 <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full">
                   {createMutation.isPending ? "作成中..." : "作成"}
                 </Button>
@@ -389,6 +569,9 @@ export default function Templates() {
                                   onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
                                 />
                               </div>
+
+                              {renderDataSourceSelector()}
+
                               <Button onClick={handleUpdate} disabled={updateMutation.isPending} className="w-full">
                                 {updateMutation.isPending ? "更新中..." : "更新"}
                               </Button>
