@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -38,6 +38,7 @@ const menuItems = [
   { icon: Calendar, label: "投稿カレンダー", path: "/calendar" },
   { icon: History, label: "投稿履歴", path: "/history" },
   { icon: BarChart3, label: "効果測定", path: "/analytics" },
+  { icon: PieChart, label: "パフォーマンス", path: "/performance" },
   { icon: FileText, label: "テンプレート", path: "/templates" },
   { icon: Settings, label: "設定", path: "/settings" },
   { icon: HelpCircle, label: "ヘルプ", path: "/help" },

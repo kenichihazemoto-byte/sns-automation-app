@@ -2050,6 +2050,63 @@ export const appRouter = router({
         throw new Error(`All data sources failed. Errors: ${errors.join(", ")}`);
       }),
   }),
+
+  // Template Performance Stats
+  templatePerformance: router({
+    // Record a post generation attempt
+    record: protectedProcedure
+      .input(z.object({
+        templateId: z.number(),
+        dataSourceId: z.number().optional(),
+        success: z.boolean(),
+        platform: z.enum(["instagram", "x", "threads"]).optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.recordTemplatePerformance({
+          templateId: input.templateId,
+          dataSourceId: input.dataSourceId || null,
+          success: input.success,
+          platform: input.platform,
+          companyName: input.companyName,
+        });
+        return { success: true };
+      }),
+
+    // Get performance stats with filters
+    getStats: protectedProcedure
+      .input(z.object({
+        templateId: z.number().optional(),
+        dataSourceId: z.number().optional(),
+        startDate: z.string().optional(), // ISO date string
+        endDate: z.string().optional(), // ISO date string
+        platform: z.enum(["instagram", "x", "threads"]).optional(),
+        companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]).optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getTemplatePerformanceStats({
+          templateId: input.templateId,
+          dataSourceId: input.dataSourceId,
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
+          endDate: input.endDate ? new Date(input.endDate) : undefined,
+          platform: input.platform,
+          companyName: input.companyName,
+        });
+      }),
+
+    // Get aggregated summary
+    getSummary: protectedProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getTemplatePerformanceSummary({
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
+          endDate: input.endDate ? new Date(input.endDate) : undefined,
+        });
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

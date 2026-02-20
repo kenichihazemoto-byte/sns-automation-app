@@ -456,3 +456,24 @@ export const errorLogs = mysqlTable("errorLogs", {
 
 export type ErrorLog = typeof errorLogs.$inferSelect;
 export type InsertErrorLog = typeof errorLogs.$inferInsert;
+
+/**
+ * Template performance statistics table
+ * Tracks post generation success/failure rates for each template-datasource combination
+ */
+export const templatePerformanceStats = mysqlTable("template_performance_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  templateId: int("templateId").notNull(), // References customTemplates.id
+  dataSourceId: int("dataSourceId"), // References dataSources.id, null if no datasource used
+  generationDate: timestamp("generationDate").notNull(), // Date when post was generated
+  totalAttempts: int("totalAttempts").default(0).notNull(), // Total generation attempts
+  successCount: int("successCount").default(0).notNull(), // Successful generations
+  failureCount: int("failureCount").default(0).notNull(), // Failed generations
+  platform: mysqlEnum("platform", ["instagram", "x", "threads"]), // Target platform
+  companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TemplatePerformanceStat = typeof templatePerformanceStats.$inferSelect;
+export type InsertTemplatePerformanceStat = typeof templatePerformanceStats.$inferInsert;

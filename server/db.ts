@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -60,6 +60,9 @@ import {
   templateDataSources,
   InsertTemplateDataSource,
   TemplateDataSource,
+  templatePerformanceStats,
+  InsertTemplatePerformanceStat,
+  TemplatePerformanceStat,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1824,7 +1827,7 @@ export async function createPostTemplate(template: {
   
   const { postTemplates } = await import("../drizzle/schema");
   const result: any = await db.insert(postTemplates).values(template);
-  return Number(result.insertId);
+  return Number(result[0].insertId);
 }
 
 export async function updatePostTemplate(id: number, updates: {
@@ -2067,4 +2070,156 @@ export async function updateTemplateDataSourcePriority(templateId: number, dataS
         eq(templateDataSources.dataSourceId, dataSourceId)
       )
     );
+}
+
+// Template Performance Stats Functions
+
+export async function recordTemplatePerformance(params: {
+  templateId: number;
+  dataSourceId: number | null;
+  success: boolean;
+  platform?: "instagram" | "x" | "threads";
+  companyName?: "ハゼモト建設" | "クリニックアーキプロ";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // 今日の統計レコードを検索
+  const existing = await db
+    .select()
+    .from(templatePerformanceStats)
+    .where(
+      and(
+        eq(templatePerformanceStats.templateId, params.templateId),
+        params.dataSourceId 
+          ? eq(templatePerformanceStats.dataSourceId, params.dataSourceId)
+          : isNull(templatePerformanceStats.dataSourceId),
+        eq(templatePerformanceStats.generationDate, today),
+        params.platform 
+          ? eq(templatePerformanceStats.platform, params.platform)
+          : isNull(templatePerformanceStats.platform),
+        params.companyName
+          ? eq(templatePerformanceStats.companyName, params.companyName)
+          : isNull(templatePerformanceStats.companyName)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // 既存レコードを更新
+    const stat = existing[0];
+    await db
+      .update(templatePerformanceStats)
+      .set({
+        totalAttempts: stat.totalAttempts + 1,
+        successCount: params.success ? stat.successCount + 1 : stat.successCount,
+        failureCount: params.success ? stat.failureCount : stat.failureCount + 1,
+      })
+      .where(eq(templatePerformanceStats.id, stat.id));
+  } else {
+    // 新規レコードを作成
+    await db.insert(templatePerformanceStats).values({
+      templateId: params.templateId,
+      dataSourceId: params.dataSourceId,
+      generationDate: today,
+      totalAttempts: 1,
+      successCount: params.success ? 1 : 0,
+      failureCount: params.success ? 0 : 1,
+      platform: params.platform || null,
+      companyName: params.companyName || null,
+    });
+  }
+}
+
+export async function getTemplatePerformanceStats(params?: {
+  templateId?: number;
+  dataSourceId?: number;
+  startDate?: Date;
+  endDate?: Date;
+  platform?: "instagram" | "x" | "threads";
+  companyName?: "ハゼモト建設" | "クリニックアーキプロ";
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [];
+  
+  if (params?.templateId) {
+    conditions.push(eq(templatePerformanceStats.templateId, params.templateId));
+  }
+  if (params?.dataSourceId) {
+    conditions.push(eq(templatePerformanceStats.dataSourceId, params.dataSourceId));
+  }
+  if (params?.startDate) {
+    conditions.push(gte(templatePerformanceStats.generationDate, params.startDate));
+  }
+  if (params?.endDate) {
+    conditions.push(lte(templatePerformanceStats.generationDate, params.endDate));
+  }
+  if (params?.platform) {
+    conditions.push(eq(templatePerformanceStats.platform, params.platform));
+  }
+  if (params?.companyName) {
+    conditions.push(eq(templatePerformanceStats.companyName, params.companyName));
+  }
+  
+  const query = db
+    .select()
+    .from(templatePerformanceStats);
+  
+  if (conditions.length > 0) {
+    return await query.where(and(...conditions)).orderBy(desc(templatePerformanceStats.generationDate));
+  }
+  
+  return await query.orderBy(desc(templatePerformanceStats.generationDate));
+}
+
+export async function getTemplatePerformanceSummary(params?: {
+  startDate?: Date;
+  endDate?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // テンプレート別の集計を取得
+  const conditions = [];
+  if (params?.startDate) {
+    conditions.push(gte(templatePerformanceStats.generationDate, params.startDate));
+  }
+  if (params?.endDate) {
+    conditions.push(lte(templatePerformanceStats.generationDate, params.endDate));
+  }
+  
+  const query = db
+    .select({
+      templateId: templatePerformanceStats.templateId,
+      dataSourceId: templatePerformanceStats.dataSourceId,
+      platform: templatePerformanceStats.platform,
+      companyName: templatePerformanceStats.companyName,
+      totalAttempts: sql<number>`SUM(${templatePerformanceStats.totalAttempts})`,
+      successCount: sql<number>`SUM(${templatePerformanceStats.successCount})`,
+      failureCount: sql<number>`SUM(${templatePerformanceStats.failureCount})`,
+    })
+    .from(templatePerformanceStats);
+  
+  if (conditions.length > 0) {
+    return await query
+      .where(and(...conditions))
+      .groupBy(
+        templatePerformanceStats.templateId,
+        templatePerformanceStats.dataSourceId,
+        templatePerformanceStats.platform,
+        templatePerformanceStats.companyName
+      );
+  }
+  
+  return await query.groupBy(
+    templatePerformanceStats.templateId,
+    templatePerformanceStats.dataSourceId,
+    templatePerformanceStats.platform,
+    templatePerformanceStats.companyName
+  );
 }

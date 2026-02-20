@@ -24,6 +24,7 @@ import MyProgress from "./pages/MyProgress";
 import ErrorStats from "./pages/ErrorStats";
 import PostDrafts from "./pages/PostDrafts";
 import DataSources from "./pages/DataSources";
+import Performance from "./pages/Performance";
 
 function Router() {
   return (
@@ -48,6 +49,7 @@ function Router() {
       <Route path={"/error-stats"} component={ErrorStats} />
       <Route path="/post-drafts" component={PostDrafts} />
       <Route path="/data-sources" component={DataSources} />
+      <Route path="/performance" component={Performance} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
