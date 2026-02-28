@@ -141,6 +141,20 @@
       "when": 1771580462067,
       "tag": "0019_awesome_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1772267584478,
+      "tag": "0020_square_punisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1772269526912,
+      "tag": "0021_unique_midnight",
+      "breakpoints": true
     }
   ]
 }

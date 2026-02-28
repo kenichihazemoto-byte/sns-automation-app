@@ -477,3 +477,52 @@ export const templatePerformanceStats = mysqlTable("template_performance_stats",
 
 export type TemplatePerformanceStat = typeof templatePerformanceStats.$inferSelect;
 export type InsertTemplatePerformanceStat = typeof templatePerformanceStats.$inferInsert;
+
+/**
+ * ユーザーバッジテーブル
+ * 達成バッジシステム用
+ */
+export const userBadges = mysqlTable("user_badges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  badgeType: varchar("badgeType", { length: 64 }).notNull(), // "first_post", "10_posts", "week_5_posts", "quality_master", "streak_7"
+  badgeName: varchar("badgeName", { length: 128 }).notNull(),
+  badgeDescription: text("badgeDescription"),
+  earnedAt: timestamp("earnedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserBadge = typeof userBadges.$inferSelect;
+export type InsertUserBadge = typeof userBadges.$inferInsert;
+
+/**
+ * 今日のタスク進捗テーブル
+ * 利用者さんの日次タスク達成状況を記録
+ */
+export const dailyTaskProgress = mysqlTable("daily_task_progress", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  taskDate: timestamp("taskDate").notNull(), // 対象日
+  targetPostCount: int("targetPostCount").default(1).notNull(), // 今日の目標投稿数
+  completedPostCount: int("completedPostCount").default(0).notNull(), // 達成した投稿数
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DailyTaskProgress = typeof dailyTaskProgress.$inferSelect;
+export type InsertDailyTaskProgress = typeof dailyTaskProgress.$inferInsert;
+
+// Notion連携設定テーブル
+export const notionSettings = mysqlTable("notion_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  integrationToken: text("integrationToken").notNull(),
+  databaseId: varchar("databaseId", { length: 64 }).notNull(),
+  databaseTitle: varchar("databaseTitle", { length: 255 }),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotionSetting = typeof notionSettings.$inferSelect;
+export type InsertNotionSetting = typeof notionSettings.$inferInsert;

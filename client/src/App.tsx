@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import NotionSettings from "@/pages/NotionSettings";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -25,6 +26,8 @@ import ErrorStats from "./pages/ErrorStats";
 import PostDrafts from "./pages/PostDrafts";
 import DataSources from "./pages/DataSources";
 import Performance from "./pages/Performance";
+import TodayTask from "./pages/TodayTask";
+import BeforeAfterPost from "./pages/BeforeAfterPost";
 
 function Router() {
   return (
@@ -50,6 +53,9 @@ function Router() {
       <Route path="/post-drafts" component={PostDrafts} />
       <Route path="/data-sources" component={DataSources} />
       <Route path="/performance" component={Performance} />
+      <Route path="/today-task" component={TodayTask} />
+      <Route path="/before-after" component={BeforeAfterPost} />
+      <Route path="/notion-settings" component={NotionSettings} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

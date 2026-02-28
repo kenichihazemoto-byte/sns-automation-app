@@ -21,17 +21,19 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
+  { icon: Target, label: "今日のタスク", path: "/today-task" },
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: TrendingUp, label: "マイページ", path: "/my-progress" },
   { icon: Zap, label: "かんたん投稿", path: "/simple-post" },
   { icon: Sparkles, label: "AI投稿生成", path: "/demo" },
+  { icon: GitCompare, label: "ビフォーアフター投稿", path: "/before-after" },
   { icon: Save, label: "下書き", path: "/drafts" },
   { icon: Database, label: "データ接続先", path: "/data-sources" },
   { icon: Calendar, label: "予約投稿管理", path: "/scheduled" },
@@ -40,6 +42,7 @@ const menuItems = [
   { icon: BarChart3, label: "効果測定", path: "/analytics" },
   { icon: PieChart, label: "パフォーマンス", path: "/performance" },
   { icon: FileText, label: "テンプレート", path: "/templates" },
+  { icon: BookOpenCheck, label: "Notion連携", path: "/notion-settings" },
   { icon: Settings, label: "設定", path: "/settings" },
   { icon: HelpCircle, label: "ヘルプ", path: "/help" },
 ];

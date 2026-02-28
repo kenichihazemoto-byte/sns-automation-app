@@ -361,7 +361,7 @@ export async function generateCombinedPost(
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。
+        content: `あなたは${companyName === 'ハゼモト建設' ? '「地元で生まれ地元で育った北九州の工務店」ハゼモト建設' : companyName}の公式アカウントです。「SNS担当」「広報担当」などの役職表記は絶対に使わない。
 ターゲット: ${targetAudience.name}
 トーン: ${targetAudience.tone}
 
@@ -611,7 +611,7 @@ export async function generateReelsStoriesContent(params: {
     messages: [
       {
         role: "system",
-        content: `あなたは${companyName}のSNSマーケティング担当者です。Instagram ReelsやStoriesに最適な短くてインパクトのある文章を作成します。`
+        content: `あなたは${companyName === 'ハゼモト建設' ? '「地元で生まれ地元で育った北九州の工務店」ハゼモト建設' : companyName}の公式アカウントです。「SNS担当」「広報担当」などの役職表記は絶対に使わない。Instagram ReelsやStoriesに最適な短くてインパクトのある文章を作成します。`
       },
       {
         role: "user",

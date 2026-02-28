@@ -63,6 +63,12 @@ import {
   templatePerformanceStats,
   InsertTemplatePerformanceStat,
   TemplatePerformanceStat,
+  userBadges,
+  InsertUserBadge,
+  UserBadge,
+  dailyTaskProgress,
+  InsertDailyTaskProgress,
+  DailyTaskProgress,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2222,4 +2228,135 @@ export async function getTemplatePerformanceSummary(params?: {
     templatePerformanceStats.platform,
     templatePerformanceStats.companyName
   );
+}
+
+// ============================================================
+// バッジシステム関数
+// ============================================================
+
+export async function getUserBadges(userId: number): Promise<UserBadge[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(userBadges).where(eq(userBadges.userId, userId)).orderBy(desc(userBadges.earnedAt));
+}
+
+export async function awardBadge(userId: number, badgeType: string, badgeName: string, badgeDescription?: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  // 既に同じバッジを持っているか確認
+  const existing = await db.select().from(userBadges)
+    .where(and(eq(userBadges.userId, userId), eq(userBadges.badgeType, badgeType)))
+    .limit(1);
+  if (existing.length > 0) return false; // 既に取得済み
+  await db.insert(userBadges).values({ userId, badgeType, badgeName, badgeDescription });
+  return true;
+}
+
+// バッジ条件チェック＆自動付与
+export async function checkAndAwardBadges(userId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const awarded: string[] = [];
+
+  // 投稿数カウント（activityLog）
+  const postLogs = await db.select().from(userActivityLog)
+    .where(and(eq(userActivityLog.userId, userId), eq(userActivityLog.activityType, "post_generation")));
+  const totalPosts = postLogs.length;
+
+  // はじめの一歩
+  if (totalPosts >= 1) {
+    const got = await awardBadge(userId, "first_post", "はじめの一歩", "初めての投稿文を生成しました！");
+    if (got) awarded.push("はじめの一歩");
+  }
+  // 10投稿達成
+  if (totalPosts >= 10) {
+    const got = await awardBadge(userId, "10_posts", "10投稿達成", "投稿文を10件生成しました！");
+    if (got) awarded.push("10投稿達成");
+  }
+  // 50投稿達成
+  if (totalPosts >= 50) {
+    const got = await awardBadge(userId, "50_posts", "50投稿達成", "投稿文を50件生成しました！");
+    if (got) awarded.push("50投稿達成");
+  }
+
+  // 7日連続投稿チェック
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const recentLogs = await db.select().from(userActivityLog)
+    .where(and(
+      eq(userActivityLog.userId, userId),
+      eq(userActivityLog.activityType, "post_generation"),
+      gte(userActivityLog.createdAt, sevenDaysAgo)
+    ))
+    .orderBy(asc(userActivityLog.createdAt));
+  
+  // 7日連続かチェック
+  if (recentLogs.length >= 7) {
+    const days = new Set(recentLogs.map(l => l.createdAt.toISOString().slice(0, 10)));
+    if (days.size >= 7) {
+      const got = await awardBadge(userId, "streak_7", "連続投稿7日", "7日連続で投稿文を作成しました！");
+      if (got) awarded.push("連続投稿7日");
+    }
+  }
+
+  return awarded;
+}
+
+// ============================================================
+// 今日のタスク進捗関数
+// ============================================================
+
+export async function getTodayTaskProgress(userId: number): Promise<DailyTaskProgress | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const result = await db.select().from(dailyTaskProgress)
+    .where(and(
+      eq(dailyTaskProgress.userId, userId),
+      gte(dailyTaskProgress.taskDate, today),
+      lte(dailyTaskProgress.taskDate, tomorrow)
+    ))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function upsertTodayTaskProgress(userId: number, completedPostCount: number, targetPostCount: number = 1): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const existing = await getTodayTaskProgress(userId);
+  if (existing) {
+    await db.update(dailyTaskProgress)
+      .set({ completedPostCount, targetPostCount })
+      .where(eq(dailyTaskProgress.id, existing.id));
+  } else {
+    await db.insert(dailyTaskProgress).values({ userId, taskDate: today, completedPostCount, targetPostCount });
+  }
+}
+
+export async function getWeeklyTaskStats(userId: number): Promise<{ date: string; completed: number; target: number }[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  
+  const result = await db.select().from(dailyTaskProgress)
+    .where(and(
+      eq(dailyTaskProgress.userId, userId),
+      gte(dailyTaskProgress.taskDate, sevenDaysAgo)
+    ))
+    .orderBy(asc(dailyTaskProgress.taskDate));
+  
+  return result.map(r => ({
+    date: r.taskDate.toISOString().slice(0, 10),
+    completed: r.completedPostCount,
+    target: r.targetPostCount,
+  }));
 }

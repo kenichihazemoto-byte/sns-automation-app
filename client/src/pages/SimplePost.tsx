@@ -12,6 +12,10 @@ import { Loader2, Image as ImageIcon, FileText, Calendar, CheckCircle } from "lu
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { Wand2, RotateCcw, Scissors, Smile, Hash, Megaphone, AlertTriangle, Star } from "lucide-react";
 
 export default function SimplePost() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -21,8 +25,32 @@ export default function SimplePost() {
   const [scheduleTime, setScheduleTime] = useState("");
   const [platform, setPlatform] = useState<"instagram" | "x" | "threads">("instagram");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [editedPostText, setEditedPostText] = useState<string | null>(null);
+  const [qualityScore, setQualityScore] = useState<any>(null);
+  const [isRefining, setIsRefining] = useState(false);
+  const [isScoring, setIsScoring] = useState(false);
+  const [showSupportAlert, setShowSupportAlert] = useState(false);
 
   const utils = trpc.useUtils();
+
+  const refineMutation = trpc.postQuality.refine.useMutation();
+  const scoreMutation = trpc.postQuality.score.useMutation();
+  const [notionSynced, setNotionSynced] = useState(false);
+  const [notionPageUrl, setNotionPageUrl] = useState<string | null>(null);
+  const syncToNotionMutation = trpc.notion.syncPost.useMutation({
+    onSuccess: (data) => {
+      setNotionSynced(true);
+      setNotionPageUrl(data.url);
+      toast.success("Notionに保存しました！");
+    },
+    onError: (err) => {
+      if (err.message.includes("Notion連携が設定")) {
+        toast.error("まずNotion連携設定を行ってください。サイドバーの「Notion連携」から設定できます。");
+      } else {
+        toast.error(`Notion保存エラー: ${err.message}`);
+      }
+    },
+  });
 
   const steps = [
     { id: 1, title: "写真を選ぶ", description: "リフォーム事例の写真" },
@@ -344,7 +372,7 @@ export default function SimplePost() {
               <div className="space-y-4">
                 <div>
                   <Label>投稿するプラットフォーム</Label>
-                  <Select value={platform} onValueChange={(v: any) => setPlatform(v)}>
+                  <Select value={platform} onValueChange={(v: any) => { setPlatform(v); setEditedPostText(null); setQualityScore(null); }}>
                     <SelectTrigger className="w-full mt-2">
                       <SelectValue />
                     </SelectTrigger>
@@ -356,12 +384,186 @@ export default function SimplePost() {
                   </Select>
                 </div>
 
-                <div className="border rounded-lg p-4 bg-muted/50">
-                  <h3 className="font-semibold mb-2">投稿文</h3>
-                  <p className="whitespace-pre-wrap">{generatedPost[platform].post}</p>
+                {/* 投稿文表示・編集エリア */}
+                <div className="border rounded-lg p-4 bg-muted/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">投稿文</h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditedPostText(editedPostText !== null ? null : (generatedPost[platform].post))}
+                    >
+                      {editedPostText !== null ? "編集を閉じる" : "手動で編集"}
+                    </Button>
+                  </div>
+                  {editedPostText !== null ? (
+                    <Textarea
+                      value={editedPostText}
+                      onChange={(e) => setEditedPostText(e.target.value)}
+                      rows={6}
+                      className="resize-none"
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap">{generatedPost[platform].post}</p>
+                  )}
                   
-                  <h3 className="font-semibold mt-4 mb-2">ハッシュタグ</h3>
+                  <h3 className="font-semibold mt-2">ハッシュタグ</h3>
                   <p className="text-primary">{generatedPost[platform].hashtags.join(" ")}</p>
+                </div>
+
+                {/* 修正提案ボタン */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">投稿文を修正する</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { type: "shorter", label: "もっと短く", icon: Scissors },
+                      { type: "friendlier", label: "もっと親しみやすく", icon: Smile },
+                      { type: "more_hashtags", label: "ハッシュタグ追加", icon: Hash },
+                      { type: "add_cta", label: "CTAを追加", icon: Megaphone },
+                      { type: "regenerate", label: "全体を書き直す", icon: RotateCcw },
+                    ].map(({ type, label, icon: Icon }) => (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        size="sm"
+                        disabled={isRefining}
+                        onClick={() => {
+                          setIsRefining(true);
+                          const currentText = editedPostText ?? generatedPost[platform].post;
+                          refineMutation.mutate(
+                            { postText: currentText, platform, refineType: type as any, companyName: "ハゼモト建設" },
+                            {
+                              onSuccess: (result) => {
+                                setEditedPostText(typeof result.refinedText === "string" ? result.refinedText : null);
+                                setQualityScore(null);
+                                toast.success("投稿文を修正しました");
+                                setIsRefining(false);
+                              },
+                              onError: () => {
+                                toast.error("修正に失敗しました");
+                                setIsRefining(false);
+                              },
+                            }
+                          );
+                        }}
+                        className="flex items-center gap-1 text-xs"
+                      >
+                        {isRefining ? <Loader2 className="h-3 w-3 animate-spin" /> : <Icon className="h-3 w-3" />}
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 品質スコアリング */}
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={isScoring}
+                    onClick={() => {
+                      setIsScoring(true);
+                      const currentText = editedPostText ?? generatedPost[platform].post;
+                      scoreMutation.mutate(
+                        { postText: currentText, platform, companyName: "ハゼモト建設" },
+                        {
+                          onSuccess: (result) => {
+                            setQualityScore(result);
+                            setIsScoring(false);
+                          },
+                          onError: () => {
+                            toast.error("品質チェックに失敗しました");
+                            setIsScoring(false);
+                          },
+                        }
+                      );
+                    }}
+                  >
+                    {isScoring ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Star className="h-4 w-4 mr-2" />}
+                    品質チェックをする
+                  </Button>
+
+                  {qualityScore && (
+                    <div className={`border rounded-lg p-4 space-y-3 ${qualityScore.pass ? "border-green-300 bg-green-50" : "border-orange-300 bg-orange-50"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">品質スコア</span>
+                        <Badge variant={qualityScore.pass ? "default" : "secondary"} className={qualityScore.pass ? "bg-green-600" : "bg-orange-500 text-white"}>
+                          {qualityScore.total}点 / 100点
+                        </Badge>
+                      </div>
+                      <Progress value={qualityScore.total} className="h-2" />
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>ハゼモトらしさ: {qualityScore.brand_voice}/30</div>
+                        <div>地域貢献: {qualityScore.community_contribution}/20</div>
+                        <div>読みやすさ: {qualityScore.readability}/20</div>
+                        <div>ハッシュタグ: {qualityScore.hashtags}/15</div>
+                        <div>CTA: {qualityScore.cta}/15</div>
+                      </div>
+                      {qualityScore.feedback && (
+                        <p className="text-sm text-muted-foreground">💡 {qualityScore.feedback}</p>
+                      )}
+                      {!qualityScore.pass && (
+                        <p className="text-sm text-orange-700 font-medium">
+                          ↑ 上の修正ボタンで投稿文を改善すると、より良い投稿になります！
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* エラー時の支援員通知 */}
+                {showSupportAlert && (
+                  <div className="border border-yellow-300 bg-yellow-50 rounded-lg p-4 flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-yellow-800">支援員に相談しましょう</p>
+                      <p className="text-sm text-yellow-700 mt-1">投稿文の修正に困ったときは、近くの支援員に尊ねてみてください。あなたの作業をサポートします！</p>
+                      <Button variant="outline" size="sm" className="mt-2" onClick={() => setShowSupportAlert(false)}>閉じる</Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notion同期ボタン */}
+                <div className="border border-dashed border-muted-foreground/30 rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div className="text-sm text-muted-foreground">
+                    {notionSynced ? (
+                      <span className="text-green-600 font-medium flex items-center gap-1">
+                        ✅ Notionに保存済み
+                        {notionPageUrl && (
+                          <a href={notionPageUrl} target="_blank" rel="noopener noreferrer" className="underline text-xs ml-1">
+                            開く
+                          </a>
+                        )}
+                      </span>
+                    ) : (
+                      <span>Notionに保存する（任意）</span>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={syncToNotionMutation.isPending || notionSynced}
+                    onClick={() => {
+                      const currentText = editedPostText ?? generatedPost?.instagram?.postText ?? "";
+                      const platformLabel = platform === "instagram" ? "Instagram" : platform === "x" ? "X（Twitter）" : "Threads";
+                      syncToNotionMutation.mutate({
+                        title: `${platformLabel}投稿 ${new Date().toLocaleDateString("ja-JP")}`,
+                        platform: platformLabel,
+                        companyName: "ハゼモト建設",
+                        postText: currentText,
+                        status: "draft",
+                        hashtags: generatedPost?.instagram?.hashtags?.join(" ") ?? "",
+                      });
+                    }}
+                  >
+                    {syncToNotionMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      "📋"
+                    )}
+                    Notionに保存
+                  </Button>
                 </div>
 
                 <p className="text-sm text-muted-foreground text-center">

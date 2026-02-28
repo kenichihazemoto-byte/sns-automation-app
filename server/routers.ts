@@ -8,7 +8,9 @@ import * as db from "./db";
 import * as aiService from "./ai-service";
 import { storagePut } from "./storage";
 import { analyzeImage } from "./ai-service";
-
+import { createNotionPage, testNotionConnection } from "./notion";
+import { notionSettings } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -2107,6 +2109,236 @@ export const appRouter = router({
         });
       }),
   }),
-});
 
+  // バッジシステム
+  badges: router({
+    getMyBadges: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getUserBadges(ctx.user.id);
+    }),
+    checkAndAward: protectedProcedure.mutation(async ({ ctx }) => {
+      const awarded = await db.checkAndAwardBadges(ctx.user.id);
+      return { awarded };
+    }),
+  }),
+
+  // 今日のタスク進捗
+  dailyTask: router({
+    getToday: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getTodayTaskProgress(ctx.user.id);
+    }),
+    getWeeklyStats: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getWeeklyTaskStats(ctx.user.id);
+    }),
+    updateProgress: protectedProcedure
+      .input(z.object({
+        completedPostCount: z.number(),
+        targetPostCount: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.upsertTodayTaskProgress(ctx.user.id, input.completedPostCount, input.targetPostCount ?? 1);
+        // バッジチェック
+        const awarded = await db.checkAndAwardBadges(ctx.user.id);
+        return { success: true, newBadges: awarded };
+      }),
+  }),
+
+  // 投稿品質スコアリング
+  postQuality: router({
+    score: protectedProcedure
+      .input(z.object({
+        postText: z.string(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        companyName: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+        const prompt = `あなたはSNS投稿の品質評価専門家です。以下の投稿文を100点満点で採点してください。
+
+投稿文:
+${input.postText}
+
+会社名: ${input.companyName}
+プラットフォーム: ${input.platform}
+
+以下の5項目で採点し、JSON形式で返してください：
+1. brand_voice（30点）: ハゼモト建設らしい温かみのある語り口か
+2. community_contribution（20点）: 地域密着・地域貢献の要素があるか
+3. readability（20点）: 読みやすさ（適切な文字数・改行・構成）
+4. hashtags（15点）: ハッシュタグの適切さと数
+5. cta（15点）: 行動を促すCTA（コール・トゥ・アクション）が含まれているか
+
+返答フォーマット（JSONのみ）:
+{
+  "total": 数値,
+  "brand_voice": 数値,
+  "community_contribution": 数値,
+  "readability": 数値,
+  "hashtags": 数値,
+  "cta": 数値,
+  "feedback": "改善のための具体的なアドバイス（100文字以内）",
+  "pass": true/false（70点以上でtrue）
+}`;
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "あなたはSNS投稿品質評価の専門家です。必ずJSONのみで返答してください。" },
+            { role: "user", content: prompt },
+          ],
+        });
+        const rawContent = response.choices[0]?.message?.content;
+        const content = typeof rawContent === "string" ? rawContent : "{}";
+        try {
+          return JSON.parse(content);
+        } catch {
+          return { total: 0, pass: false, feedback: "採点に失敗しました" };
+        }
+      }),
+
+    // 投稿文修正提案
+    refine: protectedProcedure
+      .input(z.object({
+        postText: z.string(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        refineType: z.enum(["shorter", "friendlier", "more_hashtags", "add_cta", "regenerate"]),
+        companyName: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+        const refineInstructions: Record<string, string> = {
+          shorter: "投稿文をより短く、簡潔にしてください。重要なメッセージを残しながら、文字数を30%程度削減してください。",
+          friendlier: "投稿文をより親しみやすく、温かみのある語り口に変えてください。専門用語を避け、読者に語りかけるような文体にしてください。",
+          more_hashtags: "投稿文に関連するハッシュタグを5〜10個追加してください。北九州・ハゼモト建設・地域貢献に関連するハッシュタグを含めてください。",
+          add_cta: "投稿文の最後に、読者の行動を促すCTA（プロフィールのリンクへ誘導、DMでのお問い合わせ促進など）を追加してください。",
+          regenerate: "この投稿文を全く新しい切り口で書き直してください。同じ内容でも、異なる視点や表現で魅力的な投稿文を作成してください。",
+        };
+        const instruction = refineInstructions[input.refineType];
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: `あなたは「地元で生まれ地元で育った北九州の工務店」ハゼモト建設の公式アカウントです。温かみのある語り口で、地域密着・地域貢献を大切にした投稿文を作成します。「SNS担当」「広報担当」などの役職表記は絶対に使わない。${input.platform}向けに最適化してください。` },
+            { role: "user", content: `以下の投稿文を修正してください。\n\n指示: ${instruction}\n\n元の投稿文:\n${input.postText}\n\n修正後の投稿文のみを返してください。` },
+          ],
+        });
+        const refined = response.choices[0]?.message?.content ?? input.postText;
+        return { refinedText: refined };
+      }),
+   }),
+
+  // Notion連携ルーター
+  notion: router({
+    // Notion設定の取得
+    getSettings: protectedProcedure.query(async ({ ctx }) => {
+      const db2 = await db.getDb();
+      if (!db2) return null;
+      const rows = await db2.select().from(notionSettings)
+        .where(eq(notionSettings.userId, ctx.user.id))
+        .limit(1);
+      if (rows.length === 0) return null;
+      const s = rows[0];
+      // トークンはマスクして返す
+      return {
+        id: s.id,
+        databaseId: s.databaseId,
+        databaseTitle: s.databaseTitle,
+        isActive: s.isActive,
+        tokenMasked: s.integrationToken ? `***${s.integrationToken.slice(-4)}` : "",
+      };
+    }),
+
+    // Notion設定の保存（接続テストも実行）
+    saveSettings: protectedProcedure
+      .input(z.object({
+        integrationToken: z.string().min(1),
+        databaseId: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // 接続テスト
+        const test = await testNotionConnection(input.integrationToken, input.databaseId);
+        if (!test.success) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Notion接続エラー: ${test.error ?? "不明なエラー"}`
+          });
+        }
+        const db2 = await db.getDb();
+        if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DBに接続できません" });
+        // upsert
+        const existing = await db2.select().from(notionSettings)
+          .where(eq(notionSettings.userId, ctx.user.id)).limit(1);
+        if (existing.length > 0) {
+          await db2.update(notionSettings)
+            .set({
+              integrationToken: input.integrationToken,
+              databaseId: input.databaseId,
+              databaseTitle: test.databaseTitle,
+              isActive: 1,
+            })
+            .where(eq(notionSettings.userId, ctx.user.id));
+        } else {
+          await db2.insert(notionSettings).values({
+            userId: ctx.user.id,
+            integrationToken: input.integrationToken,
+            databaseId: input.databaseId,
+            databaseTitle: test.databaseTitle,
+            isActive: 1,
+          });
+        }
+        return { success: true, databaseTitle: test.databaseTitle };
+      }),
+
+    // Notion接続テスト
+    testConnection: protectedProcedure
+      .input(z.object({
+        integrationToken: z.string().min(1),
+        databaseId: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        return await testNotionConnection(input.integrationToken, input.databaseId);
+      }),
+
+    // 投稿をNotionに同期
+    syncPost: protectedProcedure
+      .input(z.object({
+        title: z.string(),
+        platform: z.string(),
+        companyName: z.string(),
+        postText: z.string(),
+        scheduledAt: z.string().optional(),
+        status: z.enum(["draft", "scheduled", "posted", "failed"]),
+        hashtags: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db2 = await db.getDb();
+        if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DBに接続できません" });
+        const rows = await db2.select().from(notionSettings)
+          .where(eq(notionSettings.userId, ctx.user.id)).limit(1);
+        if (rows.length === 0 || !rows[0].isActive) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Notion連携が設定されていません。設定画面から先にNotionを連携してください。" });
+        }
+        const setting = rows[0];
+        const result = await createNotionPage(
+          setting.integrationToken,
+          setting.databaseId,
+          {
+            title: input.title,
+            platform: input.platform,
+            companyName: input.companyName,
+            postText: input.postText,
+            scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
+            status: input.status,
+            hashtags: input.hashtags,
+          }
+        );
+        return { success: true, pageId: result.pageId, url: result.url };
+      }),
+
+    // Notion連携の無効化
+    disconnect: protectedProcedure.mutation(async ({ ctx }) => {
+      const db2 = await db.getDb();
+      if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DBに接続できません" });
+      await db2.update(notionSettings)
+        .set({ isActive: 0 })
+        .where(eq(notionSettings.userId, ctx.user.id));
+      return { success: true };
+    }),
+  }),
+});
 export type AppRouter = typeof appRouter;
