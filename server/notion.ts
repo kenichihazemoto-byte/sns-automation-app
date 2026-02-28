@@ -134,3 +134,100 @@ function statusLabel(status: NotionPostRecord["status"]): string {
   };
   return map[status] ?? status;
 }
+
+/**
+ * Notionデータベースから変更されたレコードを取得する（双方向同期）
+ * Notionで予約日時・ステータスが変更されたレコードをアプリに反映するために使用
+ */
+export interface NotionSyncRecord {
+  pageId: string;
+  title: string;
+  platform: string;
+  companyName: string;
+  status: "draft" | "scheduled" | "posted" | "failed";
+  scheduledAt?: Date;
+  postText?: string;
+  hashtags?: string;
+  lastEditedAt: Date;
+}
+
+export async function fetchNotionChanges(
+  token: string,
+  databaseId: string,
+  sinceDate?: Date
+): Promise<NotionSyncRecord[]> {
+  const notion = createNotionClient(token);
+
+  const filter: Record<string, unknown> = sinceDate
+    ? {
+        timestamp: "last_edited_time",
+        last_edited_time: {
+          after: sinceDate.toISOString(),
+        },
+      }
+    : {};
+
+  const queryParams: Record<string, unknown> = {
+    database_id: databaseId,
+    sorts: [{ timestamp: "last_edited_time", direction: "descending" }],
+    page_size: 100,
+  };
+  if (Object.keys(filter).length > 0) {
+    queryParams["filter"] = filter;
+  }
+
+  // @notionhq/client v5: dataSources.query is the correct method for database queries
+  const response = await (notion as unknown as { dataSources: { query: (params: Record<string, unknown>) => Promise<{ results: unknown[] }> } }).dataSources.query(queryParams);
+
+  const records: NotionSyncRecord[] = [];
+
+  type NotionPage = { id: string; last_edited_time: string; properties: Record<string, unknown> };
+
+  for (const rawPage of response.results) {
+    const page = rawPage as NotionPage;
+    if (!page.properties) continue;
+    const props = page.properties;
+
+    const getTitle = (p: unknown): string => {
+      const prop = p as { title?: Array<{ plain_text?: string }> };
+      return prop?.title?.[0]?.plain_text ?? "";
+    };
+
+    const getSelect = (p: unknown): string => {
+      const prop = p as { select?: { name?: string } };
+      return prop?.select?.name ?? "";
+    };
+
+    const getRichText = (p: unknown): string => {
+      const prop = p as { rich_text?: Array<{ plain_text?: string }> };
+      return prop?.rich_text?.[0]?.plain_text ?? "";
+    };
+
+    const getDate = (p: unknown): Date | undefined => {
+      const prop = p as { date?: { start?: string } };
+      return prop?.date?.start ? new Date(prop.date.start) : undefined;
+    };
+
+    const statusStr = getSelect(props["ステータス"]);
+    const statusMap: Record<string, NotionSyncRecord["status"]> = {
+      "下書き": "draft",
+      "予約済み": "scheduled",
+      "投稿済み": "posted",
+      "失敗": "failed",
+    };
+
+    records.push({
+      pageId: page.id as string,
+      title: getTitle(props["Name"]),
+      platform: getSelect(props["プラットフォーム"]),
+      companyName: getSelect(props["会社名"]),
+      status: statusMap[statusStr] ?? "draft",
+      scheduledAt: getDate(props["予約日時"]),
+      postText: getRichText(props["投稿文"]),
+      hashtags: getRichText(props["ハッシュタグ"]),
+      lastEditedAt: new Date(page.last_edited_time),
+    });
+  }
+
+  return records;
+}

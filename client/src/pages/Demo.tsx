@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical, Edit } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle, RefreshCw, Image as ImageIcon, Instagram, Twitter, MessageSquare, Save, Calendar, Download, Upload, Clock, GripVertical, Edit, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import TemplateSelector from "@/components/TemplateSelector";
@@ -194,6 +194,21 @@ export default function Demo() {
 
   const [selectedPhotosForCarousel, setSelectedPhotosForCarousel] = useState<Set<string>>(new Set());
   const [showSaveDraftDialog, setShowSaveDraftDialog] = useState<boolean>(false);
+  const [notionSavedPlatforms, setNotionSavedPlatforms] = useState<Set<string>>(new Set());
+
+  const saveToNotionMutation = trpc.notion.syncPost.useMutation({
+    onSuccess: (_, variables) => {
+      setNotionSavedPlatforms(prev => new Set([...prev, variables.platform]));
+      toast.success("Notionに保存しました");
+    },
+    onError: (err) => {
+      if (err.message.includes("PRECONDITION_FAILED") || err.message.includes("連携が設定")) {
+        toast.error("Notion連携が設定されていません。サイドバーの「Notion連携」から設定してください。");
+      } else {
+        toast.error(`Notion保存エラー: ${err.message}`);
+      }
+    },
+  });
   const [draftTitle, setDraftTitle] = useState<string>("");
   const [currentDraftId, setCurrentDraftId] = useState<number | null>(null);
 
@@ -834,7 +849,7 @@ export default function Demo() {
               ))}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -850,6 +865,37 @@ export default function Demo() {
                 <>
                   <Copy className="mr-2 h-4 w-4" />
                   写真と投稿文を一括コピー
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => saveToNotionMutation.mutate({
+                title: `${companyName} ${platform} 投稿`,
+                platform,
+                companyName,
+                postText: content.caption,
+                hashtags: content.hashtags.map((t: string) => `#${t}`).join(" "),
+                status: "draft",
+              })}
+              disabled={saveToNotionMutation.isPending || notionSavedPlatforms.has(platform)}
+              className="shrink-0"
+            >
+              {notionSavedPlatforms.has(platform) ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                  Notion保存済み
+                </>
+              ) : saveToNotionMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Notionに保存
                 </>
               )}
             </Button>

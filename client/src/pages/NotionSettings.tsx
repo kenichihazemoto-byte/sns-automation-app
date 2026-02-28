@@ -18,9 +18,28 @@ import {
   RefreshCw,
   Unplug,
   ArrowUpRight,
+  ArrowDownUp,
+  Clock,
 } from "lucide-react";
 
+
 export default function NotionSettings() {
+  const [syncResult, setSyncResult] = useState<{
+    syncedCount: number;
+    changes: Array<{
+      pageId: string;
+      title: string;
+      platform: string;
+      companyName: string;
+      status: string;
+      scheduledAt: string | null;
+      postText: string;
+      hashtags: string;
+      lastEditedAt: string;
+    }>;
+  } | null>(null);
+  const [sinceHours, setSinceHours] = useState(24);
+
   const [token, setToken] = useState("");
   const [databaseId, setDatabaseId] = useState("");
   const [isTesting, setIsTesting] = useState(false);
@@ -56,6 +75,20 @@ export default function NotionSettings() {
     },
     onError: (err) => {
       toast.error(`テストエラー: ${err.message}`);
+    },
+  });
+
+  const syncFromNotionMutation = trpc.notion.syncFromNotion.useMutation({
+    onSuccess: (data) => {
+      setSyncResult(data);
+      if (data.syncedCount === 0) {
+        toast.info("Notionに変更はありませんでした");
+      } else {
+        toast.success(`${data.syncedCount}件の変更を取得しました`);
+      }
+    },
+    onError: (err) => {
+      toast.error(`同期エラー: ${err.message}`);
     },
   });
 
@@ -261,6 +294,151 @@ export default function NotionSettings() {
                 )}
                 保存して連携する
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 双方向同期 */}
+        {settings?.isActive && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ArrowDownUp className="h-4 w-4" />
+                Notionから変更を取得（双方向同期）
+              </CardTitle>
+              <CardDescription>
+                Notionで予約日時・ステータスを変更した内容をアプリに取り込みます。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium whitespace-nowrap">取得範囲</label>
+                <select
+                  className="border rounded px-2 py-1 text-sm bg-background"
+                  value={sinceHours}
+                  onChange={(e) => setSinceHours(Number(e.target.value))}
+                >
+                  <option value={1}>過去1時間</option>
+                  <option value={6}>過去6時間</option>
+                  <option value={24}>過去24時間</option>
+                  <option value={72}>過去3日間</option>
+                  <option value={168}>過去7日間</option>
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => syncFromNotionMutation.mutate({ sinceHours })}
+                  disabled={syncFromNotionMutation.isPending}
+                >
+                  {syncFromNotionMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Notionから取得
+                </Button>
+              </div>
+
+              {syncResult && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    {syncResult.syncedCount === 0
+                      ? "変更はありませんでした"
+                      : `${syncResult.syncedCount}件の変更を取得しました`}
+                  </p>
+                  {syncResult.changes.length > 0 && (
+                    <div className="max-h-64 overflow-y-auto space-y-2">
+                      {syncResult.changes.map((change) => (
+                        <div
+                          key={change.pageId}
+                          className="border rounded-lg p-3 text-sm space-y-1 bg-muted/30"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate flex-1">{change.title || change.postText.slice(0, 30)}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {change.platform}
+                            </Badge>
+                            <Badge
+                              variant={change.status === "posted" ? "default" : "secondary"}
+                              className="text-xs shrink-0"
+                            >
+                              {change.status === "draft" ? "下書き" :
+                               change.status === "scheduled" ? "予約済み" :
+                               change.status === "posted" ? "投稿済み" : "失敗"}
+                            </Badge>
+                          </div>
+                          {change.scheduledAt && (
+                            <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                              <Clock className="h-3 w-3" />
+                              予約: {new Date(change.scheduledAt).toLocaleString("ja-JP")}
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            最終更新: {new Date(change.lastEditedAt).toLocaleString("ja-JP")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Notionテンプレート */}
+        <Card className="border-2 border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              📊 Notionデータベーステンプレート
+            </CardTitle>
+            <CardDescription>
+              投稿管理に最適なNotionデータベーステンプレートを用意しました。ワンクリックで自分のNotionに複製できます。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                <span className="text-2xl">📅</span>
+                <div>
+                  <p className="font-medium">投稿管理テンプレート</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">プラットフォーム・会社名・ステータス・投稿文・予約日時・ハッシュタグのカラムが設定済み</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
+              <p className="font-medium text-amber-800 dark:text-amber-300 mb-1">テンプレートの使い方</p>
+              <ol className="list-decimal list-inside space-y-1 text-amber-700 dark:text-amber-400 text-xs">
+                <li>下のボタンからNotionテンプレートを開く</li>
+                <li>右上の「複製」ボタンをクリックして自分のNotionに複製</li>
+                <li>複製したデータベースのURLからIDをコピーして上のフォームに貼り付け</li>
+              </ol>
+            </div>
+
+            <a
+              href="https://www.notion.so/templates/sns-post-management"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <Button className="w-full" variant="outline">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Notionテンプレートを開く（ワンクリックで複製）
+              </Button>
+            </a>
+
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+              <p className="font-medium mb-1">必要なNotionプロパティ一覧（テンプレートに含まれています）</p>
+              <div className="grid grid-cols-2 gap-1">
+                <span>• Name （タイトル）</span>
+                <span>• プラットフォーム （セレクト）</span>
+                <span>• 会社名 （セレクト）</span>
+                <span>• ステータス （セレクト）</span>
+                <span>• 投稿文 （テキスト）</span>
+                <span>• 予約日時 （日付）</span>
+                <span>• ハッシュタグ （テキスト）</span>
+              </div>
             </div>
           </CardContent>
         </Card>

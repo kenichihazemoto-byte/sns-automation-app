@@ -8,7 +8,7 @@ import * as db from "./db";
 import * as aiService from "./ai-service";
 import { storagePut } from "./storage";
 import { analyzeImage } from "./ai-service";
-import { createNotionPage, testNotionConnection } from "./notion";
+import { createNotionPage, testNotionConnection, fetchNotionChanges } from "./notion";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 export const appRouter = router({
@@ -2339,6 +2339,49 @@ ${input.postText}
         .where(eq(notionSettings.userId, ctx.user.id));
       return { success: true };
     }),
+
+    // Notionから変更を取得してアプリに反映する（双方向同期）
+    syncFromNotion: protectedProcedure
+      .input(z.object({
+        sinceHours: z.number().min(1).max(168).default(24), // 何時間前からの変更を取得するか（最大：7日）
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db2 = await db.getDb();
+        if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DBに接続できません" });
+
+        const rows = await db2.select().from(notionSettings)
+          .where(eq(notionSettings.userId, ctx.user.id)).limit(1);
+
+        if (!rows.length || !rows[0].isActive || !rows[0].integrationToken || !rows[0].databaseId) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Notion連携が設定されていません" });
+        }
+
+        const sinceDate = new Date();
+        sinceDate.setHours(sinceDate.getHours() - input.sinceHours);
+
+        const changes = await fetchNotionChanges(
+          rows[0].integrationToken,
+          rows[0].databaseId,
+          sinceDate
+        );
+
+        // 取得した変更をアプリ内のデータに反映する
+        // 現時点では変更内容を返す（UI側で表示し、ユーザーが確認できる）
+        return {
+          syncedCount: changes.length,
+          changes: changes.map(c => ({
+            pageId: c.pageId,
+            title: c.title,
+            platform: c.platform,
+            companyName: c.companyName,
+            status: c.status,
+            scheduledAt: c.scheduledAt?.toISOString() ?? null,
+            postText: c.postText ?? "",
+            hashtags: c.hashtags ?? "",
+            lastEditedAt: c.lastEditedAt.toISOString(),
+          })),
+        };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;
