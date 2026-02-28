@@ -44,10 +44,18 @@ export default function SimplePost() {
       toast.success("Notionに保存しました！");
     },
     onError: (err) => {
-      if (err.message.includes("Notion連携が設定")) {
-        toast.error("まずNotion連携設定を行ってください。サイドバーの「Notion連携」から設定できます。");
+      const isNotConfigured =
+        err.message.includes("設定されていません") ||
+        err.message.includes("連携が設定") ||
+        (err as any)?.data?.code === "BAD_REQUEST" ||
+        (err as any)?.data?.code === "PRECONDITION_FAILED";
+      if (isNotConfigured) {
+        toast.error(
+          "❗ Notion連携が未設定です。左メニューの「Notion連携」からインテグレーショントークンとデータベースIDを設定してください。",
+          { duration: 6000 }
+        );
       } else {
-        toast.error(`Notion保存エラー: ${err.message}`);
+        toast.error("❗ Notion保存に失敗しました。しばらく経ってから再試行してください。");
       }
     },
   });
