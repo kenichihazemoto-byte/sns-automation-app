@@ -29,7 +29,7 @@ import DataSources from "./pages/DataSources";
 import Performance from "./pages/Performance";
 import TodayTask from "./pages/TodayTask";
 import BeforeAfterPost from "./pages/BeforeAfterPost";
-
+import PresidentColumn from "./pages/PresidentColumn";
 function Router() {
   return (
     <Switch>
@@ -56,6 +56,7 @@ function Router() {
       <Route path="/performance" component={Performance} />
       <Route path="/today-task" component={TodayTask} />
       <Route path="/before-after" component={BeforeAfterPost} />
+      <Route path="/president-column" component={PresidentColumn} />
       <Route path="/notion-settings" component={NotionSettings} />
       <Route path="/supervisor" component={SupervisorDashboard} />
       <Route path={"/404"} component={NotFound} />

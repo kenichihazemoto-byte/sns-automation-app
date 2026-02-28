@@ -388,3 +388,21 @@
 - [ ] Notion予約日時と自動投稿スケジューラーの連携（予約日時になったら承認キューに追加・支援員通知）
 - [x] 支援員向け管理画面（利用者ごとの今日の投稿数・使用テンプレート・進捗一覧）
 - [x] カテゴリ別テンプレート追加（ラトリエルアッシュ・子ども食堂・就労支援B型・スタッフ紹介・季節の話題）
+
+## 「人の気配」ブランディング改善（2026-02-28）
+
+- [x] AIプロンプトを「社長・櫨本健一の一人称」スタイルに全面改訂（companyProfiles.ts）
+- [x] 全13テンプレートを「人の気配・社長の個性」重視に書き直し
+- [x] 「今日の出来事」入力欄をAI生成フロー（SimplePost.tsx）に追加
+  - [x] バックエンドAPI（generateAllPlatformContents）にtodayEvent/userContextパラメータを追加
+  - [x] ai-service.tsのgeneratePostContentにtodayEvent/userContextを反映
+  - [x] SimplePost.tsxのステップ2に自由記述テキストエリアを追加
+- [x] 「社長コラム」投稿タイプ（写真なし・テキストのみ）を新設
+  - [x] routers.tsにpresidentColumn.generateルーターを追加
+  - [x] PresidentColumn.tsxページを新規作成
+  - [x] App.tsxに/president-columnルートを追加
+  - [x] DashboardLayoutのサイドバーに「社長コラム」メニューを追加
+- [x] Instagramハッシュタグを20〜30個に増やし、大中小規模バランス調整
+  - [x] 大規模タグ（10万投稿以上）9個
+  - [x] 中規模タグ（1万〜10万投稿）11個
+  - [x] 小規模タグ（1000〜1万投稿）10個

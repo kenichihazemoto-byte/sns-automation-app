@@ -92,19 +92,21 @@ export interface GeneratePostContentParams {
   platform: "instagram" | "x" | "threads";
   imageAnalysis: ImageAnalysisResult;
   companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  todayEvent?: string; // 今日の出来事・社長のリアルな体験
+  userContext?: string; // 追加コンテキスト
 }
 
 export async function generatePostContent(
   params: GeneratePostContentParams
 ): Promise<PostContent> {
-  const { platform, imageAnalysis, companyName } = params;
+  const { platform, imageAnalysis, companyName, todayEvent, userContext } = params;
 
   // プラットフォームごとの特性を定義
   const platformGuidelines = {
     instagram: {
       style: "写真映えする魅力的な文章",
       length: "長め（200-300文字程度）",
-      hashtagCount: "多め（15-20個）",
+      hashtagCount: "多め（20-30個）。大規模タグ（10万投稿以上）・中規模タグ（1万〜10万投稿）・小規模タグ（1000〜1万投稿）をバランスよく混在させること",
       tone: "親しみやすく、視覚的な表現を重視",
     },
     x: {
@@ -173,37 +175,53 @@ export async function generatePostContent(
 - トーン: ${guideline.tone}
 
 ${companyName === "ハゼモト建設" ? `
-推奨ハッシュタグ（以下から選択）:
+推奨ハッシュタグ（大・中・小規模をバランスよく20-30個選択）:
+
+【大規模タグ（10万投稿以上・リーチ広い）】
 #注文住宅
-#北九州新築
+#マイホーム
+#家づくり
+#新築住宅
+#リフォーム
+#リノベーション
+#住宅
+#工務店
+#北九州
+
+【中規模タグ（1万〜10万投稿・ニッチ層にリーチ）】
 #北九州工務店
+#北九州新築
+#北九州リフォーム
 #注文住宅北九州
-#新築北九州
-#工務店北九州
-#リフォーム北九州
-#リノベーション北九州
-#福岡子育て
-#土地探し北九州
-#ローコスト住宅北九州
-#現場見学会北九州
-#シンプルな暮らし
-#モデルハウス北九州
-#マイホーム準備
-#ZEH北九州
-#ハゼモト建設
 #マイホーム北九州
-#高断熱住宅北九州
-#木造住宅北九州
-#子育て北九州
-#施工事例北九州
-#スマートハウス北九州
-#長期優良住宅北九州
-#家づくり北九州
-#一戸建て北九州
-#ハウスメーカー北九州
 #北九州市
+#北九州子育て
+#北九州一戸建て
+#北九州家づくり
+#北九州住宅
+#北九州施工事例
+
+【小規模タグ（1000〜1万投稿・コアファンにリーチ）】
+#ハゼモト建設
 #ハゼモト建設株式会社
+#北九州地元工務店
+#北九州建築士
+#北九州一級建築士
+#北九州職人
+#北九州地域活動
+#北九州の工務店
+#北九州実績
+#北九州新築一戸建て
 ` : ""}
+
+${todayEvent ? `
+【今日の出来事・社長の体験】
+${todayEvent}
+
+この体験や気づきを必ず投稿文に盛り込んでください。「今日ね、〜」「現場で〜があって」のような語り口で、リアルな体験として書いてください。` : ''}
+
+${userContext ? `【追加コンテキスト】
+${userContext}` : ''}
 
 投稿文とハッシュタグを生成してください。`,
       },

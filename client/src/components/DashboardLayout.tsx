@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck, PenLine } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -34,6 +34,7 @@ const menuItems = [
   { icon: Zap, label: "かんたん投稿", path: "/simple-post" },
   { icon: Sparkles, label: "AI投稿生成", path: "/demo" },
   { icon: GitCompare, label: "ビフォーアフター投稿", path: "/before-after" },
+  { icon: PenLine, label: "社長コラム", path: "/president-column" },
   { icon: Save, label: "下書き", path: "/drafts" },
   { icon: Database, label: "データ接続先", path: "/data-sources" },
   { icon: Calendar, label: "予約投稿管理", path: "/scheduled" },

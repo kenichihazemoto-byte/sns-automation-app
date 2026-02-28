@@ -30,6 +30,7 @@ export default function SimplePost() {
   const [isRefining, setIsRefining] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [showSupportAlert, setShowSupportAlert] = useState(false);
+  const [todayEvent, setTodayEvent] = useState(""); // 今日の出来事・社長の体験
 
   const utils = trpc.useUtils();
 
@@ -325,11 +326,30 @@ export default function SimplePost() {
               </div>
             )}
 
-            {/* ステップ2: 投稿文を作る */}
+             {/* ステップ2: 投稿文を作る */}
             {currentStep === 2 && (
               <div className="space-y-4">
-                <VoiceGuide text="ステップ2です。投稿文を生成ボタンを押すと、AIが写真から投稿文を自動で作成します。生成には少し時間がかかります。" />
-                <div className="text-center py-8">
+                <VoiceGuide text="ステップ2です。今日の出来事を入力すると、AIが社長の語り口で盛り込んだ投稿文を作ります。入力しなくても投稿文は作れます。" />
+
+                {/* 今日の出来事入力欄 */}
+                <div className="border rounded-lg p-4 bg-amber-50 border-amber-200 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl mt-0.5">📝</span>
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold text-amber-800">今日の出来事（任意・おすすめ）</Label>
+                      <p className="text-xs text-amber-700 mt-0.5">現場での出来事、お客様との会話、気づきなどを書くと、AIが社長の語り口で盛り込みます</p>
+                    </div>
+                  </div>
+                  <Textarea
+                    placeholder="例）今日な、小倉市の現場に行ったら、お客様が「洗面台の位置を少し変えたい」って言ってくれて。あれ、実はそこが一番大事なんだよなって思った。"
+                    value={todayEvent}
+                    onChange={(e) => setTodayEvent(e.target.value)}
+                    rows={3}
+                    className="resize-none text-sm bg-white border-amber-200 focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="text-center py-4">
                   {generatedPost ? (
                     <div className="space-y-4">
                       <CheckCircle className="h-16 w-16 mx-auto text-primary" />
@@ -339,21 +359,21 @@ export default function SimplePost() {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <FileText className="h-24 w-24 mx-auto text-muted-foreground" />
-                      <p className="text-muted-foreground">
+                    <div className="space-y-2">
+                      <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+                      <p className="text-muted-foreground text-sm">
                         「投稿文を生成」ボタンを押すと、<br />
                         AIが写真から投稿文を作成します
                       </p>
                     </div>
                   )}
                 </div>
-
                 <Button
                   onClick={() =>
                     generatePostMutation.mutate({
                       imageAnalysis: selectedImage.analysis,
                       companyName: "ハゼモト建設",
+                      todayEvent: todayEvent.trim() || undefined,
                     })
                   }
                   disabled={generatePostMutation.isPending || !selectedImage}
@@ -368,7 +388,7 @@ export default function SimplePost() {
                   ) : (
                     <>
                       <FileText className="mr-2 h-5 w-5" />
-                      投稿文を生成
+                      {todayEvent.trim() ? "📝 体験を盛り込んで生成" : "投稿文を生成"}
                     </>
                   )}
                 </Button>

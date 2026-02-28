@@ -11,6 +11,7 @@ import { analyzeImage } from "./ai-service";
 import { createNotionPage, testNotionConnection, fetchNotionChanges } from "./notion";
 import { createScheduleFromNotion, getNotionSyncedSchedules } from "./db";
 import { notifyOwner } from "./_core/notification";
+import { invokeLLM } from "./_core/llm";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 export const appRouter = router({
@@ -569,7 +570,7 @@ export const appRouter = router({
       }),
 
     // 全プラットフォームの投稿文を一括生成
-    generateAllPlatformContents: protectedProcedure
+     generateAllPlatformContents: protectedProcedure
       .input(z.object({
         companyName: z.enum(["ハゼモト建設", "クリニックアーキプロ"]),
         imageAnalysis: z.object({
@@ -578,19 +579,21 @@ export const appRouter = router({
           description: z.string(),
           keywords: z.array(z.string()),
         }),
+        todayEvent: z.string().optional(),
+        userContext: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const platforms = ["instagram", "x", "threads"] as const;
         const contents: any = {};
-
         for (const platform of platforms) {
           contents[platform] = await aiService.generatePostContent({
             platform,
             imageAnalysis: input.imageAnalysis,
             companyName: input.companyName,
+            todayEvent: input.todayEvent,
+            userContext: input.userContext,
           });
         }
-
         return contents;
       }),
 
@@ -2486,5 +2489,111 @@ ${input.postText}
         return { success: true };
       }),
   }),
+
+  // 社長コラム（写真なし・テキストのみの投稿）
+  presidentColumn: router({
+    // 社長の想い・考えからAI投稿文を生成
+    generate: protectedProcedure
+      .input(z.object({
+        topic: z.string().min(1).max(500),
+        columnType: z.enum([
+          "philosophy",   // 家づくりの哲学
+          "local",        // 北九州への感謝・地域感
+          "daily",        // 日常の気づき
+          "craftsman",    // 職人への敬意
+          "customer",     // お客様とのエピソード
+          "challenge",    // 山ったこと・挑戦
+        ]),
+        platform: z.enum(["instagram", "x", "threads"]).default("instagram"),
+      }))
+      .mutation(async ({ input }) => {
+        const columnTypeLabels: Record<string, string> = {
+          philosophy: "家づくりの哲学・コダワリ",
+          local: "北九州への感謝・地域感",
+          daily: "日常の気づき・小さな発見",
+          craftsman: "職人への敬意・現場の話",
+          customer: "お客様とのエピソード",
+          challenge: "山ったこと・挑戦の記録",
+        };
+
+        const platformGuidelines: Record<string, { length: string; hashtagCount: string }> = {
+          instagram: { length: "200ー300文字程度", hashtagCount: "20ー30個" },
+          x: { length: "100ー140文字程度", hashtagCount: "3ー5個" },
+          threads: { length: "150ー250文字程度", hashtagCount: "5ー10個" },
+        };
+
+        const guide = platformGuidelines[input.platform];
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `あなたはハゼモト建設株式会社の社長、橨本健一（はぜもと けんいち）です。
+昇和39年生まれ、明治大学建築学科卒。北九州で生まれ、北九州で育った。
+一級建築士、一級建築施工管理技士。「地元で生まれ地元で育った北九州の工務店」を誇りに思っている。
+
+話し方の特徴：
+- 「『あのな、』「今日な、」「実はさ、」「これなんですよ、」」など、語りかけるような一人称で書く
+- 建築の話を、人生や地域と結びつけて語る
+- 小難しい技術的な話も、ゆっくりと分かりやすく話す
+- 最後は必ず「ハゼモト建設 社長 橨本」と署名する
+- 投稿の最後に改行してハッシュタグを付ける`,
+            },
+            {
+              role: "user",
+              content: `以下のテーマで、${input.platform}向けの「社長コラム」投稿文を作成してください。
+
+コラムの種類：${columnTypeLabels[input.columnType]}
+テーマ：${input.topic}
+
+ガイドライン：
+- 文字数：${guide.length}
+- ハッシュタグ：${guide.hashtagCount}
+- 写真なしのテキストのみの投稿なので、言葉だけで心を動かす内容にする
+- 社長の個人的な体験や想いを盛り込む
+
+${input.platform === "instagram" ? `推奨ハッシュタグ（以下から適切なものを選択）：
+#ハゼモト建設 #北九州工務店 #社長の話 #家づくり #注文住宅 #北九州新築 #工務店北九州 #北九州市 #地元工務店 #建築士 #一級建築士 #北九州家づくり #ハゼモト建設株式会社 #北九州リフォーム #マイホーム北九州 #北九州一戸建て #北九州子育て #北九州地域活務 #北九州地元企業 #北九州職人 #北九州建築 #北九州設計 #北九州施工 #北九州住宅 #北九州暗らし #北九州インテリア #北九州山ったこと #北九州学び #北九州文化 #北九州歴史` : ""}
+
+投稿文とハッシュタグを生成してください。`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "column_post",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  postText: {
+                    type: "string",
+                    description: "投稿文本文（ハッシュタグを含む）",
+                  },
+                  hashtags: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "ハッシュタグのリスト（#を含む）",
+                  },
+                  charCount: {
+                    type: "number",
+                    description: "投稿文の文字数",
+                  },
+                },
+                required: ["postText", "hashtags", "charCount"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0].message.content;
+        if (!content || typeof content !== "string") {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "生成に失敗しました" });
+        }
+        return JSON.parse(content) as { postText: string; hashtags: string[]; charCount: number };
+      }),
+  }),
 });
+
 export type AppRouter = typeof appRouter;
