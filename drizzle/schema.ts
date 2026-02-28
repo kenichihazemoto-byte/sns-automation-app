@@ -113,6 +113,9 @@ export const postSchedules = mysqlTable("post_schedules", {
   isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
   beforeImageUrl: text("beforeImageUrl"),
   afterImageUrl: text("afterImageUrl"),
+  // Notion連携用
+  notionPageId: varchar("notionPageId", { length: 255 }),
+  notionSyncedAt: timestamp("notionSyncedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

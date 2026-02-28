@@ -92,6 +92,24 @@ export default function NotionSettings() {
     },
   });
 
+  const [importHours, setImportHours] = useState(24);
+  const [importResult, setImportResult] = useState<{ importedCount: number; totalChanges: number } | null>(null);
+  const { data: syncedSchedules, refetch: refetchSynced } = trpc.notion.getSyncedSchedules.useQuery();
+  const importSchedulesMutation = trpc.notion.importSchedules.useMutation({
+    onSuccess: (data) => {
+      setImportResult(data);
+      refetchSynced();
+      if (data.importedCount === 0) {
+        toast.info("Notionに予約日時が設定された投稿はありませんでした");
+      } else {
+        toast.success(`${data.importedCount}件の投稿をスケジューラーに登録しました！`);
+      }
+    },
+    onError: (err) => {
+      toast.error(`取り込みエラー: ${err.message}`);
+    },
+  });
+
   const disconnectMutation = trpc.notion.disconnect.useMutation({
     onSuccess: () => {
       toast.success("Notion連携を解除しました");
@@ -380,6 +398,79 @@ export default function NotionSettings() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Notion予約日時をスケジューラーに取り込む */}
+        {settings?.isActive && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Notion予約日時をスケジューラーに取り込む
+              </CardTitle>
+              <CardDescription>
+                Notionに予約日時が設定された投稿を自動的にスケジューラーに登録します。登録後は「予約投稿管理」から確認できます。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium whitespace-nowrap">取得範囲</label>
+                <select
+                  className="border rounded px-2 py-1 text-sm bg-background"
+                  value={importHours}
+                  onChange={(e) => setImportHours(Number(e.target.value))}
+                >
+                  <option value={1}>過去1時間</option>
+                  <option value={6}>過去6時間</option>
+                  <option value={24}>過去24時間</option>
+                  <option value={72}>過去3日間</option>
+                  <option value={168}>過去7日間</option>
+                </select>
+                <Button
+                  size="sm"
+                  onClick={() => importSchedulesMutation.mutate({ hours: importHours })}
+                  disabled={importSchedulesMutation.isPending}
+                >
+                  {importSchedulesMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <ArrowDownUp className="h-4 w-4 mr-2" />
+                  )}
+                  Notionから取り込む
+                </Button>
+              </div>
+
+              {importResult && (
+                <div className="p-3 rounded-lg bg-muted/30 border text-sm">
+                  <p className="font-medium">
+                    {importResult.importedCount === 0
+                      ? `Notionに予約日時が設定された投稿はありませんでした（変更検出: ${importResult.totalChanges}件）`
+                      : `${importResult.importedCount}件の投稿をスケジューラーに登録しました！`}
+                  </p>
+                </div>
+              )}
+
+              {syncedSchedules && syncedSchedules.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Notion連携済みスケジュール（{syncedSchedules.length}件）</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {syncedSchedules.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 text-xs p-2 bg-muted/20 rounded border">
+                        <Badge variant="outline" className="text-xs shrink-0">{s.companyName}</Badge>
+                        <span className="flex-1 truncate">{s.scheduledAt ? new Date(s.scheduledAt).toLocaleString("ja-JP") : "日時未設定"}</span>
+                        <Badge
+                          variant={s.status === "scheduled" ? "default" : "secondary"}
+                          className="text-xs shrink-0"
+                        >
+                          {s.status === "draft" ? "下書き" : s.status === "scheduled" ? "予約済み" : s.status === "posted" ? "投稿済み" : "失敗"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </CardContent>

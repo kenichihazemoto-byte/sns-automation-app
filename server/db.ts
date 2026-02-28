@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -2359,4 +2359,151 @@ export async function getWeeklyTaskStats(userId: number): Promise<{ date: string
     completed: r.completedPostCount,
     target: r.targetPostCount,
   }));
+}
+
+// Notion予約スケジューラー連携
+export async function createScheduleFromNotion(params: {
+  userId: number;
+  notionPageId: string;
+  companyName: "ハゼモト建設" | "クリニックアーキプロ";
+  scheduledAt: Date;
+  platform: string;
+  postText: string;
+  hashtags?: string;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 同じNotionページIDのスケジュールが既に存在するか確認
+  const existing = await db.select().from(postSchedules)
+    .where(eq(postSchedules.notionPageId, params.notionPageId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    // 既存スケジュールの予約日時を更新
+    await db.update(postSchedules)
+      .set({
+        scheduledAt: params.scheduledAt,
+        status: "scheduled",
+        notionSyncedAt: new Date(),
+      })
+      .where(eq(postSchedules.id, existing[0].id));
+    return existing[0].id;
+  }
+
+  // 新規スケジュール作成
+  const result = await db.insert(postSchedules).values({
+    userId: params.userId,
+    companyName: params.companyName,
+    scheduledAt: params.scheduledAt,
+    status: "scheduled",
+    notionPageId: params.notionPageId,
+    notionSyncedAt: new Date(),
+    notificationSent: false,
+    isBeforeAfter: false,
+  });
+  const scheduleId = Number(result[0].insertId);
+
+  // 投稿内容を保存
+  const platform = ["instagram", "x", "threads"].includes(params.platform)
+    ? params.platform as "instagram" | "x" | "threads"
+    : "instagram" as const;
+  await db.insert(postContents).values({
+    postScheduleId: scheduleId,
+    platform,
+    caption: params.postText,
+    hashtags: params.hashtags ?? "",
+  });
+
+  return scheduleId;
+}
+
+export async function getNotionSyncedSchedules(userId: number): Promise<any[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(postSchedules)
+    .where(and(
+      eq(postSchedules.userId, userId),
+      isNotNull(postSchedules.notionPageId),
+    ))
+    .orderBy(asc(postSchedules.scheduledAt));
+}
+
+
+// 支援員向け：全利用者の今日の進捗を取得
+export async function getAllUsersProgressToday(): Promise<Array<{
+  userId: number;
+  name: string | null;
+  email: string | null;
+  todayPostCount: number;
+  todayApprovalCount: number;
+  todaySuccessCount: number;
+  lastActivityAt: Date | null;
+  topTemplate: string | null;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // 全ユーザーを取得
+  const allUsers = await db.select().from(users).orderBy(asc(users.name));
+
+  const results = await Promise.all(allUsers.map(async (user) => {
+    // 今日のアクティビティログを取得
+    const todayLogs = await db.select().from(userActivityLog)
+      .where(and(
+        eq(userActivityLog.userId, user.id),
+        gte(userActivityLog.createdAt, today),
+        lte(userActivityLog.createdAt, tomorrow),
+      ));
+
+    const todayPostCount = todayLogs.filter(l =>
+      l.activityType === "post_generation" || l.activityType === "post_generate"
+    ).length;
+
+    const todayApprovalCount = todayLogs.filter(l =>
+      l.activityType === "post_approval"
+    ).length;
+
+    const todaySuccessCount = todayLogs.filter(l =>
+      l.status === "success"
+    ).length;
+
+    const lastLog = todayLogs.sort((a, b) =>
+      b.createdAt.getTime() - a.createdAt.getTime()
+    )[0];
+
+    // 最もよく使ったテンプレートを取得（detailsのJSONから）
+    let topTemplate: string | null = null;
+    const templateCounts: Record<string, number> = {};
+    for (const log of todayLogs) {
+      if (log.details) {
+        try {
+          const d = JSON.parse(log.details);
+          if (d.templateName) {
+            templateCounts[d.templateName] = (templateCounts[d.templateName] || 0) + 1;
+          }
+        } catch {}
+      }
+    }
+    const topEntry = Object.entries(templateCounts).sort((a, b) => b[1] - a[1])[0];
+    if (topEntry) topTemplate = topEntry[0];
+
+    return {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      todayPostCount,
+      todayApprovalCount,
+      todaySuccessCount,
+      lastActivityAt: lastLog?.createdAt ?? null,
+      topTemplate,
+    };
+  }));
+
+  return results;
 }

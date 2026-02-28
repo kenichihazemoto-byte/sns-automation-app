@@ -9,6 +9,8 @@ import * as aiService from "./ai-service";
 import { storagePut } from "./storage";
 import { analyzeImage } from "./ai-service";
 import { createNotionPage, testNotionConnection, fetchNotionChanges } from "./notion";
+import { createScheduleFromNotion, getNotionSyncedSchedules } from "./db";
+import { notifyOwner } from "./_core/notification";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 export const appRouter = router({
@@ -2381,6 +2383,107 @@ ${input.postText}
             lastEditedAt: c.lastEditedAt.toISOString(),
           })),
         };
+      }),
+
+    // Notion予約日時をスケジューラーに取り込む
+    importSchedules: protectedProcedure
+      .input(z.object({ hours: z.number().min(1).max(168).default(24) }))
+      .mutation(async ({ ctx, input }) => {
+        const db2 = await db.getDb();
+        if (!db2) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+        const settings = await db2.select().from(notionSettings)
+          .where(eq(notionSettings.userId, ctx.user.id)).limit(1);
+        if (!settings.length || !settings[0].integrationToken || !settings[0].databaseId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Notion連携が未設定です。左メニューの「Notion連携」から設定してください。" });
+        }
+
+        const sinceDate = new Date();
+        sinceDate.setHours(sinceDate.getHours() - input.hours);
+
+        const changes = await fetchNotionChanges(
+          settings[0].integrationToken,
+          settings[0].databaseId,
+          sinceDate
+        );
+
+        // 予約日時が設定されているページのみスケジューラーに登録
+        const scheduledChanges = changes.filter(c => c.scheduledAt);
+        const importedIds: number[] = [];
+
+        for (const change of scheduledChanges) {
+          const companyName = change.companyName === "ハゼモト建設" ? "ハゼモト建設" : "クリニックアーキプロ";
+          const scheduleId = await createScheduleFromNotion({
+            userId: ctx.user.id,
+            notionPageId: change.pageId,
+            companyName,
+            scheduledAt: change.scheduledAt!,
+            platform: change.platform ?? "instagram",
+            postText: change.postText ?? "",
+            hashtags: change.hashtags ?? "",
+          });
+          importedIds.push(scheduleId);
+        }
+
+        // オーナーに通知
+        if (importedIds.length > 0) {
+          await notifyOwner({
+            title: `Notionから${importedIds.length}件の投稿をスケジュールに登録しました`,
+            content: `Notionの予約日時が設定された${importedIds.length}件の投稿を自動的にスケジューラーに登録しました。`,
+          });
+        }
+
+        return {
+          importedCount: importedIds.length,
+          totalChanges: changes.length,
+          scheduleIds: importedIds,
+        };
+      }),
+
+    // Notion連携済みスケジュール一覧を取得
+    getSyncedSchedules: protectedProcedure
+      .query(async ({ ctx }) => {
+        const schedules = await getNotionSyncedSchedules(ctx.user.id);
+        return schedules.map(s => ({
+          id: s.id,
+          companyName: s.companyName,
+          scheduledAt: s.scheduledAt?.toISOString() ?? null,
+          status: s.status,
+          notionPageId: s.notionPageId,
+          notionSyncedAt: s.notionSyncedAt?.toISOString() ?? null,
+        }));
+      }),
+  }),
+  supervisor: router({
+    // 支援員向け：全利用者の今日の進捗を取得
+    getUsersProgressToday: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "管理者のみアクセスできます" });
+        }
+        return await db.getAllUsersProgressToday();
+      }),
+    // 支援員向け：特定利用者にフィードバックを送信
+    sendFeedback: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number(),
+        message: z.string().min(1).max(500),
+        feedbackType: z.enum(["praise", "suggestion", "correction"]).default("suggestion"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "管理者のみアクセスできます" });
+        }
+        const dbConn = await db.getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { userFeedback } = await import("../drizzle/schema");
+        await dbConn.insert(userFeedback).values({
+          userId: input.targetUserId,
+          supervisorId: ctx.user.id,
+          message: input.message,
+          feedbackType: input.feedbackType,
+        });
+        return { success: true };
       }),
   }),
 });

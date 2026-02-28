@@ -48,6 +48,7 @@ const menuItems = [
 ];
 
 const adminMenuItems = [
+  { icon: Users, label: "支援員ダッシュボード", path: "/supervisor" },
   { icon: CheckSquare, label: "承認待ち投稿", path: "/approval-queue" },
   { icon: ClipboardList, label: "作業履歴", path: "/activity-log" },
 ];

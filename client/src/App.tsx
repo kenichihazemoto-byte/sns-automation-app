@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import NotionSettings from "@/pages/NotionSettings";
+import SupervisorDashboard from "@/pages/SupervisorDashboard";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/today-task" component={TodayTask} />
       <Route path="/before-after" component={BeforeAfterPost} />
       <Route path="/notion-settings" component={NotionSettings} />
+      <Route path="/supervisor" component={SupervisorDashboard} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
