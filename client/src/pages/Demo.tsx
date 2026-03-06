@@ -1797,11 +1797,32 @@ export default function Demo() {
                     "全SNSの投稿文を生成"
                   )}
                 </Button>
-                <a href={selectedImage.url} download className="flex-shrink-0">
-                  <Button variant="outline" size="icon">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </a>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="flex-shrink-0"
+                  title="画像をダウンロード"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      const response = await fetch(selectedImage.url);
+                      const blob = await response.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = blobUrl;
+                      const ext = selectedImage.url.split('.').pop()?.split('?')[0] || 'jpg';
+                      link.download = `hazemoto-${Date.now()}.${ext}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(blobUrl);
+                    } catch {
+                      toast.error('画像のダウンロードに失敗しました。画像を長押し（または右クリック）して保存してください。');
+                    }
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
               </div>
               {multiplePhotos.length >= 2 && (
                 <div className="flex gap-2 pt-4 border-t">
