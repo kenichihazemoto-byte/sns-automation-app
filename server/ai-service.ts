@@ -105,7 +105,7 @@ export async function generatePostContent(
   const platformGuidelines = {
     instagram: {
       style: "写真映えする魅力的な文章",
-      length: "長め（200-300文字程度）",
+      length: "500文字以内（Threadsシェア対応のため厳守）",
       hashtagCount: "多め（20-30個）。大規模タグ（10万投稿以上）・中規模タグ（1万〜10万投稿）・小規模タグ（1000〜1万投稿）をバランスよく混在させること",
       tone: "親しみやすく、視覚的な表現を重視",
     },
@@ -500,7 +500,7 @@ export async function generatePostFromTemplate(params: {
   const systemPrompt = getSystemPrompt(companyName as "ハゼモト建設" | "クリニックアーキプロ");
 
   // プラットフォーム別の文字数制限
-  const maxLength = platform === "x" ? 280 : platform === "threads" ? 500 : 2200;
+  const maxLength = platform === "x" ? 280 : 500; // Instagram・Threads共に500字以内（Threadsシェア対応）
 
   const prompt = `${systemPrompt}
 
@@ -687,12 +687,12 @@ export async function generateBeforeAfterPost(params: {
   let hashtagCount = '8-12';
   
   if (platform === 'instagram') {
-    maxLength = 2200;
+    maxLength = 500;
     hashtagCount = '8-12';
-    platformGuidance = `文字数制限: ${maxLength}文字以内。
+    platformGuidance = `文字数制限: ${maxLength}文字以内（Threadsシェア対応のため厳守）。
 改行を効果的に使い、視覚的に読みやすく。
 絵文字を適度に使用（🔄✨🏠等）。
-変化点は箱条書き（✅または•）で3-5個明記。
+変化点は箇条書き（✅または•）で3-5個明記。
 ハッシュタグは${hashtagCount}個程度。`;
   } else if (platform === 'x') {
     maxLength = 280;

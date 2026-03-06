@@ -859,6 +859,35 @@ export default function Demo() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
+            {selectedImage?.url && (
+              <Button
+                variant="outline"
+                size="sm"
+                title="画像をダウンロード"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  try {
+                    const response = await fetch(selectedImage.url);
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    const ext = selectedImage.url.split('.').pop()?.split('?')[0] || 'jpg';
+                    link.download = `hazemoto-${platform}-${Date.now()}.${ext}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(blobUrl);
+                  } catch {
+                    toast.error('画像のダウンロードに失敗しました。画像を長押し（または右クリック）して保存してください。');
+                  }
+                }}
+                className="shrink-0"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                画像を保存
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
