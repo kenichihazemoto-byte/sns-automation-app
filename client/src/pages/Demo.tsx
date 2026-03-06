@@ -195,6 +195,34 @@ export default function Demo() {
   const [selectedPhotosForCarousel, setSelectedPhotosForCarousel] = useState<Set<string>>(new Set());
   const [showSaveDraftDialog, setShowSaveDraftDialog] = useState<boolean>(false);
   const [notionSavedPlatforms, setNotionSavedPlatforms] = useState<Set<string>>(new Set());
+  // ワンクリック修正ボタン用のstate
+  const [refiningPlatform, setRefiningPlatform] = useState<string | null>(null);
+  const refinePostMutation = trpc.refinePost.refine.useMutation({
+    onSuccess: (data, variables) => {
+      if (contents) {
+        const platform = variables.platform;
+        const refinedFull = data.refinedText;
+        // ハッシュタグと本文を分離
+        const hashtagMatches = refinedFull.match(/#[^\s\u3000]+/g) || [];
+        const newHashtags = hashtagMatches.map((t: string) => t.replace('#', ''));
+        const newCaption = refinedFull.replace(/#[^\s\u3000]+/g, '').trim();
+        setContents((prev: any) => ({
+          ...prev,
+          [platform]: {
+            ...prev[platform],
+            caption: newCaption || prev[platform].caption,
+            hashtags: newHashtags.length > 0 ? newHashtags : prev[platform].hashtags,
+          },
+        }));
+      }
+      setRefiningPlatform(null);
+      toast.success('投稿文を修正しました ✓');
+    },
+    onError: () => {
+      setRefiningPlatform(null);
+      toast.error('修正に失敗しました。もう一度お試しください。');
+    },
+  });
 
   const saveToNotionMutation = trpc.notion.syncPost.useMutation({
     onSuccess: (_, variables) => {
@@ -855,6 +883,40 @@ export default function Demo() {
                 <Badge key={index} variant="secondary">
                   #{tag}
                 </Badge>
+              ))}
+            </div>
+          </div>
+          {/* ワンクリック修正ボタン */}
+          <div className="border rounded-lg p-3 bg-muted/30">
+            <p className="text-xs text-muted-foreground mb-2 font-medium">✨ 投稿文をワンクリックで修正</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { type: 'shorter', label: 'もっと短く' },
+                { type: 'president_style', label: '社長っぽく' },
+                { type: 'more_hashtags', label: '#を増やす' },
+                { type: 'casual', label: 'カジュアルに' },
+                { type: 'formal', label: '丁寧に' },
+              ] as const).map(({ type, label }) => (
+                <Button
+                  key={type}
+                  variant="secondary"
+                  size="sm"
+                  className="text-xs h-7"
+                  disabled={refiningPlatform === platform}
+                  onClick={() => {
+                    setRefiningPlatform(platform);
+                    refinePostMutation.mutate({
+                      originalText: fullText,
+                      platform: platform as 'instagram' | 'x' | 'threads',
+                      refineType: type,
+                    });
+                  }}
+                >
+                  {refiningPlatform === platform ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : null}
+                  {label}
+                </Button>
               ))}
             </div>
           </div>

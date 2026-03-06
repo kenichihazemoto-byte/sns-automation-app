@@ -2591,9 +2591,54 @@ ${input.platform === "instagram" ? `推奨ハッシュタグ（以下から適�
         if (!content || typeof content !== "string") {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "生成に失敗しました" });
         }
-        return JSON.parse(content) as { postText: string; hashtags: string[]; charCount: number };
+         return JSON.parse(content) as { postText: string; hashtags: string[]; charCount: number };
+      }),
+  }),
+
+  // ワンクリック投稿文修正ルーター
+  refinePost: router({
+    refine: protectedProcedure
+      .input(z.object({
+        originalText: z.string(),
+        platform: z.enum(["instagram", "x", "threads"]),
+        refineType: z.enum(["shorter", "president_style", "more_hashtags", "casual", "formal"]),
+        companyName: z.string().default("\u30cf\u30bc\u30e2\u30c8\u5efa\u8a2d"),
+      }))
+      .mutation(async ({ input }) => {
+        const refineInstructions: Record<string, string> = {
+          shorter: "\u6295\u7a3f\u6587\u3092\u73fe\u5728\u306e60%\u4ee5\u4e0b\u306e\u6587\u5b57\u6570\u306b\u5c0f\u3055\u304f\u307e\u3068\u3081\u3066\u304f\u3060\u3055\u3044\u3002\u8981\u70b9\u3068\u4eba\u306e\u6c17\u914d\u306f\u6b8b\u3057\u3001\u4e0d\u8981\u306a\u8aac\u660e\u3092\u524a\u3063\u3066\u3001\u30b3\u30f3\u30d1\u30af\u30c8\u306b\u3002",
+          president_style: "\u793e\u9577\u30fb\u6a68\u672c\u5065\u4e00\u306e\u4e00\u4eba\u79f0\u30b9\u30bf\u30a4\u30eb\u306b\u66f8\u304d\u76f4\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u300c\u4eca\u65e5\u306d\u3001\u73fe\u5834\u3067\u3053\u3093\u306a\u3053\u3068\u304c\u3042\u3063\u3066\u300d\u300c\u3046\u3061\u3067\u306f\u300d\u300c\u6b63\u76f4\u306b\u8a00\u3046\u3068\u300d\u306a\u3069\u3001\u793e\u9577\u306e\u80c3\u306e\u8a00\u8449\u3067\u3002\u660e\u308b\u304f\u3001\u30e6\u30fc\u30e2\u30a2\u304c\u3042\u308a\u3001\u4eba\u306e\u6c17\u914d\u304c\u611f\u3058\u3089\u308c\u308b\u6587\u4f53\u306b\u3002",
+          more_hashtags: "\u30cf\u30c3\u30b7\u30e5\u30bf\u30b0\u3092\u5897\u3084\u3057\u3066\u304f\u3060\u3055\u3044\u3002Instagram\u306f20\uff5e30\u500b\u3001X\u306f3\uff5e5\u500b\u3001Threads\u306f8\uff5e12\u500b\u3092\u76ee\u5b89\u306b\u3002\u5927\u898f\u6a21\u30bf\u30b0\uff08\u6ce8\u6587\u4f4f\u5b85\u7b49\uff09\u30fb\u4e2d\u898f\u6a21\u30bf\u30b0\uff08\u5317\u4e5d\u5dde\u5de5\u52d9\u5e97\u7b49\uff09\u30fb\u5c0f\u898f\u6a21\u30bf\u30b0\uff08\u30cf\u30bc\u30e2\u30c8\u5efa\u8a2d\u7b49\uff09\u3092\u30d0\u30e9\u30f3\u30b9\u3088\u304f\u3002",
+          casual: "\u3082\u3063\u3068\u30ab\u30b8\u30e5\u30a2\u30eb\u3067\u89aa\u3057\u307f\u3084\u3059\u3044\u6587\u4f53\u306b\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u8fd1\u6240\u306e\u304a\u3058\u3055\u3093\u306b\u8a71\u3059\u3088\u3046\u306a\u6e29\u304b\u3044\u30c8\u30fc\u30f3\u3067\u3002",
+          formal: "\u3082\u3063\u3068\u4e01\u5be7\u3067\u4fe1\u983c\u6027\u306e\u9ad8\u3044\u6587\u4f53\u306b\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u30d7\u30ed\u3089\u3057\u3055\u3068\u6e29\u304b\u307f\u3092\u4e21\u7acb\u3055\u305b\u3001\u304a\u5ba2\u69d8\u306b\u5b89\u5fc3\u611f\u3092\u4e0e\u3048\u308b\u6587\u4f53\u306b\u3002",
+        };
+
+        const platformLimits: Record<string, number> = {
+          instagram: 500,
+          x: 280,
+          threads: 500,
+        };
+
+        const instruction = refineInstructions[input.refineType];
+        const maxLength = platformLimits[input.platform];
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `\u3042\u306a\u305f\u306f\u30cf\u30bc\u30e2\u30c8\u5efa\u8a2d\u306e\u793e\u9577\u30fb\u6a68\u672c\u5065\u4e00\u3067\u3059\u3002${input.platform}\u5411\u3051\u306e\u6295\u7a3f\u6587\u3092\u4fee\u6b63\u3059\u308b\u30a8\u30ad\u30b9\u30d1\u30fc\u30c8\u3067\u3059\u3002\u4fee\u6b63\u5f8c\u306e\u6295\u7a3f\u6587\u306f${maxLength}\u5b57\u4ee5\u5185\u306b\u53ce\u3081\u3066\u304f\u3060\u3055\u3044\u3002`,
+            },
+            {
+              role: "user",
+              content: `\u4ee5\u4e0b\u306e\u6295\u7a3f\u6587\u3092\u4fee\u6b63\u3057\u3066\u304f\u3060\u3055\u3044\u3002\n\n\u300c\u4fee\u6b63\u6307\u793a\u300d\n${instruction}\n\n\u300c\u5143\u306e\u6295\u7a3f\u6587\u300d\n${input.originalText}\n\n\u4fee\u6b63\u5f8c\u306e\u6295\u7a3f\u6587\u306e\u307f\u3092\u8fd4\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u8aac\u660e\u3084\u30b3\u30e1\u30f3\u30c8\u306f\u4e0d\u8981\u3067\u3059\u3002`,
+            },
+          ],
+        });
+
+        const rawContent = response.choices[0].message.content;
+        const refinedText = typeof rawContent === 'string' ? rawContent.trim() : input.originalText;
+        return { refinedText };
       }),
   }),
 });
-
 export type AppRouter = typeof appRouter;
