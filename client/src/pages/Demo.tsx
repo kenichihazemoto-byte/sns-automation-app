@@ -224,6 +224,45 @@ export default function Demo() {
     },
   });
 
+  // Threads用に短縮ボタン用のstate
+  const [isShorteningForThreads, setIsShorteningForThreads] = useState<boolean>(false);
+  const shortenForThreadsMutation = trpc.refinePost.shortenForThreads.useMutation({
+    onSuccess: (data) => {
+      // Threadsタブの投稿文を更新
+      const shortenedFull = data.shortenedText;
+      const hashtagMatches = shortenedFull.match(/#[^\s\u3000]+/g) || [];
+      const newHashtags = hashtagMatches.map((t: string) => t.replace('#', ''));
+      const newCaption = shortenedFull.replace(/#[^\s\u3000]+/g, '').trim();
+      if (allPlatformsPosts) {
+        setAllPlatformsPosts((prev: any) => ({
+          ...prev,
+          threads: {
+            ...prev.threads,
+            content: newCaption || prev.threads?.content || '',
+            hashtags: newHashtags.length > 0 ? newHashtags.join(' ') : prev.threads?.hashtags || '',
+          },
+        }));
+        setActiveTab('threads');
+      }
+      if (contents) {
+        setContents((prev: any) => ({
+          ...prev,
+          threads: {
+            ...prev.threads,
+            caption: newCaption || prev.threads?.caption || '',
+            hashtags: newHashtags.length > 0 ? newHashtags : prev.threads?.hashtags || [],
+          },
+        }));
+      }
+      setIsShorteningForThreads(false);
+      toast.success('Threads用に短縮しました ✓ Threadsタブを確認してください');
+    },
+    onError: () => {
+      setIsShorteningForThreads(false);
+      toast.error('短縮に失敗しました。もう一度お試しください。');
+    },
+  });
+
   const saveToNotionMutation = trpc.notion.syncPost.useMutation({
     onSuccess: (_, variables) => {
       setNotionSavedPlatforms(prev => new Set([...prev, variables.platform]));
@@ -861,6 +900,7 @@ export default function Demo() {
 
   const renderPostContent = (platform: string, content: any, icon: any) => {
     const fullText = `${content.caption}\n\n${content.hashtags.map((tag: string) => `#${tag}`).join(" ")}`;
+    const fullTextCharCount = fullText.length;
     const Icon = icon;
 
     return (
@@ -869,6 +909,14 @@ export default function Demo() {
           <CardTitle className="flex items-center gap-2">
             <Icon className="h-5 w-5" />
             {platform === "instagram" ? "Instagram" : platform === "x" ? "X (Twitter)" : "Threads"}
+            <span className={`ml-auto text-xs font-normal ${
+              platform === "instagram" && fullTextCharCount > 2200 ? "text-destructive" :
+              platform === "x" && fullTextCharCount > 280 ? "text-destructive" :
+              platform === "threads" && fullTextCharCount > 500 ? "text-destructive" :
+              "text-muted-foreground"
+            }`}>
+              {fullTextCharCount} / {platform === "instagram" ? 2200 : platform === "x" ? 280 : 500}文字
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -886,6 +934,20 @@ export default function Demo() {
               ))}
             </div>
           </div>
+          {/* InstagramカードのThreads連動説明 */}
+          {platform === "instagram" && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-700 mb-1 font-medium">💬 Threadsへのクロスポストについて</p>
+              <p className="text-xs text-blue-600">
+                InstagramからThreadsへの自動連動は<strong>500文字以内</strong>の投稿のみ対応。現在{fullTextCharCount}文字。
+                {fullTextCharCount > 500 ? (
+                  <span className="text-orange-600 font-medium"> → Threadsタブの「Threads用に短縮」ボタンで対応できます。</span>
+                ) : (
+                  <span className="text-green-600 font-medium"> → Threads連動可能です。</span>
+                )}
+              </p>
+            </div>
+          )}
           {/* ワンクリック修正ボタン */}
           <div className="border rounded-lg p-3 bg-muted/30">
             <p className="text-xs text-muted-foreground mb-2 font-medium">✨ 投稿文をワンクリックで修正</p>
@@ -1465,6 +1527,45 @@ export default function Demo() {
                               ⚠️ 文字数が{activeTab === "instagram" ? "Instagram" : activeTab === "x" ? "X" : "Threads"}の制限({maxChars}文字)を超えています。
                               投稿前に編集してください。
                             </p>
+                          </div>
+                        )}
+
+                        {/* InstagramタブのときのThreads連動ボタン */}
+                        {activeTab === "instagram" && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-xs text-blue-700 mb-2 font-medium">
+                              💬 Threadsへのクロスポストについて
+                            </p>
+                            <p className="text-xs text-blue-600 mb-3">
+                              InstagramからThreadsへの自動連動は<strong>500文字以内</strong>の投稿のみ対応します。
+                              現在のInstagram投稿文は{charCount}文字です。
+                              {charCount > 500 ? (
+                                <span className="text-orange-600 font-medium"> → Threads連動には短縮が必要です。「Threads用に短縮」でThreadsタブに短縮版を生成できます。</span>
+                              ) : (
+                                <span className="text-green-600 font-medium"> → 500文字以内なのでThreads連動可能です。</span>
+                              )}
+                            </p>
+                            {charCount > 500 && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                                disabled={isShorteningForThreads}
+                                onClick={() => {
+                                  setIsShorteningForThreads(true);
+                                  shortenForThreadsMutation.mutate({
+                                    originalText: fullPost,
+                                    companyName,
+                                  });
+                                }}
+                              >
+                                {isShorteningForThreads ? (
+                                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />短縮中...</>
+                                ) : (
+                                  <><MessageSquare className="mr-2 h-4 w-4" />Threads用に短縮してThreadsタブに反映</>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         )}
 
