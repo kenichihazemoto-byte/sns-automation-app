@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart3,
@@ -12,7 +14,15 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Instagram,
+  MessageSquare,
+  Twitter,
+  ArrowRight,
+  Copy,
+  Check,
+  FileText,
 } from "lucide-react";
+import { toast } from "sonner";
 
 // 投稿タイプごとの色設定
 const TYPE_COLORS: Record<string, { bg: string; text: string; bar: string; badge: string }> = {
@@ -33,12 +43,145 @@ function TrendIcon({ actual, recommended }: { actual: number; recommended: numbe
   return <Minus className="h-3.5 w-3.5 text-gray-400" />;
 }
 
+interface TemplateResult {
+  category: string;
+  title: string;
+  instagram: string;
+  threads: string;
+  x: string;
+  hashtags: string[];
+}
+
+function TemplateCard({ template }: { template: TemplateResult }) {
+  const [, navigate] = useLocation();
+  const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
+
+  const colors = TYPE_COLORS[template.category] ?? TYPE_COLORS["その他"];
+
+  const handleCopy = async (text: string, platform: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedPlatform(platform);
+    toast.success(`${platform}用テキストをコピーしました`);
+    setTimeout(() => setCopiedPlatform(null), 2000);
+  };
+
+  const handleUseTemplate = (platform: "instagram" | "threads" | "x") => {
+    // テンプレートをsessionStorageに保存して投稿作成画面へ遷移
+    const templateData = {
+      category: template.category,
+      title: template.title,
+      instagram: template.instagram,
+      threads: template.threads,
+      x: template.x,
+      hashtags: template.hashtags,
+      platform,
+    };
+    sessionStorage.setItem("pendingTemplate", JSON.stringify(templateData));
+    toast.success("投稿作成画面に移動します");
+    navigate("/demo");
+  };
+
+  return (
+    <div className={`rounded-lg border p-4 space-y-3 ${colors.bg}`}>
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FileText className={`h-4 w-4 ${colors.text}`} />
+          <span className={`text-sm font-semibold ${colors.text}`}>{template.title}</span>
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors.badge}`}>
+          {template.category}
+        </span>
+      </div>
+
+      {/* プラットフォーム別タブ */}
+      <Tabs defaultValue="instagram" className="w-full">
+        <TabsList className="w-full h-8 bg-white/60">
+          <TabsTrigger value="instagram" className="flex-1 text-xs gap-1 h-7">
+            <Instagram className="h-3 w-3" />
+            Instagram
+          </TabsTrigger>
+          <TabsTrigger value="threads" className="flex-1 text-xs gap-1 h-7">
+            <MessageSquare className="h-3 w-3" />
+            Threads
+          </TabsTrigger>
+          <TabsTrigger value="x" className="flex-1 text-xs gap-1 h-7">
+            <Twitter className="h-3 w-3" />
+            X
+          </TabsTrigger>
+        </TabsList>
+
+        {(["instagram", "threads", "x"] as const).map((platform) => {
+          const text = template[platform];
+          const charCount = text.length;
+          const limit = platform === "instagram" ? 2200 : platform === "threads" ? 500 : 280;
+          const isOver = charCount > limit;
+          const platformLabel = platform === "instagram" ? "Instagram" : platform === "threads" ? "Threads" : "X";
+
+          return (
+            <TabsContent key={platform} value={platform} className="mt-2 space-y-2">
+              {/* テキストプレビュー */}
+              <div className="bg-white/70 rounded-md p-3 text-xs text-gray-700 leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {text}
+              </div>
+              {/* 文字数 */}
+              <div className="flex items-center justify-between">
+                <span className={`text-xs ${isOver ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                  {charCount} / {limit}文字
+                </span>
+                <div className="flex gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 px-2"
+                    onClick={() => handleCopy(text, platformLabel)}
+                  >
+                    {copiedPlatform === platformLabel ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                    コピー
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={`h-7 text-xs gap-1 px-2 ${colors.text} bg-white hover:bg-white/80 border border-current/20`}
+                    variant="outline"
+                    onClick={() => handleUseTemplate(platform)}
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                    投稿作成へ
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          );
+        })}
+      </Tabs>
+
+      {/* ハッシュタグ */}
+      {template.hashtags.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1 border-t border-white/40">
+          {template.hashtags.slice(0, 8).map((tag, i) => (
+            <span key={i} className="text-xs text-muted-foreground">#{tag}</span>
+          ))}
+          {template.hashtags.length > 8 && (
+            <span className="text-xs text-muted-foreground">+{template.hashtags.length - 8}個</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PostBalanceCard({ companyName = "ハゼモト建設" }: { companyName?: string }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [advice, setAdvice] = useState<string | null>(null);
   const [adviceLabel, setAdviceLabel] = useState<string>("");
+  const [templates, setTemplates] = useState<TemplateResult[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const { data, isLoading } = trpc.postBalance.getMonthlyBalance.useQuery({
     companyName,
@@ -53,6 +196,19 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
     },
   });
 
+  const generateTemplatesMutation = trpc.postBalance.generateTemplates.useMutation({
+    onSuccess: (result) => {
+      setTemplates(result.templates);
+      setShowTemplates(true);
+      if (result.templates.length === 0) {
+        toast.info("不足しているカテゴリがありません。バランスが良好です！");
+      }
+    },
+    onError: () => {
+      toast.error("テンプレートの生成に失敗しました。再度お試しください。");
+    },
+  });
+
   const handlePrevMonth = () => {
     if (month === 1) {
       setYear(y => y - 1);
@@ -61,6 +217,8 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
       setMonth(m => m - 1);
     }
     setAdvice(null);
+    setTemplates([]);
+    setShowTemplates(false);
   };
 
   const handleNextMonth = () => {
@@ -71,6 +229,8 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
       setMonth(m => m + 1);
     }
     setAdvice(null);
+    setTemplates([]);
+    setShowTemplates(false);
   };
 
   const handleGenerateAdvice = () => {
@@ -82,6 +242,16 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
       typeCounts: data.typeCounts,
       total: data.total,
       recommendedBalance: data.recommendedBalance,
+    });
+  };
+
+  const handleGenerateTemplates = () => {
+    if (!data || shortCategories.length === 0) return;
+    generateTemplatesMutation.mutate({
+      companyName,
+      shortCategories,
+      year,
+      month,
     });
   };
 
@@ -214,8 +384,29 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
               <span>バーの長さ = 実際の割合</span>
             </div>
 
-            {/* AIアドバイスボタン */}
-            <div className="pt-2 border-t">
+            {/* アクションボタン群 */}
+            <div className="pt-2 border-t space-y-2">
+              {/* テンプレート提案ボタン（不足カテゴリがある場合のみ） */}
+              {shortCategories.length > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleGenerateTemplates}
+                  disabled={generateTemplatesMutation.isPending}
+                  className="w-full gap-2 bg-primary"
+                >
+                  {generateTemplatesMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {generateTemplatesMutation.isPending
+                    ? `AIが${shortCategories.join("・")}の投稿文を生成中...`
+                    : `不足している「${shortCategories.slice(0, 2).join("・")}」の投稿文をAIに提案させる`}
+                </Button>
+              )}
+
+              {/* AIアドバイスボタン */}
               <Button
                 variant="outline"
                 size="sm"
@@ -240,6 +431,27 @@ export function PostBalanceCard({ companyName = "ハゼモト建設" }: { compan
                   <span className="text-sm font-medium text-amber-800">{adviceLabel}のバランスアドバイス</span>
                 </div>
                 <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{advice}</p>
+              </div>
+            )}
+
+            {/* テンプレート提案表示 */}
+            {showTemplates && templates.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">
+                    AIが提案する投稿テンプレート（{templates.length}件）
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    不足カテゴリ補強
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  各テンプレートはInstagram・Threads・X用に最適化されています。「投稿作成へ」ボタンで投稿作成画面に内容を引き継げます。
+                </p>
+                {templates.map((template, i) => (
+                  <TemplateCard key={i} template={template} />
+                ))}
               </div>
             )}
           </>

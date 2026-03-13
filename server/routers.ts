@@ -2742,6 +2742,103 @@ ${balanceSummary}
         const advice = typeof rawContent === "string" ? rawContent.trim() : "アドバイスの生成に失敗しました。";
         return { advice, monthLabel };
       }),
+
+    // 不足カテゴリのAI投稿文テンプレート生成
+    generateTemplates: protectedProcedure
+      .input(z.object({
+        companyName: z.string().default("ハゼモト建設"),
+        shortCategories: z.array(z.string()),
+        year: z.number().optional(),
+        month: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (input.shortCategories.length === 0) {
+          return { templates: [] };
+        }
+
+        const monthLabel = `${input.year ?? new Date().getFullYear()}年${input.month ?? (new Date().getMonth() + 1)}月`;
+        const systemPrompt = getSystemPrompt(input.companyName as import("../shared/companyProfiles").CompanyName);
+
+        // カテゴリごとにテンプレートを生成
+        const templates: Array<{
+          category: string;
+          title: string;
+          instagram: string;
+          threads: string;
+          x: string;
+          hashtags: string[];
+        }> = [];
+
+        for (const category of input.shortCategories.slice(0, 3)) { // 最大3カテゴリ
+          const categoryGuide: Record<string, string> = {
+            "施工事例": "完成した住宅・リフォーム事例の紹介。写真映えする外観・内装・こだわりポイントを中心に。施主様の喜びの声や具体的な工夫を盛り込む。",
+            "地域活動": "子ども食堂・就労支援・地域イベントへの参加・支援活動の紹介。地域への想いと具体的な活動内容を。",
+            "スタッフ紹介": "職人・スタッフの人柄・技術・日常の一コマ。現場での仕事ぶりや、仕事への想いを親しみやすく。",
+            "社長コラム": "社長・櫨本健一の家づくりへの想い・考え方・最近の気づき。日常の出来事から住まいや人生の話へ。",
+            "季節・イベント": "季節の変わり目・年中行事・地域のイベントと住まいの関係。季節感のある暮らしのヒントを。",
+          };
+
+          const guide = categoryGuide[category] ?? `${category}に関する投稿`;
+
+          const response = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt + `\n\nあなたは今、「${category}」カテゴリの投稿文テンプレートを作成するエキスパートです。\n${guide}\n\nInstagram用（800〜1200文字、ハッシュタグ15〜20個）、Threads用（300〜500文字、ハッシュタグ5〜8個）、X用（100〜200文字、ハッシュタグ3〜5個）の3種類を作成してください。`,
+              },
+              {
+                role: "user",
+                content: `${monthLabel}の「${category}」カテゴリの投稿テンプレートを作成してください。
+
+以下のJSON形式で返してください（説明文は不要、JSONのみ）：
+{
+  "title": "投稿のタイトル（20文字以内）",
+  "instagram": "Instagram用投稿文（ハッシュタグ含む）",
+  "threads": "Threads用投稿文（500文字以内、ハッシュタグ含む）",
+  "x": "X用投稿文（280文字以内、ハッシュタグ含む）",
+  "hashtags": ["ハッシュタグ1", "ハッシュタグ2", ...]
+}`,
+              },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "post_template",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    instagram: { type: "string" },
+                    threads: { type: "string" },
+                    x: { type: "string" },
+                    hashtags: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["title", "instagram", "threads", "x", "hashtags"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+
+          try {
+            const rawContent = response.choices[0].message.content;
+            const parsed = JSON.parse(typeof rawContent === "string" ? rawContent : "{}");
+            templates.push({
+              category,
+              title: parsed.title ?? `${category}の投稿`,
+              instagram: parsed.instagram ?? "",
+              threads: parsed.threads ?? "",
+              x: parsed.x ?? "",
+              hashtags: parsed.hashtags ?? [],
+            });
+          } catch {
+            // JSON解析失敗時はスキップ
+          }
+        }
+
+        return { templates, monthLabel };
+      }),
   }),
 
   // ワンクリック投稿文修正ルーター
