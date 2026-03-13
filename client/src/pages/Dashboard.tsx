@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Calendar, Image, BarChart3, MessageSquare, Instagram, Twitter, Loader2 } from "lucide-react";
 import { TaskChecklist } from "@/components/TaskChecklist";
 import { HelpButton } from "@/components/HelpButton";
+import { PostBalanceCard } from "@/components/PostBalanceCard";
 import { useState } from "react";
 
 export default function Dashboard() {
@@ -126,6 +127,11 @@ export default function Dashboard() {
                 },
               ]}
             />
+
+            {/* 投稿バランス分析カード */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <PostBalanceCard companyName="ハゼモト建設" />
+            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
