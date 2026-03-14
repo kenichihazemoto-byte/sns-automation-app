@@ -47,6 +47,16 @@ export default function ScheduledPosts() {
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [dateFromFilter, setDateFromFilter] = useState<string>("");
   const [dateToFilter, setDateToFilter] = useState<string>("");
+  const [businessUnitFilter, setBusinessUnitFilter] = useState<string>("all");
+
+  // 事業区分定義
+  const BUSINESS_UNITS = [
+    { key: "all",    label: "すべて",                    color: "" },
+    { key: "shuro",  label: "🤝 就労支援B型",    color: "bg-purple-100 text-purple-800 border-purple-200" },
+    { key: "kensetsu", label: "🏗️ 建設本業",     color: "bg-blue-100 text-blue-800 border-blue-200" },
+    { key: "boulangerie", label: "🍞 ラトリエルアッシュ", color: "bg-amber-100 text-amber-800 border-amber-200" },
+    { key: "kodomo", label: "🍚 子ども食堂",        color: "bg-green-100 text-green-800 border-green-200" },
+  ];
   
   // 一括操作用のstate
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -108,6 +118,25 @@ export default function ScheduledPosts() {
     },
   });
 
+  // 事業区分キーからキャプションをマッチする関数
+  const matchesBusinessUnit = (caption: string | undefined, unitKey: string): boolean => {
+    if (unitKey === "all") return true;
+    if (!caption) return false;
+    if (unitKey === "shuro") {
+      return caption.includes('農作業') || caption.includes('清掃') || caption.includes('就労支援') || caption.includes('未来のとびら') || caption.includes('手工芸') || caption.includes('ビーズ') || caption.includes('布小物') || caption.includes('利用者');
+    }
+    if (unitKey === "kensetsu") {
+      return caption.includes('施工') || caption.includes('新築') || caption.includes('リフォーム') || caption.includes('建設') || caption.includes('住宅');
+    }
+    if (unitKey === "boulangerie") {
+      return caption.includes('パン') || caption.includes('ラトリエ') || caption.includes('ルアッシュ') || caption.includes('焼きたて') || caption.includes('クロワッサン') || caption.includes('バゲット');
+    }
+    if (unitKey === "kodomo") {
+      return caption.includes('子ども食堂') || caption.includes('こども食堂') || caption.includes('子供食堂');
+    }
+    return false;
+  };
+
   // フィルタリングロジック
   const filteredSchedules = useMemo(() => {
     if (!schedules) return [];
@@ -121,6 +150,12 @@ export default function ScheduledPosts() {
       // 会社名フィルタ
       if (companyFilter !== "all" && schedule.companyName !== companyFilter) {
         return false;
+      }
+
+      // 事業区分フィルタ
+      if (businessUnitFilter !== "all") {
+        const caption = schedule.contents?.[0]?.caption;
+        if (!matchesBusinessUnit(caption, businessUnitFilter)) return false;
       }
       
       // 日付範囲フィルタ
@@ -137,7 +172,7 @@ export default function ScheduledPosts() {
       
       return true;
     });
-  }, [schedules, statusFilter, companyFilter, dateFromFilter, dateToFilter]);
+  }, [schedules, statusFilter, companyFilter, businessUnitFilter, dateFromFilter, dateToFilter]);
 
   // 会社名の一覧を取得
   const companyNames = useMemo(() => {
@@ -150,6 +185,7 @@ export default function ScheduledPosts() {
   const clearFilters = () => {
     setStatusFilter("all");
     setCompanyFilter("all");
+    setBusinessUnitFilter("all");
     setDateFromFilter("");
     setDateToFilter("");
   };
@@ -359,11 +395,41 @@ export default function ScheduledPosts() {
                 <Filter className="h-4 w-4" />
                 <span className="font-medium">フィルター</span>
               </div>
+
+              {/* 事業区分ピルボタン */}
+              <div className="space-y-2">
+                <Label>事業区分</Label>
+                <div className="flex flex-wrap gap-2">
+                  {BUSINESS_UNITS.map((unit) => (
+                    <button
+                      key={unit.key}
+                      onClick={() => setBusinessUnitFilter(unit.key)}
+                      className={[
+                        "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border transition-all",
+                        businessUnitFilter === unit.key
+                          ? unit.key === "all"
+                            ? "bg-foreground text-background border-foreground"
+                            : unit.color + " ring-2 ring-offset-1 ring-current"
+                          : unit.key === "all"
+                            ? "bg-background text-muted-foreground border-border hover:bg-muted"
+                            : "bg-background border-border hover:" + unit.color,
+                      ].join(" ")}
+                    >
+                      {unit.label}
+                      {unit.key !== "all" && (() => {
+                        const count = schedules?.filter((s: any) => matchesBusinessUnit(s.contents?.[0]?.caption, unit.key)).length ?? 0;
+                        return count > 0 ? <span className="ml-1.5 bg-white/60 text-current rounded-full px-1.5 py-0.5 text-xs">{count}</span> : null;
+                      })()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>ステータス</Label>
                   <select
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border rounded-md bg-background"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   >
@@ -377,7 +443,7 @@ export default function ScheduledPosts() {
                 <div className="space-y-2">
                   <Label>会社名</Label>
                   <select
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border rounded-md bg-background"
                     value={companyFilter}
                     onChange={(e) => setCompanyFilter(e.target.value)}
                   >
@@ -404,7 +470,7 @@ export default function ScheduledPosts() {
                   />
                 </div>
               </div>
-              {(statusFilter !== "all" || companyFilter !== "all" || dateFromFilter || dateToFilter) && (
+              {(statusFilter !== "all" || companyFilter !== "all" || businessUnitFilter !== "all" || dateFromFilter || dateToFilter) && (
                 <Button
                   variant="outline"
                   size="sm"
