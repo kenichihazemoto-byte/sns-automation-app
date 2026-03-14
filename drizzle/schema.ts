@@ -270,6 +270,7 @@ export const postTemplates = mysqlTable("post_templates", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   companyName: mysqlEnum("companyName", ["ハゼモト建設", "クリニックアーキプロ"]).notNull(),
+  businessUnit: varchar("businessUnit", { length: 100 }), // 事業区分（建設本業/ラトリエルアッシュ/子ども食堂/就労支援B型/診療案内/健康情報/スタッフ紹介）
   isBeforeAfter: boolean("isBeforeAfter").default(false).notNull(),
   // プラットフォーム別投稿文テンプレート
   instagramCaption: text("instagramCaption"),

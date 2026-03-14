@@ -162,6 +162,13 @@
       "when": 1772272255101,
       "tag": "0022_clammy_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1773476159765,
+      "tag": "0023_purple_energizer",
+      "breakpoints": true
     }
   ]
 }

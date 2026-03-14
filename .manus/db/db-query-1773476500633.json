@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE post_templates \nSET \n  instagramCaption = '📸 就労支援の現場から\\n\\n今日は【農作業・清掃・手工芸・パソコン作業】などの活動に取り組みました。\\n\\n【活動例】\\n🌱 農作業：野菜の種まき・水やり・収穫作業\\n🧹 清掃：施設内外の清掃・整理整頓\\n🎨 手工芸：ビーズアクセサリー・折り紙・布小物の制作\\n💻 パソコン作業：データ入力・文書作成・タイピング練習\\n\\n一人ひとりのペースを大切に、できることを少しずつ増やしていく。\\nそんな毎日の積み重ねが、大きな自信につながっていきます。',\n  xCaption = '📸 就労支援の現場から\\n\\n今日は農作業・清掃・手工芸・パソコン作業などの活動に取り組みました。\\n一人ひとりのペースを大切に。',\n  threadsCaption = '📸 就労支援の現場から。今日は農作業・清掃・手工芸・パソコン作業などの活動に取り組みました。一人ひとりのペースを大切に。'\nWHERE name = '就労支援B型：活動紹介' AND companyName = 'ハゼモト建設';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute UPDATE post_templates \nSET \n  instagramCaption = '📸 就労支援の現場から\\n\\n今日は【農作業・清掃・手工芸・パソコン作業】などの活動に取り組みました。\\n\\n【活動例】\\n🌱 農作業：野菜の種まき・水やり・収穫作業\\n🧹 清掃：施設内外の清掃・整理整頓\\n🎨 手工芸：ビーズアクセサリー・折り紙・布小物の制作\\n💻 パソコン作業：データ入力・文書作成・タイピング練習\\n\\n一人ひとりのペースを大切に、できることを少しずつ増やしていく。\\nそんな毎日の積み重ねが、大きな自信につながっていきます。',\n  xCaption = '📸 就労支援の現場から\\n\\n今日は農作業・清掃・手工芸・パソコン作業などの活動に取り組みました。\\n一人ひとりのペースを大切に。',\n  threadsCaption = '📸 就労支援の現場から。今日は農作業・清掃・手工芸・パソコン作業などの活動に取り組みました。一人ひとりのペースを大切に。'\nWHERE name = '就労支援B型：活動紹介' AND companyName = 'ハゼモト建設';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1517
+}

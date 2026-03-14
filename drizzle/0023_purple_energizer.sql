@@ -1,0 +1,1 @@
+ALTER TABLE `post_templates` ADD `businessUnit` varchar(100);

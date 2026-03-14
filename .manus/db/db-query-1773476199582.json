@@ -1,0 +1,185 @@
+{
+  "query": "SELECT id, name, companyName, businessUnit, instagramCaption IS NOT NULL as hasCaption FROM post_templates ORDER BY companyName, id LIMIT 30;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, name, companyName, businessUnit, instagramCaption IS NOT NULL as hasCaption FROM post_templates ORDER BY companyName, id LIMIT 30;",
+  "rows": [
+    {
+      "id": "30001",
+      "name": "高性能住宅の完成事例",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30002",
+      "name": "狭小地・高低差のある土地での施工実績",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30003",
+      "name": "コストパフォーマンスを重視した家づくり",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30004",
+      "name": "子育て世代向けの住まい",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30005",
+      "name": "シルバー世代向けのバリアフリー住宅",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30006",
+      "name": "ラトリエルアッシュ（パン屋）の紹介",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30007",
+      "name": "就労支援B型事業の取り組み",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30008",
+      "name": "未来の子ども食堂の活動",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30009",
+      "name": "地域イベントへの参加・協力",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "30010",
+      "name": "創業60年の歴史と地域との絆",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "60001",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "60002",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "60003",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90001",
+      "name": "ラトリエルアッシュ：本日のパン紹介",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90002",
+      "name": "ラトリエルアッシュ：季節限定パン",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90003",
+      "name": "子ども食堂：開催告知",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90004",
+      "name": "子ども食堂：開催報告",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90005",
+      "name": "就労支援B型：活動紹介",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90006",
+      "name": "就労支援B型：成果・達成報告",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90007",
+      "name": "スタッフ紹介：ハゼモト建設",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90008",
+      "name": "季節の話題：住まいのアドバイス",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90009",
+      "name": "季節の話題：地域イベント参加報告",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "90010",
+      "name": "季節の話題：年始のご挨拶",
+      "companyName": "ハゼモト建設",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "7",
+      "name": "クリニックアーキプロ - ビフォーアフター",
+      "companyName": "クリニックアーキプロ",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    },
+    {
+      "id": "8",
+      "name": "クリニックアーキプロ - 通常投稿",
+      "companyName": "クリニックアーキプロ",
+      "businessUnit": "NULL",
+      "hasCaption": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcompanyName\tbusinessUnit\thasCaption\n30001\t高性能住宅の完成事例\tハゼモト建設\tNULL\t1\n30002\t狭小地・高低差のある土地での施工実績\tハゼモト建設\tNULL\t1\n30003\tコストパフォーマンスを重視した家づくり\tハゼモト建設\tNULL\t1\n30004\t子育て世代向けの住まい\tハゼモト建設\tNULL\t1\n30005\tシルバー世代向けのバリアフリー住宅\tハゼモト建設\tNULL\t1\n30006\tラトリエルアッシュ（パン屋）の紹介\tハゼモト建設\tNULL\t1\n30007\t就労支援B型事業の取り組み\tハゼモト建設\tNULL\t1\n30008\t未来の子ども食堂の活動\tハゼモト建設\tNULL\t1\n30009\t地域イベントへの参加・協力\tハゼモト建設\tNULL\t1\n30010\t創業60年の歴史と地域との絆\tハゼモト建設\tNULL\t1\n60001\tPerformance Test Template\tハゼモト建設\tNULL\t1\n60002\tPerformance Test Template\tハゼモト建設\tNULL\t1\n60003\tPerformance Test Template\tハゼモト建設\tNULL\t1\n90001\tラトリエルアッシュ：本日のパン紹介\tハゼモト建設\tNULL\t1\n90002\tラトリエルアッシュ：季節限定パン\tハゼモト建設\tNULL\t1\n90003\t子ども食堂：開催告知\tハゼモト建設\tNULL\t1\n90004\t子ども食堂：開催報告\tハゼモト建設\tNULL\t1\n90005\t就労支援B型：活動紹介\tハゼモト建設\tNULL\t1\n90006\t就労支援B型：成果・達成報告\tハゼモト建設\tNULL\t1\n90007\tスタッフ紹介：ハゼモト建設\tハゼモト建設\tNULL\t1\n90008\t季節の話題：住まいのアドバイス\tハゼモト建設\tNULL\t1\n90009\t季節の話題：地域イベント参加報告\tハゼモト建設\tNULL\t1\n90010\t季節の話題：年始のご挨拶\tハゼモト建設\tNULL\t1\n7\tクリニックアーキプロ - ビフォーアフター\tクリニックアーキプロ\tNULL\t1\n8\tクリニックアーキプロ - 通常投稿\tクリニックアーキプロ\tNULL\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1599
+}

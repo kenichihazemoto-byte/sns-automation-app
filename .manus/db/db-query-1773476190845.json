@@ -1,0 +1,18 @@
+{
+  "query": "SELECT COUNT(*) as total, companyName FROM post_templates GROUP BY companyName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT COUNT(*) as total, companyName FROM post_templates GROUP BY companyName;",
+  "rows": [
+    {
+      "total": "2",
+      "companyName": "クリニックアーキプロ"
+    },
+    {
+      "total": "23",
+      "companyName": "ハゼモト建設"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\tcompanyName\n2\tクリニックアーキプロ\n23\tハゼモト建設\n",
+  "stderr": "",
+  "execution_time_ms": 1598
+}
