@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square } from "lucide-react";
+import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square, List, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 // 投稿本文から事業区分を推定する
 function detectBusinessUnit(caption: string | undefined): { label: string; color: string } | null {
@@ -48,6 +48,10 @@ export default function ScheduledPosts() {
   const [dateFromFilter, setDateFromFilter] = useState<string>("");
   const [dateToFilter, setDateToFilter] = useState<string>("");
   const [businessUnitFilter, setBusinessUnitFilter] = useState<string>("all");
+  const [upcomingBusinessUnitFilter, setUpcomingBusinessUnitFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth());
 
   // 事業区分定義
   const BUSINESS_UNITS = [
@@ -284,76 +288,106 @@ export default function ScheduledPosts() {
             <CardDescription>
               今後投稿予定の投稿を表示しています
             </CardDescription>
+            {/* 事業区分ピルフィルター */}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {BUSINESS_UNITS.map((unit) => (
+                <button
+                  key={unit.key}
+                  onClick={() => setUpcomingBusinessUnitFilter(unit.key)}
+                  className={[
+                    "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border transition-all",
+                    upcomingBusinessUnitFilter === unit.key
+                      ? unit.key === "all"
+                        ? "bg-foreground text-background border-foreground"
+                        : unit.color + " ring-2 ring-offset-1 ring-current"
+                      : unit.key === "all"
+                        ? "bg-background text-muted-foreground border-border hover:bg-muted"
+                        : "bg-background border-border hover:" + unit.color,
+                  ].join(" ")}
+                >
+                  {unit.label}
+                </button>
+              ))}
+            </div>
           </CardHeader>
           <CardContent>
-            {upcomingSchedules && upcomingSchedules.length > 0 ? (
-              <div className="space-y-4">
-                {upcomingSchedules.map((schedule: any) => (
-                  <div
-                    key={schedule.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                    onClick={() => handleViewDetail(schedule)}
-                  >
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">
-                          {format(new Date(schedule.scheduledAt), "yyyy年MM月dd日 HH:mm", { locale: ja })}
-                        </span>
-                        {getStatusBadge(schedule.status)}
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline">{schedule.companyName}</Badge>
-                        {schedule.isBeforeAfter && (
-                          <Badge variant="secondary">ビフォーアフター</Badge>
-                        )}
-                        {(() => {
-                          const caption = schedule.contents?.[0]?.caption;
-                          const unit = detectBusinessUnit(caption);
-                          return unit ? (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unit.color}`}>{unit.label}</span>
-                          ) : null;
-                        })()}
-                      </div>
-                      {schedule.contents && schedule.contents.length > 0 && (
-                        <div className="text-sm text-muted-foreground mt-2">
-                          <p className="line-clamp-2">{schedule.contents[0].caption}</p>
-                          {schedule.contents[0].hashtags && (
-                            <p className="text-xs text-blue-600 mt-1">{schedule.contents[0].hashtags}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(schedule);
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(schedule);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+{(() => {
+              const filtered = upcomingSchedules?.filter((s: any) =>
+                upcomingBusinessUnitFilter === "all" ||
+                matchesBusinessUnit(s.contents?.[0]?.caption, upcomingBusinessUnitFilter)
+              ) ?? [];
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {upcomingBusinessUnitFilter !== "all" ? "該当する予約投稿はありません" : "今後の予約投稿はありません"}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                今後の予約投稿はありません
-              </div>
-            )}
+                );
+              }
+              return (
+                <div className="space-y-4">
+                  {filtered.map((schedule: any) => (
+                    <div
+                      key={schedule.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                      onClick={() => handleViewDetail(schedule)}
+                    >
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {format(new Date(schedule.scheduledAt), "yyyy年MM月dd日 HH:mm", { locale: ja })}
+                          </span>
+                          {getStatusBadge(schedule.status)}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline">{schedule.companyName}</Badge>
+                          {schedule.isBeforeAfter && (
+                            <Badge variant="secondary">ビフォーアフター</Badge>
+                          )}
+                          {(() => {
+                            const caption = schedule.contents?.[0]?.caption;
+                            const unit = detectBusinessUnit(caption);
+                            return unit ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unit.color}`}>{unit.label}</span>
+                            ) : null;
+                          })()}
+                        </div>
+                        {schedule.contents && schedule.contents.length > 0 && (
+                          <div className="text-sm text-muted-foreground mt-2">
+                            <p className="line-clamp-2">{schedule.contents[0].caption}</p>
+                            {schedule.contents[0].hashtags && (
+                              <p className="text-xs text-blue-600 mt-1">{schedule.contents[0].hashtags}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(schedule);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(schedule);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -367,26 +401,49 @@ export default function ScheduledPosts() {
                   過去の予約投稿も含めて表示しています ({filteredSchedules.length}件)
                 </CardDescription>
               </div>
-              {selectedIds.length > 0 && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBulkEditDialog(true)}
+              <div className="flex items-center gap-2">
+                {/* リスト/カレンダー切り替え */}
+                <div className="flex rounded-md border overflow-hidden">
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm transition-colors ${
+                      viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
                   >
-                    <Edit className="h-4 w-4 mr-2" />
-                    {selectedIds.length}件を編集
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowBulkDeleteDialog(true)}
+                    <List className="h-4 w-4" />
+                    リスト
+                  </button>
+                  <button
+                    onClick={() => setViewMode("calendar")}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm transition-colors ${
+                      viewMode === "calendar" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {selectedIds.length}件を削除
-                  </Button>
+                    <CalendarDays className="h-4 w-4" />
+                    カレンダー
+                  </button>
                 </div>
-              )}
+                {selectedIds.length > 0 && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowBulkEditDialog(true)}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      {selectedIds.length}件を編集
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowBulkDeleteDialog(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {selectedIds.length}件を削除
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* フィルタリングUI */}
@@ -483,6 +540,79 @@ export default function ScheduledPosts() {
             </div>
           </CardHeader>
           <CardContent>
+            {viewMode === "calendar" ? (
+              /* カレンダービュー */
+              <div className="space-y-4">
+                {/* 月ナビゲーション */}
+                <div className="flex items-center justify-between">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+                    else setCalendarMonth(m => m - 1);
+                  }}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <h3 className="font-semibold text-lg">
+                    {calendarYear}年{calendarMonth + 1}月
+                  </h3>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+                    else setCalendarMonth(m => m + 1);
+                  }}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                {/* 曜日ヘッダー */}
+                <div className="grid grid-cols-7 gap-1">
+                  {['日', '月', '火', '水', '木', '金', '土'].map((d) => (
+                    <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
+                  ))}
+                </div>
+                {/* 日グリッド */}
+                {(() => {
+                  const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+                  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+                  const cells: React.ReactElement[] = [];
+                  for (let i = 0; i < firstDay; i++) cells.push(<div key={`empty-${i}`} />);
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const daySchedules = filteredSchedules.filter((s: any) => {
+                      const d = new Date(s.scheduledAt);
+                      return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth && d.getDate() === day;
+                    });
+                    const isToday = new Date().toISOString().slice(0,10) === dateStr;
+                    cells.push(
+                      <div key={day} className={`min-h-[80px] border rounded-md p-1 ${
+                        isToday ? 'bg-primary/5 border-primary' : 'bg-background'
+                      }`}>
+                        <div className={`text-xs font-medium mb-1 ${
+                          isToday ? 'text-primary font-bold' : 'text-muted-foreground'
+                        }`}>{day}</div>
+                        <div className="space-y-0.5">
+                          {daySchedules.map((s: any) => {
+                            const unit = detectBusinessUnit(s.contents?.[0]?.caption);
+                            return (
+                              <div
+                                key={s.id}
+                                className={`text-xs px-1 py-0.5 rounded cursor-pointer truncate ${
+                                  unit ? unit.color : 'bg-muted text-muted-foreground'
+                                }`}
+                                title={s.contents?.[0]?.caption ?? ''}
+                                onClick={() => handleViewDetail(s)}
+                              >
+                                {format(new Date(s.scheduledAt), 'HH:mm')} {unit?.label ?? s.companyName}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                })()}
+              </div>
+            ) : (
+              /* リストビュー */
+              <div className="space-y-0">
             {/* 一括選択ボタン */}
             {filteredSchedules.length > 0 && (
               <div className="mb-4 flex items-center gap-2">
@@ -579,6 +709,8 @@ export default function ScheduledPosts() {
               <div className="text-center py-8 text-muted-foreground">
                 予約投稿がありません
               </div>
+            )}
+            </div>
             )}
           </CardContent>
         </Card>
