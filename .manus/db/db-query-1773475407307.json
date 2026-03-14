@@ -1,0 +1,9 @@
+{
+  "query": "SELECT id, userId, name, LEFT(description, 100) as desc_preview, LEFT(structure, 150) as structure_preview FROM custom_templates LIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, userId, name, LEFT(description, 100) as desc_preview, LEFT(structure, 150) as structure_preview FROM custom_templates LIMIT 50;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1589
+}

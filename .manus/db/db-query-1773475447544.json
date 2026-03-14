@@ -1,0 +1,185 @@
+{
+  "query": "SELECT id, name, companyName, isBeforeAfter, LEFT(description, 80) as description FROM post_templates ORDER BY companyName, id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, name, companyName, isBeforeAfter, LEFT(description, 80) as description FROM post_templates ORDER BY companyName, id;",
+  "rows": [
+    {
+      "id": "30001",
+      "name": "高性能住宅の完成事例",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "高性能住宅の完成事例を紹介するテンプレート"
+    },
+    {
+      "id": "30002",
+      "name": "狭小地・高低差のある土地での施工実績",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "狭小地や高低差のある土地での施工実績を紹介するテンプレート"
+    },
+    {
+      "id": "30003",
+      "name": "コストパフォーマンスを重視した家づくり",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "価格と性能のバランスを重視した家づくりを紹介するテンプレート"
+    },
+    {
+      "id": "30004",
+      "name": "子育て世代向けの住まい",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "子育て世代向けの住まいを紹介するテンプレート"
+    },
+    {
+      "id": "30005",
+      "name": "シルバー世代向けのバリアフリー住宅",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "シルバー世代向けのバリアフリー住宅を紹介するテンプレート"
+    },
+    {
+      "id": "30006",
+      "name": "ラトリエルアッシュ（パン屋）の紹介",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "ラトリエルアッシュのパン屋を紹介する投稿。社長・櫨本健一の視点で、地域への想いとパンへのこだわりを語る。"
+    },
+    {
+      "id": "30007",
+      "name": "就労支援B型事業の取り組み",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "就労支援B型事業の取り組みを紹介する投稿。社長の想いと、利用者への敬意を込めて。"
+    },
+    {
+      "id": "30008",
+      "name": "未来の子ども食堂の活動",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "子ども食堂の活動を紹介する投稿。社長の地域への想いを込めて。"
+    },
+    {
+      "id": "30009",
+      "name": "地域イベントへの参加・協力",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "地域イベントへの参加・協力を紹介するテンプレート"
+    },
+    {
+      "id": "30010",
+      "name": "創業60年の歴史と地域との絆",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "創業60年の歴史と地域との絆を紹介するテンプレート"
+    },
+    {
+      "id": "60001",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "NULL"
+    },
+    {
+      "id": "60002",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "NULL"
+    },
+    {
+      "id": "60003",
+      "name": "Performance Test Template",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "NULL"
+    },
+    {
+      "id": "90001",
+      "name": "ラトリエルアッシュ：本日のパン紹介",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "今日焼き上がったパンを紹介する投稿。社長・櫨本健一の視点で、素材へのこだわりと地域への想いを伝える。"
+    },
+    {
+      "id": "90002",
+      "name": "ラトリエルアッシュ：季節限定パン",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "季節ごとの限定パンを紹介する投稿。社長の語り口で、旬の食材や季節感を伝える。"
+    },
+    {
+      "id": "90003",
+      "name": "子ども食堂：開催告知",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "子ども食堂の開催を告知する投稿。社長の想いと地域への温かさを前面に出す。"
+    },
+    {
+      "id": "90004",
+      "name": "子ども食堂：開催報告",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "子ども食堂の開催後の報告投稿。社長の目線で、参加者の様子や感謝の気持ちを伝える。"
+    },
+    {
+      "id": "90005",
+      "name": "就労支援B型：活動紹介",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "就労支援B型事業の活動を紹介する投稿。社長の想いと、利用者への敬意を込めて。"
+    },
+    {
+      "id": "90006",
+      "name": "就労支援B型：成果・達成報告",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "就労支援B型事業の成果や達成を報告する投稿。社長の目線で、利用者の成長を喜ぶ。"
+    },
+    {
+      "id": "90007",
+      "name": "スタッフ紹介：ハゼモト建設",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "ハゼモト建設のスタッフを紹介する投稿。社長の目線で、スタッフの人柄や仕事への想いを語る。"
+    },
+    {
+      "id": "90008",
+      "name": "季節の話題：住まいのアドバイス",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "季節に合わせた住まいのアドバイスを、社長の語り口で伝える。"
+    },
+    {
+      "id": "90009",
+      "name": "季節の話題：地域イベント参加報告",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "地域のイベントに参加した報告投稿。社長の地域への愛着と、参加した感想を伝える。"
+    },
+    {
+      "id": "90010",
+      "name": "季節の話題：年始のご挨拶",
+      "companyName": "ハゼモト建設",
+      "isBeforeAfter": "0",
+      "description": "年始のご挨拶投稿。社長・櫨本健一の言葉で、今年の抱負と感謝を伝える。"
+    },
+    {
+      "id": "7",
+      "name": "クリニックアーキプロ - ビフォーアフター",
+      "companyName": "クリニックアーキプロ",
+      "isBeforeAfter": "1",
+      "description": "クリニックアーキプロのビフォーアフター投稿用テンプレート"
+    },
+    {
+      "id": "8",
+      "name": "クリニックアーキプロ - 通常投稿",
+      "companyName": "クリニックアーキプロ",
+      "isBeforeAfter": "0",
+      "description": "クリニックアーキプロの通常投稿用テンプレート"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcompanyName\tisBeforeAfter\tdescription\n30001\t高性能住宅の完成事例\tハゼモト建設\t0\t高性能住宅の完成事例を紹介するテンプレート\n30002\t狭小地・高低差のある土地での施工実績\tハゼモト建設\t0\t狭小地や高低差のある土地での施工実績を紹介するテンプレート\n30003\tコストパフォーマンスを重視した家づくり\tハゼモト建設\t0\t価格と性能のバランスを重視した家づくりを紹介するテンプレート\n30004\t子育て世代向けの住まい\tハゼモト建設\t0\t子育て世代向けの住まいを紹介するテンプレート\n30005\tシルバー世代向けのバリアフリー住宅\tハゼモト建設\t0\tシルバー世代向けのバリアフリー住宅を紹介するテンプレート\n30006\tラトリエルアッシュ（パン屋）の紹介\tハゼモト建設\t0\tラトリエルアッシュのパン屋を紹介する投稿。社長・櫨本健一の視点で、地域への想いとパンへのこだわりを語る。\n30007\t就労支援B型事業の取り組み\tハゼモト建設\t0\t就労支援B型事業の取り組みを紹介する投稿。社長の想いと、利用者への敬意を込めて。\n30008\t未来の子ども食堂の活動\tハゼモト建設\t0\t子ども食堂の活動を紹介する投稿。社長の地域への想いを込めて。\n30009\t地域イベントへの参加・協力\tハゼモト建設\t0\t地域イベントへの参加・協力を紹介するテンプレート\n30010\t創業60年の歴史と地域との絆\tハゼモト建設\t0\t創業60年の歴史と地域との絆を紹介するテンプレート\n60001\tPerformance Test Template\tハゼモト建設\t0\tNULL\n60002\tPerformance Test Template\tハゼモト建設\t0\tNULL\n60003\tPerformance Test Template\tハゼモト建設\t0\tNULL\n90001\tラトリエルアッシュ：本日のパン紹介\tハゼモト建設\t0\t今日焼き上がったパンを紹介する投稿。社長・櫨本健一の視点で、素材へのこだわりと地域への想いを伝える。\n90002\tラトリエルアッシュ：季節限定パン\tハゼモト建設\t0\t季節ごとの限定パンを紹介する投稿。社長の語り口で、旬の食材や季節感を伝える。\n90003\t子ども食堂：開催告知\tハゼモト建設\t0\t子ども食堂の開催を告知する投稿。社長の想いと地域への温かさを前面に出す。\n90004\t子ども食堂：開催報告\tハゼモト建設\t0\t子ども食堂の開催後の報告投稿。社長の目線で、参加者の様子や感謝の気持ちを伝える。\n90005\t就労支援B型：活動紹介\tハゼモト建設\t0\t就労支援B型事業の活動を紹介する投稿。社長の想いと、利用者への敬意を込めて。\n90006\t就労支援B型：成果・達成報告\tハゼモト建設\t0\t就労支援B型事業の成果や達成を報告する投稿。社長の目線で、利用者の成長を喜ぶ。\n90007\tスタッフ紹介：ハゼモト建設\tハゼモト建設\t0\tハゼモト建設のスタッフを紹介する投稿。社長の目線で、スタッフの人柄や仕事への想いを語る。\n90008\t季節の話題：住まいのアドバイス\tハゼモト建設\t0\t季節に合わせた住まいのアドバイスを、社長の語り口で伝える。\n90009\t季節の話題：地域イベント参加報告\tハゼモト建設\t0\t地域のイベントに参加した報告投稿。社長の地域への愛着と、参加した感想を伝える。\n90010\t季節の話題：年始のご挨拶\tハゼモト建設\t0\t年始のご挨拶投稿。社長・櫨本健一の言葉で、今年の抱負と感謝を伝える。\n7\tクリニックアーキプロ - ビフォーアフター\tクリニックアーキプロ\t1\tクリニックアーキプロのビフォーアフター投稿用テンプレート\n8\tクリニックアーキプロ - 通常投稿\tクリニックアーキプロ\t0\tクリニックアーキプロの通常投稿用テンプレート\n",
+  "stderr": "",
+  "execution_time_ms": 1524
+}
