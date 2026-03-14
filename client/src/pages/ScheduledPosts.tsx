@@ -4,6 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square } from "lucide-react";
+
+// 投稿本文から事業区分を推定する
+function detectBusinessUnit(caption: string | undefined): { label: string; color: string } | null {
+  if (!caption) return null;
+  if (caption.includes('農作業') || caption.includes('清掃') || caption.includes('就労支援') || caption.includes('未来のとびら') || caption.includes('手工芸') || caption.includes('ビーズ') || caption.includes('布小物') || caption.includes('利用者')) {
+    return { label: '🤝 就労支援B型', color: 'bg-purple-100 text-purple-800 border-purple-200' };
+  }
+  if (caption.includes('パン') || caption.includes('ラトリエ') || caption.includes('ルアッシュ') || caption.includes('焼きたて') || caption.includes('クロワッサン') || caption.includes('バゲット')) {
+    return { label: '🍞 ラトリエルアッシュ', color: 'bg-amber-100 text-amber-800 border-amber-200' };
+  }
+  if (caption.includes('子ども食堂') || caption.includes('こども食堂') || caption.includes('子供食堂')) {
+    return { label: '🍚 子ども食堂', color: 'bg-green-100 text-green-800 border-green-200' };
+  }
+  if (caption.includes('施工') || caption.includes('新築') || caption.includes('リフォーム') || caption.includes('建設') || caption.includes('住宅')) {
+    return { label: '🏗️ 建設本業', color: 'bg-blue-100 text-blue-800 border-blue-200' };
+  }
+  return null;
+}
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -248,11 +266,18 @@ export default function ScheduledPosts() {
                         </span>
                         {getStatusBadge(schedule.status)}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="outline">{schedule.companyName}</Badge>
                         {schedule.isBeforeAfter && (
                           <Badge variant="secondary">ビフォーアフター</Badge>
                         )}
+                        {(() => {
+                          const caption = schedule.contents?.[0]?.caption;
+                          const unit = detectBusinessUnit(caption);
+                          return unit ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unit.color}`}>{unit.label}</span>
+                          ) : null;
+                        })()}
                       </div>
                       {schedule.contents && schedule.contents.length > 0 && (
                         <div className="text-sm text-muted-foreground mt-2">
@@ -438,7 +463,7 @@ export default function ScheduledPosts() {
                         </span>
                         {getStatusBadge(schedule.status)}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="outline">{schedule.companyName}</Badge>
                         {schedule.isBeforeAfter && (
                           <Badge variant="secondary">ビフォーアフター</Badge>
@@ -446,6 +471,13 @@ export default function ScheduledPosts() {
                         {schedule.notificationSent && (
                           <Badge variant="secondary">通知送信済み</Badge>
                         )}
+                        {(() => {
+                          const caption = schedule.contents?.[0]?.caption;
+                          const unit = detectBusinessUnit(caption);
+                          return unit ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unit.color}`}>{unit.label}</span>
+                          ) : null;
+                        })()}
                       </div>
                       {schedule.contents && schedule.contents.length > 0 && (
                         <div className="text-sm text-muted-foreground mt-2">
