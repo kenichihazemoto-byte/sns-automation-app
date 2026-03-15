@@ -173,6 +173,15 @@ export default function Dashboard() {
                 return { label, counts, total: monthSchedules.length };
               });
               const maxTotal = Math.max(...data.map(d => d.total), 1);
+              // 事業別合計件数を集計
+              const unitTotals: Record<string, number> = {};
+              units.forEach(u => unitTotals[u] = 0);
+              schedules.forEach((s: any) => {
+                const caption = (s as any).contents?.[0]?.caption ?? (s as any).caption ?? '';
+                const u = getUnit(caption);
+                unitTotals[u] = (unitTotals[u] || 0) + 1;
+              });
+              const grandTotal = schedules.length;
               return (
                 <Card>
                   <CardHeader>
@@ -183,6 +192,7 @@ export default function Dashboard() {
                     <CardDescription>月別の予約投稿数を事業区分ごとに表示</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {/* 月別横棒グラフ */}
                     <div className="space-y-3">
                       {data.map(({ label, counts, total }) => (
                         <div key={label} className="space-y-1">
@@ -207,9 +217,46 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
+
+                    {/* 事業別合計件数表 */}
+                    <div className="mt-5 border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">事業区分</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">合計件数</th>
+                            <th className="text-right px-3 py-2 font-medium text-muted-foreground">割合</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {units.filter(u => unitTotals[u] > 0).map((u, i, arr) => (
+                            <tr key={u} className={i < arr.length - 1 ? 'border-b' : ''}>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${unitColors[u]}`} />
+                                  <span>{u}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold">{unitTotals[u]}件</td>
+                              <td className="px-3 py-2 text-right text-muted-foreground">
+                                {grandTotal > 0 ? Math.round((unitTotals[u] / grandTotal) * 100) : 0}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-muted/30 border-t">
+                            <td className="px-3 py-2 font-medium">合計</td>
+                            <td className="px-3 py-2 text-right font-bold">{grandTotal}件</td>
+                            <td className="px-3 py-2 text-right font-medium">100%</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
                     {/* 例 */}
                     <div className="flex flex-wrap gap-3 mt-4">
-                      {units.filter(u => u !== 'その他').map(u => (
+                      {units.filter(u => u !== 'その他' && unitTotals[u] > 0).map(u => (
                         <div key={u} className="flex items-center gap-1.5 text-xs">
                           <div className={`w-3 h-3 rounded-sm ${unitColors[u]}`} />
                           <span>{u}</span>
