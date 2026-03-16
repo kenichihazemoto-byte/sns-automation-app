@@ -539,3 +539,10 @@
 - [x] ScheduledPosts.tsxの各投稿カードに「GBPに流用」ボタンを追加
 - [x] クリック時にGBP投稿画面（/gbp-post）へ投稿内容をURLパラメータで引き継いで遷移
 - [x] GBPPost.tsxでURLパラメータから内容を受け取りフォームに自動入力
+
+## ダッシュボード：GBP投稿履歴をSNSグラフに統合（2026-03-16）
+
+- [x] server/db.tsにGBP投稿統計取得ヘルパーを追加
+- [x] server/routers.tsのdashboard手続きにGBP統計を追加
+- [x] Dashboard.tsxのグラフをSNS+GBP統合表示に改善（チャンネル別色分け）
+- [x] 集計テーブルにGBP列を追加して総合件数・割合を表示

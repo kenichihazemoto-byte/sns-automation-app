@@ -3117,6 +3117,11 @@ ${balanceSummary}
       .query(async ({ ctx, input }) => {
         return await db.getRecentPostSchedulesForGbp(ctx.user.id, input.companyName);
       }),
+
+    /** GBP投稿の月別・拠点別統計を取得（ダッシュボード用） */
+    getPostStats: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getGbpPostStats(ctx.user.id);
+    }),
   }),
 });
 export type AppRouter = typeof appRouter;

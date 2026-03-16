@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Calendar, Image, BarChart3, MessageSquare, Instagram, Twitter, Loader2 } from "lucide-react";
+import { Calendar, Image, BarChart3, MessageSquare, Instagram, Twitter, Loader2, MapPin } from "lucide-react";
 import { TaskChecklist } from "@/components/TaskChecklist";
 import { HelpButton } from "@/components/HelpButton";
 import { PostBalanceCard } from "@/components/PostBalanceCard";
@@ -12,6 +12,7 @@ export default function Dashboard() {
   const { data: images, isLoading: loadingImages } = trpc.images.list.useQuery({ limit: 10 });
   const { data: schedules, isLoading: loadingSchedules } = trpc.posts.schedules.useQuery();
   const { data: history, isLoading: loadingHistory } = trpc.posts.history.useQuery({ limit: 10 });
+  const { data: gbpStats } = trpc.gbp.getPostStats.useQuery();
 
   const isLoading = loadingSns || loadingImages || loadingSchedules || loadingHistory;
 
@@ -133,8 +134,8 @@ export default function Dashboard() {
               <PostBalanceCard companyName="ハゼモト建設" />
             </div>
 
-            {/* 事業区分別投稿頻度グラフ */}
-            {schedules && schedules.length > 0 && (() => {
+            {/* 事業区分別投稿頻度グラフ（SNS + GBP統合） */}
+            {schedules && (() => {
               // 投稿本文から事業区分を判定する関数
               const getUnit = (caption: string | undefined) => {
                 if (!caption) return 'その他';
@@ -156,8 +157,20 @@ export default function Dashboard() {
                 '🍞 ラトリエルアッシュ': 'bg-amber-500',
                 '🍚 子ども食堂': 'bg-green-500',
                 '🤝 就労支援B型': 'bg-purple-500',
+                '📍 GBP投稿': 'bg-rose-500',
                 'その他': 'bg-gray-400',
               };
+              // GBP投稿統計を月別・拠点別に集計
+              const gbpMonthCounts: Record<string, number> = {}; // key: "year-month"
+              let gbpGrandTotal = 0;
+              if (gbpStats) {
+                gbpStats.forEach((stat: any) => {
+                  const key = `${stat.year}-${stat.month}`;
+                  gbpMonthCounts[key] = (gbpMonthCounts[key] || 0) + stat.count;
+                  gbpGrandTotal += stat.count;
+                });
+              }
+
               const data = months.map(({ year, month, label }) => {
                 const monthSchedules = schedules.filter((s: any) => {
                   const d = new Date(s.scheduledAt);
@@ -170,26 +183,29 @@ export default function Dashboard() {
                   const u = getUnit(caption);
                   counts[u] = (counts[u] || 0) + 1;
                 });
-                return { label, counts, total: monthSchedules.length };
+                const gbpCount = gbpMonthCounts[`${year}-${month}`] || 0;
+                counts['📍 GBP投稿'] = gbpCount;
+                return { label, counts, total: monthSchedules.length + gbpCount };
               });
               const maxTotal = Math.max(...data.map(d => d.total), 1);
               // 事業別合計件数を集計
               const unitTotals: Record<string, number> = {};
-              units.forEach(u => unitTotals[u] = 0);
+              [...units, '📍 GBP投稿'].forEach(u => unitTotals[u] = 0);
               schedules.forEach((s: any) => {
                 const caption = (s as any).contents?.[0]?.caption ?? (s as any).caption ?? '';
                 const u = getUnit(caption);
                 unitTotals[u] = (unitTotals[u] || 0) + 1;
               });
-              const grandTotal = schedules.length;
+              unitTotals['📍 GBP投稿'] = gbpGrandTotal;
+              const grandTotal = schedules.length + gbpGrandTotal;
               return (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <BarChart3 className="h-5 w-5" />
-                      事業区分別 投稿頻度
+                      事業区分別 投稿頻度（SNS + GBP）
                     </CardTitle>
-                    <CardDescription>月別の予約投稿数を事業区分ごとに表示</CardDescription>
+                    <CardDescription>月別の予約投稿数とGBP投稿履歴を事業区分ごとに表示</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {/* 月別横棒グラフ */}
@@ -204,7 +220,7 @@ export default function Dashboard() {
                             {total === 0 ? (
                               <div className="w-full bg-muted" />
                             ) : (
-                              units.filter(u => counts[u] > 0).map(u => (
+                              [...units, '📍 GBP投稿'].filter(u => counts[u] > 0).map(u => (
                                 <div
                                   key={u}
                                   className={`${unitColors[u]} transition-all`}
@@ -218,18 +234,28 @@ export default function Dashboard() {
                       ))}
                     </div>
 
+                    {/* GBP投稿バッジ */}
+                    {gbpGrandTotal > 0 && (
+                      <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-rose-50 dark:bg-rose-950/20 rounded-lg border border-rose-200 dark:border-rose-800">
+                        <MapPin className="h-4 w-4 text-rose-500 flex-shrink-0" />
+                        <span className="text-sm text-rose-700 dark:text-rose-300">
+                          Googleビジネスプロフィールへの投稿: <strong>{gbpGrandTotal}件</strong>
+                        </span>
+                      </div>
+                    )}
+
                     {/* 事業別合計件数表 */}
                     <div className="mt-5 border rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-muted/50">
-                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">事業区分</th>
+                            <th className="text-left px-3 py-2 font-medium text-muted-foreground">投稿チャンネル / 事業区分</th>
                             <th className="text-right px-3 py-2 font-medium text-muted-foreground">合計件数</th>
                             <th className="text-right px-3 py-2 font-medium text-muted-foreground">割合</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {units.filter(u => unitTotals[u] > 0).map((u, i, arr) => (
+                          {[...units, '📍 GBP投稿'].filter(u => unitTotals[u] > 0).map((u, i, arr) => (
                             <tr key={u} className={i < arr.length - 1 ? 'border-b' : ''}>
                               <td className="px-3 py-2">
                                 <div className="flex items-center gap-2">
@@ -256,7 +282,7 @@ export default function Dashboard() {
 
                     {/* 例 */}
                     <div className="flex flex-wrap gap-3 mt-4">
-                      {units.filter(u => u !== 'その他' && unitTotals[u] > 0).map(u => (
+                      {[...units, '📍 GBP投稿'].filter(u => u !== 'その他' && unitTotals[u] > 0).map(u => (
                         <div key={u} className="flex items-center gap-1.5 text-xs">
                           <div className={`w-3 h-3 rounded-sm ${unitColors[u]}`} />
                           <span>{u}</span>

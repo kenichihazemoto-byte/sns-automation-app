@@ -35,7 +35,7 @@ import {
 const DEFAULT_LOCATIONS = [
   { name: "ハゼモト建設", description: "建設本業・新築・リフォーム" },
   { name: "クリニックアーキプロ", description: "医療クリニック建設" },
-  { name: "L'Atelier de Ash（ラトリエルアッシュ）", description: "パン屋" },
+  { name: "L’Atelier de Ash（ラトリエルアッシュ）", description: "パン屋" },
   { name: "未来のとびら", description: "就労支援B型" },
 ];
 

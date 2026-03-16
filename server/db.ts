@@ -2620,3 +2620,37 @@ export async function getRecentPostSchedulesForGbp(
   }));
   return results;
 }
+
+/** GBP投稿の月別・拠点別統計を取得 */
+export async function getGbpPostStats(userId: number): Promise<Array<{
+  year: number;
+  month: number;
+  locationName: string;
+  count: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const posts = await db.select({
+    createdAt: gbpPosts.createdAt,
+    gbpAccountId: gbpPosts.gbpAccountId,
+    locationName: gbpAccounts.locationName,
+  }).from(gbpPosts)
+    .leftJoin(gbpAccounts, eq(gbpPosts.gbpAccountId, gbpAccounts.id))
+    .where(eq(gbpPosts.userId, userId))
+    .orderBy(gbpPosts.createdAt);
+
+  const stats: Record<string, { year: number; month: number; locationName: string; count: number }> = {};
+  for (const post of posts) {
+    const d = new Date(post.createdAt);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const loc = post.locationName || 'その他';
+    const key = `${year}-${month}-${loc}`;
+    if (!stats[key]) {
+      stats[key] = { year, month, locationName: loc, count: 0 };
+    }
+    stats[key].count++;
+  }
+  return Object.values(stats);
+}
