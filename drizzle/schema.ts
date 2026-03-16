@@ -597,3 +597,42 @@ export const gbpPosts = mysqlTable("gbp_posts", {
 
 export type GbpPost = typeof gbpPosts.$inferSelect;
 export type InsertGbpPost = typeof gbpPosts.$inferInsert;
+
+/**
+ * GBP予約投稿スケジュールテーブル
+ * 日時を指定してGoogleビジネスプロフィールへの投稿を予約管理する
+ */
+export const gbpScheduledPosts = mysqlTable("gbp_scheduled_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  gbpAccountId: int("gbpAccountId").notNull(),
+  /** 投稿タイプ: standard=通常投稿, event=イベント, offer=特典 */
+  topicType: mysqlEnum("topicType", ["STANDARD", "EVENT", "OFFER"]).default("STANDARD").notNull(),
+  /** 投稿本文 */
+  summary: text("summary").notNull(),
+  /** 添付画像URL */
+  mediaUrl: text("mediaUrl"),
+  /** CTAボタンタイプ */
+  callToActionType: mysqlEnum("callToActionType", ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"]),
+  /** CTAリンクURL */
+  callToActionUrl: text("callToActionUrl"),
+  /** イベントタイトル（topicType=EVENTの場合） */
+  eventTitle: varchar("eventTitle", { length: 255 }),
+  /** イベント開始日時 */
+  eventStartAt: timestamp("eventStartAt"),
+  /** イベント終了日時 */
+  eventEndAt: timestamp("eventEndAt"),
+  /** 予約投稿日時 */
+  scheduledAt: timestamp("scheduledAt").notNull(),
+  /** スケジュールステータス: pending=待機中, published=投稿済み, failed=失敗, cancelled=キャンセル */
+  status: mysqlEnum("status", ["pending", "published", "failed", "cancelled"]).default("pending").notNull(),
+  /** 実際に投稿されたGBP投稿ID（gbp_postsのID） */
+  gbpPostId: int("gbpPostId"),
+  /** エラーメッセージ（失敗時） */
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GbpScheduledPost = typeof gbpScheduledPosts.$inferSelect;
+export type InsertGbpScheduledPost = typeof gbpScheduledPosts.$inferInsert;

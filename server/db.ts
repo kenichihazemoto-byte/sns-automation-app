@@ -75,6 +75,9 @@ import {
   gbpPosts,
   InsertGbpPost,
   GbpPost,
+  gbpScheduledPosts,
+  InsertGbpScheduledPost,
+  GbpScheduledPost,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2653,4 +2656,129 @@ export async function getGbpPostStats(userId: number): Promise<Array<{
     stats[key].count++;
   }
   return Object.values(stats);
+}
+
+// ─── GBP予約スケジュール ──────────────────────────────────────────────────────
+
+/** GBP予約スケジュールを作成する */
+export async function createGbpScheduledPost(
+  input: Omit<InsertGbpScheduledPost, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<{ id: number }> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  const result = await db.insert(gbpScheduledPosts).values(input);
+  return { id: Number((result as any)[0]?.insertId ?? 0) };
+}
+
+/** ユーザーのGBP予約スケジュール一覧を取得 */
+export async function getGbpScheduledPostsByUserId(
+  userId: number,
+  status?: 'pending' | 'published' | 'failed' | 'cancelled'
+): Promise<Array<GbpScheduledPost & { locationName: string }>> {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(gbpScheduledPosts.userId, userId)];
+  if (status) conditions.push(eq(gbpScheduledPosts.status, status));
+  const rows = await db
+    .select({
+      id: gbpScheduledPosts.id,
+      userId: gbpScheduledPosts.userId,
+      gbpAccountId: gbpScheduledPosts.gbpAccountId,
+      topicType: gbpScheduledPosts.topicType,
+      summary: gbpScheduledPosts.summary,
+      mediaUrl: gbpScheduledPosts.mediaUrl,
+      callToActionType: gbpScheduledPosts.callToActionType,
+      callToActionUrl: gbpScheduledPosts.callToActionUrl,
+      eventTitle: gbpScheduledPosts.eventTitle,
+      eventStartAt: gbpScheduledPosts.eventStartAt,
+      eventEndAt: gbpScheduledPosts.eventEndAt,
+      scheduledAt: gbpScheduledPosts.scheduledAt,
+      status: gbpScheduledPosts.status,
+      gbpPostId: gbpScheduledPosts.gbpPostId,
+      errorMessage: gbpScheduledPosts.errorMessage,
+      createdAt: gbpScheduledPosts.createdAt,
+      updatedAt: gbpScheduledPosts.updatedAt,
+      locationName: gbpAccounts.locationName,
+    })
+    .from(gbpScheduledPosts)
+    .leftJoin(gbpAccounts, eq(gbpScheduledPosts.gbpAccountId, gbpAccounts.id))
+    .where(and(...conditions))
+    .orderBy(asc(gbpScheduledPosts.scheduledAt));
+  return rows.map(r => ({ ...r, locationName: r.locationName ?? 'その他' }));
+}
+
+/** GBP予約スケジュールを1件取得（所有者チェック付き） */
+export async function getGbpScheduledPostById(
+  id: number,
+  userId: number
+): Promise<GbpScheduledPost | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(gbpScheduledPosts)
+    .where(and(eq(gbpScheduledPosts.id, id), eq(gbpScheduledPosts.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** GBP予約スケジュールをキャンセルする */
+export async function cancelGbpScheduledPost(id: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  await db
+    .update(gbpScheduledPosts)
+    .set({ status: 'cancelled' })
+    .where(and(eq(gbpScheduledPosts.id, id), eq(gbpScheduledPosts.userId, userId), eq(gbpScheduledPosts.status, 'pending')));
+}
+
+/** GBP予約スケジュールのステータスを更新する（サーバー内部用） */
+export async function updateGbpScheduledPostStatus(
+  id: number,
+  status: 'published' | 'failed',
+  gbpPostId?: number,
+  errorMessage?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  await db
+    .update(gbpScheduledPosts)
+    .set({ status, gbpPostId: gbpPostId ?? null, errorMessage: errorMessage ?? null })
+    .where(eq(gbpScheduledPosts.id, id));
+}
+
+/** 実行期限を過ぎた pending の GBP予約スケジュールを取得する（スケジューラー用） */
+export async function getPendingGbpScheduledPosts(): Promise<Array<GbpScheduledPost & { locationName: string; accessToken: string | null; refreshToken: string | null; accountId: string | null; locationId: string | null }>> {
+  const db = await getDb();
+  if (!db) return [];
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: gbpScheduledPosts.id,
+      userId: gbpScheduledPosts.userId,
+      gbpAccountId: gbpScheduledPosts.gbpAccountId,
+      topicType: gbpScheduledPosts.topicType,
+      summary: gbpScheduledPosts.summary,
+      mediaUrl: gbpScheduledPosts.mediaUrl,
+      callToActionType: gbpScheduledPosts.callToActionType,
+      callToActionUrl: gbpScheduledPosts.callToActionUrl,
+      eventTitle: gbpScheduledPosts.eventTitle,
+      eventStartAt: gbpScheduledPosts.eventStartAt,
+      eventEndAt: gbpScheduledPosts.eventEndAt,
+      scheduledAt: gbpScheduledPosts.scheduledAt,
+      status: gbpScheduledPosts.status,
+      gbpPostId: gbpScheduledPosts.gbpPostId,
+      errorMessage: gbpScheduledPosts.errorMessage,
+      createdAt: gbpScheduledPosts.createdAt,
+      updatedAt: gbpScheduledPosts.updatedAt,
+      locationName: gbpAccounts.locationName,
+      accessToken: gbpAccounts.accessToken,
+      refreshToken: gbpAccounts.refreshToken,
+      accountId: gbpAccounts.accountId,
+      locationId: gbpAccounts.locationId,
+    })
+    .from(gbpScheduledPosts)
+    .leftJoin(gbpAccounts, eq(gbpScheduledPosts.gbpAccountId, gbpAccounts.id))
+    .where(and(eq(gbpScheduledPosts.status, 'pending'), lte(gbpScheduledPosts.scheduledAt, now)));
+  return rows.map(r => ({ ...r, locationName: r.locationName ?? 'その他' }));
 }

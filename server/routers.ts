@@ -3122,6 +3122,57 @@ ${balanceSummary}
     getPostStats: protectedProcedure.query(async ({ ctx }) => {
       return await db.getGbpPostStats(ctx.user.id);
     }),
+
+    // ─── GBP予約スケジュール ────────────────────────────────────────────────
+
+    /** GBP予約投稿を作成する */
+    createSchedule: protectedProcedure
+      .input(z.object({
+        gbpAccountId: z.number(),
+        topicType: z.enum(['STANDARD', 'EVENT', 'OFFER']).default('STANDARD'),
+        summary: z.string().min(1).max(1500),
+        mediaUrl: z.string().optional(),
+        callToActionType: z.enum(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']).optional(),
+        callToActionUrl: z.string().optional(),
+        eventTitle: z.string().optional(),
+        eventStartAt: z.date().optional(),
+        eventEndAt: z.date().optional(),
+        scheduledAt: z.date(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id } = await db.createGbpScheduledPost({
+          userId: ctx.user.id,
+          gbpAccountId: input.gbpAccountId,
+          topicType: input.topicType,
+          summary: input.summary,
+          mediaUrl: input.mediaUrl ?? null,
+          callToActionType: input.callToActionType ?? null,
+          callToActionUrl: input.callToActionUrl ?? null,
+          eventTitle: input.eventTitle ?? null,
+          eventStartAt: input.eventStartAt ?? null,
+          eventEndAt: input.eventEndAt ?? null,
+          scheduledAt: input.scheduledAt,
+          status: 'pending',
+        });
+        return { success: true, id };
+      }),
+
+    /** GBP予約スケジュール一覧を取得する */
+    listSchedules: protectedProcedure
+      .input(z.object({
+        status: z.enum(['pending', 'published', 'failed', 'cancelled']).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getGbpScheduledPostsByUserId(ctx.user.id, input.status);
+      }),
+
+    /** GBP予約スケジュールをキャンセルする */
+    cancelSchedule: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.cancelGbpScheduledPost(input.id, ctx.user.id);
+        return { success: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

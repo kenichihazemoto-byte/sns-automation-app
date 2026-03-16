@@ -44,6 +44,7 @@ const menuItems = [
   { icon: PieChart, label: "パフォーマンス", path: "/performance" },
   { icon: FileText, label: "テンプレート", path: "/templates" },
   { icon: MapPin, label: "GBP投稿", path: "/gbp-post" },
+  { icon: Calendar, label: "GBP予約一覧", path: "/gbp-schedule" },
   { icon: BookOpenCheck, label: "Notion連携", path: "/notion-settings" },
   { icon: Settings, label: "設定", path: "/settings" },
   { icon: HelpCircle, label: "ヘルプ", path: "/help" },

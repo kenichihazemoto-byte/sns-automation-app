@@ -94,6 +94,9 @@ export default function GBPPost() {
   const [eventStartAt, setEventStartAt] = useState("");
   const [eventEndAt, setEventEndAt] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  // 投稿モード: 'immediate' = 即時投稿, 'scheduled' = 予約投稿
+  const [postMode, setPostMode] = useState<'immediate' | 'scheduled'>('immediate');
+  const [scheduledAt, setScheduledAt] = useState("");
 
   // 新規拠点登録ダイアログ
   const [newLocationName, setNewLocationName] = useState("");
@@ -120,7 +123,7 @@ export default function GBPPost() {
   // GBP投稿ミューテーション
   const createPostMutation = trpc.gbp.createPost.useMutation({
     onSuccess: () => {
-      toast.success("Googleビジネスプロフィールに投稿しました！");
+      toast.success("グーグルビジネスプロフィールに投稿しました！");
       setSummary("");
       setMediaUrl("");
       setCtaType("");
@@ -131,6 +134,23 @@ export default function GBPPost() {
       refetchHistory();
     },
     onError: (err) => toast.error(`投稿失敗: ${err.message}`),
+  });
+
+  // GBP予約投稿ミューテーション
+  const createScheduleMutation = trpc.gbp.createSchedule.useMutation({
+    onSuccess: () => {
+      toast.success("予約投稿を登録しました！");
+      setSummary("");
+      setMediaUrl("");
+      setCtaType("");
+      setCtaUrl("");
+      setEventTitle("");
+      setEventStartAt("");
+      setEventEndAt("");
+      setScheduledAt("");
+      utils.gbp.listSchedules.invalidate();
+    },
+    onError: (err) => toast.error(`予約失敗: ${err.message}`),
   });
 
   // 他SNS投稿から内容を流用する
@@ -166,6 +186,35 @@ export default function GBPPost() {
     }
     if (!summary.trim()) {
       toast.error("投稿本文を入力してください");
+      return;
+    }
+    if (postMode === 'scheduled') {
+      if (!scheduledAt) {
+        toast.error("予約日時を指定してください");
+        return;
+      }
+      const scheduledDate = new Date(scheduledAt);
+      if (scheduledDate <= new Date()) {
+        toast.error("予約日時は現在時刻より後に設定してください");
+        return;
+      }
+      setIsPosting(true);
+      try {
+        await createScheduleMutation.mutateAsync({
+          gbpAccountId: selectedAccountId,
+          summary: summary.trim(),
+          topicType,
+          mediaUrl: mediaUrl || undefined,
+          callToActionType: ctaType as any || undefined,
+          callToActionUrl: ctaUrl || undefined,
+          eventTitle: eventTitle || undefined,
+          eventStartAt: eventStartAt ? new Date(eventStartAt) : undefined,
+          eventEndAt: eventEndAt ? new Date(eventEndAt) : undefined,
+          scheduledAt: scheduledDate,
+        });
+      } finally {
+        setIsPosting(false);
+      }
       return;
     }
     setIsPosting(true);
@@ -467,19 +516,74 @@ export default function GBPPost() {
                   </div>
                 </div>
 
-                {/* 投稿ボタン */}
-                <Button
-                  className="w-full"
-                  onClick={handlePost}
-                  disabled={!selectedAccountId || !summary.trim() || isPosting}
-                >
-                  {isPosting ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
+                {/* 投稿モード切り替え */}
+                <div className="space-y-3">
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        postMode === 'immediate'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-background text-muted-foreground hover:bg-muted'
+                      }`}
+                      onClick={() => setPostMode('immediate')}
+                    >
+                      <Send className="h-3.5 w-3.5 inline mr-1.5" />
+                      即時投稿
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        postMode === 'scheduled'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-background text-muted-foreground hover:bg-muted'
+                      }`}
+                      onClick={() => setPostMode('scheduled')}
+                    >
+                      <Calendar className="h-3.5 w-3.5 inline mr-1.5" />
+                      予約投稿
+                    </button>
+                  </div>
+
+                  {postMode === 'scheduled' && (
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1 text-sm">
+                        <Clock className="h-3.5 w-3.5" />
+                        予約日時
+                      </Label>
+                      <Input
+                        type="datetime-local"
+                        value={scheduledAt}
+                        onChange={(e) => setScheduledAt(e.target.value)}
+                        min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        指定日時に自動でGBPに投稿されます。予約一覧から確認・キャンセルできます。
+                      </p>
+                    </div>
                   )}
-                  {isPosting ? "投稿中..." : "Googleビジネスプロフィールに投稿"}
-                </Button>
+
+                  <Button
+                    className="w-full"
+                    onClick={handlePost}
+                    disabled={!selectedAccountId || !summary.trim() || isPosting || (postMode === 'scheduled' && !scheduledAt)}
+                    variant={postMode === 'scheduled' ? 'outline' : 'default'}
+                  >
+                    {isPosting ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : postMode === 'scheduled' ? (
+                      <Calendar className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    {isPosting
+                      ? (postMode === 'scheduled' ? '予約登録中...' : '投稿中...')
+                      : postMode === 'scheduled'
+                        ? `${scheduledAt ? new Date(scheduledAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' に予約登録' : '予約日時を選択してください'}`
+                        : 'Googleビジネスプロフィールに投稿'
+                    }
+                  </Button>
+                </div>
 
                 {!selectedAccount?.isConnected && selectedAccountId && (
                   <div className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-md text-sm text-orange-700">

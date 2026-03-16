@@ -546,3 +546,13 @@
 - [x] server/routers.tsのdashboard手続きにGBP統計を追加
 - [x] Dashboard.tsxのグラフをSNS+GBP統合表示に改善（チャンネル別色分け）
 - [x] 集計テーブルにGBP列を追加して総合件数・割合を表示
+
+## GBP投稿予約スケジュール機能（2026-03-16）
+
+- [x] drizzle/schema.tsにgbp_scheduled_postsテーブルを追加
+- [x] pnpm db:pushでマイグレーション実行
+- [x] server/db.tsにGBP予約スケジュールクルードヘルパーを追加
+- [x] server/routers.tsにGBP予約スケジュール APIを追加（作成・一覧・削除）- [x] GBPPost.tsxに「即時投稿」「予約投稿」切り替えUIを追加
+- [x] GBPSchedule.tsxを新規作成（予約一覧・キャンセル機能）
+- [x] App.tsxにGBPScheduleルートを追加
+- [x] DashboardLayout.tsxにGBP予約一覧ナビゲーションを追加
