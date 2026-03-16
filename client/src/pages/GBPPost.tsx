@@ -496,12 +496,12 @@ export default function GBPPost() {
                     CTAボタン（任意）
                   </Label>
                   <div className="grid grid-cols-2 gap-2">
-                    <Select value={ctaType} onValueChange={setCtaType}>
+                    <Select value={ctaType || 'none'} onValueChange={(v) => setCtaType(v === 'none' ? '' : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="ボタンタイプを選択" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">なし</SelectItem>
+                        <SelectItem value="none">なし</SelectItem>
                         {Object.entries(CTA_TYPE_LABELS).map(([value, label]) => (
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
@@ -615,12 +615,12 @@ export default function GBPPost() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Select value={selectedCompanyForImport} onValueChange={setSelectedCompanyForImport}>
+                <Select value={selectedCompanyForImport || 'all'} onValueChange={(v) => setSelectedCompanyForImport(v === 'all' ? '' : v)}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="会社でフィルター" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">すべて</SelectItem>
+                    <SelectItem value="all">すべて</SelectItem>
                     <SelectItem value="ハゼモト建設">ハゼモト建設</SelectItem>
                     <SelectItem value="クリニックアーキプロ">クリニックアーキプロ</SelectItem>
                   </SelectContent>
