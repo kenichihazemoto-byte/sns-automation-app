@@ -2916,5 +2916,207 @@ ${balanceSummary}
         return { refinedText };
       }),
   }),
+  // Google Business Profile (GBP) 投稿機能
+  gbp: router({
+    /** GBPアカウント一覧を取得 */
+    listAccounts: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getGbpAccountsByUserId(ctx.user.id);
+    }),
+
+    /** GBPアカウントを登録または更新する */
+    upsertAccount: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        locationName: z.string(),
+        accountId: z.string().optional(),
+        locationId: z.string().optional(),
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        tokenExpiresAt: z.date().optional(),
+        isConnected: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await db.upsertGbpAccount(ctx.user.id, input);
+      }),
+
+    /** GBP OAuth2認証コードをトークンに交換してDBに保存する */
+    connectOAuth: protectedProcedure
+      .input(z.object({
+        code: z.string(),
+        gbpAccountId: z.number(),
+        redirectUri: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        if (!clientId || !clientSecret) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Google OAuth認証情報が設定されていません' });
+        }
+        const { exchangeCodeForTokens } = await import('./gbp');
+        const tokens = await exchangeCodeForTokens(input.code, clientId, clientSecret, input.redirectUri);
+        const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+        await db.upsertGbpAccount(ctx.user.id, {
+          id: input.gbpAccountId,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          tokenExpiresAt: expiresAt,
+          isConnected: true,
+        });
+        return { success: true };
+      }),
+
+    /** GBP OAuth2認証 URLを生成する */
+    getAuthUrl: protectedProcedure
+      .input(z.object({
+        gbpAccountId: z.number(),
+        redirectUri: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        if (!clientId) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Google Client IDが設定されていません' });
+        }
+        const { getGbpAuthUrl } = await import('./gbp');
+        const state = `${ctx.user.id}:${input.gbpAccountId}`;
+        const url = getGbpAuthUrl(clientId, input.redirectUri, state);
+        return { url };
+      }),
+
+    /** GBP拠点一覧を取得（APIから） */
+    listLocations: protectedProcedure
+      .input(z.object({ gbpAccountId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const account = await db.getGbpAccountById(input.gbpAccountId, ctx.user.id);
+        if (!account?.accessToken) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'GBPアカウントが未接続です' });
+        }
+        const { listGbpAccounts, listGbpLocations, refreshAccessToken } = await import('./gbp');
+        const clientId = process.env.GOOGLE_CLIENT_ID!;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+        // トークン有効期限チェック
+        let token = account.accessToken;
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          const refreshed = await refreshAccessToken(account.refreshToken!, clientId, clientSecret);
+          token = refreshed.access_token;
+          await db.upsertGbpAccount(ctx.user.id, {
+            id: account.id,
+            accessToken: token,
+            tokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+          });
+        }
+        const accounts = await listGbpAccounts(token);
+        const results: Array<{ accountId: string; accountName: string; locationId: string; locationName: string }> = [];
+        for (const acc of accounts) {
+          const locations = await listGbpLocations(token, acc.name);
+          for (const loc of locations) {
+            results.push({
+              accountId: acc.name,
+              accountName: acc.accountName,
+              locationId: loc.name,
+              locationName: loc.locationName,
+            });
+          }
+        }
+        return results;
+      }),
+
+    /** GBPに投稿する */
+    createPost: protectedProcedure
+      .input(z.object({
+        gbpAccountId: z.number(),
+        summary: z.string().min(1).max(1500),
+        topicType: z.enum(['STANDARD', 'EVENT', 'OFFER']).default('STANDARD'),
+        mediaUrl: z.string().url().optional(),
+        callToActionType: z.enum(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']).optional(),
+        callToActionUrl: z.string().url().optional(),
+        eventTitle: z.string().optional(),
+        eventStartAt: z.date().optional(),
+        eventEndAt: z.date().optional(),
+        sourceScheduleId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.getGbpAccountById(input.gbpAccountId, ctx.user.id);
+        if (!account?.accessToken || !account.accountId || !account.locationId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'GBP拠点情報が不完全です。アカウントIDと拠点IDを設定してください' });
+        }
+        const { createGbpPost, refreshAccessToken } = await import('./gbp');
+        const clientId = process.env.GOOGLE_CLIENT_ID!;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+        let token = account.accessToken;
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          const refreshed = await refreshAccessToken(account.refreshToken!, clientId, clientSecret);
+          token = refreshed.access_token;
+          await db.upsertGbpAccount(ctx.user.id, {
+            id: account.id,
+            accessToken: token,
+            tokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+          });
+        }
+        // GBPに投稿
+        let gbpPostId: string | undefined;
+        let status: 'published' | 'failed' = 'published';
+        let errorMessage: string | undefined;
+        try {
+          const payload: any = {
+            summary: input.summary,
+            topicType: input.topicType,
+            mediaUrl: input.mediaUrl,
+          };
+          if (input.callToActionType && input.callToActionUrl) {
+            payload.callToAction = { actionType: input.callToActionType, url: input.callToActionUrl };
+          }
+          if (input.topicType === 'EVENT' && input.eventTitle && input.eventStartAt && input.eventEndAt) {
+            const s = input.eventStartAt;
+            const e = input.eventEndAt;
+            payload.event = {
+              title: input.eventTitle,
+              startDate: { year: s.getFullYear(), month: s.getMonth() + 1, day: s.getDate() },
+              startTime: { hours: s.getHours(), minutes: s.getMinutes(), seconds: 0, nanos: 0 },
+              endDate: { year: e.getFullYear(), month: e.getMonth() + 1, day: e.getDate() },
+              endTime: { hours: e.getHours(), minutes: e.getMinutes(), seconds: 0, nanos: 0 },
+            };
+          }
+          const result = await createGbpPost(token, account.accountId, account.locationId, payload);
+          gbpPostId = result.name;
+        } catch (err: any) {
+          status = 'failed';
+          errorMessage = err.message;
+        }
+        // DBに記録
+        const saved = await db.createGbpPost(ctx.user.id, {
+          gbpAccountId: input.gbpAccountId,
+          topicType: input.topicType,
+          summary: input.summary,
+          mediaUrl: input.mediaUrl,
+          callToActionType: input.callToActionType,
+          callToActionUrl: input.callToActionUrl,
+          eventTitle: input.eventTitle,
+          eventStartAt: input.eventStartAt,
+          eventEndAt: input.eventEndAt,
+          gbpPostId,
+          status,
+          sourceScheduleId: input.sourceScheduleId,
+          errorMessage,
+        });
+        if (status === 'failed') {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: errorMessage ?? 'GBP投稿に失敗しました' });
+        }
+        return { success: true, gbpPostId, id: saved.id };
+      }),
+
+    /** GBP投稿履歴一覧 */
+    listPosts: protectedProcedure
+      .input(z.object({ gbpAccountId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await db.getGbpPostsByUserId(ctx.user.id, input.gbpAccountId);
+      }),
+
+    /** 他SNSの投稿内容を流用するためのスケジュール一覧を取得 */
+    listRecentSchedules: protectedProcedure
+      .input(z.object({ companyName: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await db.getRecentPostSchedulesForGbp(ctx.user.id, input.companyName);
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;

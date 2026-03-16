@@ -530,3 +530,70 @@ export const notionSettings = mysqlTable("notion_settings", {
 
 export type NotionSetting = typeof notionSettings.$inferSelect;
 export type InsertNotionSetting = typeof notionSettings.$inferInsert;
+
+/**
+ * Googleビジネスプロフィール（GBP）アカウント連携テーブル
+ * 各拠点のGoogleアカウントOAuth2トークンを保管
+ */
+export const gbpAccounts = mysqlTable("gbp_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** 拠点名（表示用） */
+  locationName: varchar("locationName", { length: 255 }).notNull(),
+  /** Google My Business アカウントID（例: accounts/12345678） */
+  accountId: varchar("accountId", { length: 128 }),
+  /** Google My Business ロケーションID（例: locations/87654321） */
+  locationId: varchar("locationId", { length: 128 }),
+  /** OAuth2 アクセストークン */
+  accessToken: text("accessToken"),
+  /** OAuth2 リフレッシュトークン */
+  refreshToken: text("refreshToken"),
+  /** トークン有効期限 */
+  tokenExpiresAt: timestamp("tokenExpiresAt"),
+  /** 接続ステータス */
+  isConnected: boolean("isConnected").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GbpAccount = typeof gbpAccounts.$inferSelect;
+export type InsertGbpAccount = typeof gbpAccounts.$inferInsert;
+
+/**
+ * GBP投稿履歴テーブル
+ * Googleビジネスプロフィールへの投稿記録
+ */
+export const gbpPosts = mysqlTable("gbp_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  gbpAccountId: int("gbpAccountId").notNull(),
+  /** 投稿タイプ: standard=通常投稿, event=イベント, offer=特典 */
+  topicType: mysqlEnum("topicType", ["STANDARD", "EVENT", "OFFER"]).default("STANDARD").notNull(),
+  /** 投稿本文 */
+  summary: text("summary").notNull(),
+  /** 添付画像URL（S3またはGoogleフォト） */
+  mediaUrl: text("mediaUrl"),
+  /** CTAボタンタイプ */
+  callToActionType: mysqlEnum("callToActionType", ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"]),
+  /** CTAリンクURL */
+  callToActionUrl: text("callToActionUrl"),
+  /** イベントタイトル（topicType=EVENTの場合） */
+  eventTitle: varchar("eventTitle", { length: 255 }),
+  /** イベント開始日時 */
+  eventStartAt: timestamp("eventStartAt"),
+  /** イベント終了日時 */
+  eventEndAt: timestamp("eventEndAt"),
+  /** GBP側で発行された投稿ID */
+  gbpPostId: varchar("gbpPostId", { length: 255 }),
+  /** 投稿ステータス */
+  status: mysqlEnum("status", ["draft", "published", "failed"]).default("draft").notNull(),
+  /** 流用元のSNS投稿ID（post_schedulesのID） */
+  sourceScheduleId: int("sourceScheduleId"),
+  /** エラーメッセージ（失敗時） */
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GbpPost = typeof gbpPosts.$inferSelect;
+export type InsertGbpPost = typeof gbpPosts.$inferInsert;

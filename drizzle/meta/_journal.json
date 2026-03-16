@@ -169,6 +169,13 @@
       "when": 1773476159765,
       "tag": "0023_purple_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1773629012271,
+      "tag": "0024_last_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

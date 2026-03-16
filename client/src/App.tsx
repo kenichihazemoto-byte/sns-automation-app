@@ -30,6 +30,7 @@ import Performance from "./pages/Performance";
 import TodayTask from "./pages/TodayTask";
 import BeforeAfterPost from "./pages/BeforeAfterPost";
 import PresidentColumn from "./pages/PresidentColumn";
+import GBPPost from "./pages/GBPPost";
 function Router() {
   return (
     <Switch>
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/president-column" component={PresidentColumn} />
       <Route path="/notion-settings" component={NotionSettings} />
       <Route path="/supervisor" component={SupervisorDashboard} />
+      <Route path="/gbp-post" component={GBPPost} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

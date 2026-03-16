@@ -513,3 +513,23 @@
 ## ダッシュボードグラフ：事業別合計件数の数値ラベル追加（2026-03-14）
 
 - [x] ダッシュボードの事業区分別投稿頻度グラフに事業別合計件数を数値で表示
+
+## Googleビジネスプロフィール（GBP）投稿機能（2026-03-15）
+
+- [ ] DBスキーマにgbp_accounts・gbp_postsテーブルを追加してマイグレーション
+- [ ] Google OAuth2認証フロー（GBP APIスコープ）をサーバー側に実装
+- [ ] GBP API呼び出しヘルパー（投稿作成・拠点一覧取得）をサーバー側に実装
+- [ ] GBP投稿画面（GBPPost.tsx）を作成：拠点選択・投稿タイプ・他SNSコンテンツ流用・画像添付・投稿実行
+- [ ] サイドバーにGBP投稿メニューを追加
+
+## Googleビジネスプロフィール（GBP）投稿機能（2026-03-16）
+
+- [x] DBスキーマにgbp_accounts・gbp_postsテーブルを追加してマイグレーション
+- [x] server/gbp.tsにGoogle OAuth2認証フローとGBP API呼び出しヘルパーを実装
+- [x] server/db.tsにGBP関連クエリヘルパーを追加
+- [x] server/routers.tsにGBPルーター（listAccounts, upsertAccount, getAuthUrl, createPost, listPosts, listRecentSchedules）を追加
+- [x] GBP投稿画面（GBPPost.tsx）を作成：拠点選択・投稿タイプ・他SNS流用・画像URL・CTA・投稿実行・履歴表示
+- [x] App.tsxに/gbp-postルートを追加
+- [x] DashboardLayout.tsxのサイドバーに「GBP投稿」メニューを追加
+- [ ] Google Cloud ConsoleでOAuth2クライアントIDを設定（ユーザー作業）
+- [ ] GOOGLE_CLIENT_ID・GOOGLE_CLIENT_SECRETをSecretsに設定（ユーザー作業）

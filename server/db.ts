@@ -69,6 +69,12 @@ import {
   dailyTaskProgress,
   InsertDailyTaskProgress,
   DailyTaskProgress,
+  gbpAccounts,
+  InsertGbpAccount,
+  GbpAccount,
+  gbpPosts,
+  InsertGbpPost,
+  GbpPost,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2505,5 +2511,112 @@ export async function getAllUsersProgressToday(): Promise<Array<{
     };
   }));
 
+  return results;
+}
+
+// ============================================================
+// GBP（Googleビジネスプロフィール）関連クエリヘルパー
+// ============================================================
+
+/** ユーザーのGBPアカウント一覧を取得 */
+export async function getGbpAccountsByUserId(userId: number): Promise<GbpAccount[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(gbpAccounts).where(eq(gbpAccounts.userId, userId));
+}
+
+/** GBPアカウントを1件取得（所有者チェック付き） */
+export async function getGbpAccountById(id: number, userId: number): Promise<GbpAccount | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(gbpAccounts)
+    .where(and(eq(gbpAccounts.id, id), eq(gbpAccounts.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** GBPアカウントを登録または更新する */
+export async function upsertGbpAccount(
+  userId: number,
+  input: Partial<InsertGbpAccount> & { id?: number }
+): Promise<{ id: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  if (input.id) {
+    // 更新
+    const updateData: Partial<InsertGbpAccount> = {};
+    if (input.locationName !== undefined) updateData.locationName = input.locationName;
+    if (input.accountId !== undefined) updateData.accountId = input.accountId;
+    if (input.locationId !== undefined) updateData.locationId = input.locationId;
+    if (input.accessToken !== undefined) updateData.accessToken = input.accessToken;
+    if (input.refreshToken !== undefined) updateData.refreshToken = input.refreshToken;
+    if (input.tokenExpiresAt !== undefined) updateData.tokenExpiresAt = input.tokenExpiresAt;
+    if (input.isConnected !== undefined) updateData.isConnected = input.isConnected;
+    await db.update(gbpAccounts).set(updateData).where(and(eq(gbpAccounts.id, input.id), eq(gbpAccounts.userId, userId)));
+    return { id: input.id };
+  } else {
+    // 新規作成
+    const values: InsertGbpAccount = {
+      userId,
+      locationName: input.locationName ?? "",
+      accountId: input.accountId,
+      locationId: input.locationId,
+      accessToken: input.accessToken,
+      refreshToken: input.refreshToken,
+      tokenExpiresAt: input.tokenExpiresAt,
+      isConnected: input.isConnected ?? false,
+    };
+    const result = await db.insert(gbpAccounts).values(values);
+    return { id: Number((result as any).insertId) };
+  }
+}
+
+/** GBP投稿を作成してDBに保存する */
+export async function createGbpPost(
+  userId: number,
+  input: Omit<InsertGbpPost, "userId">
+): Promise<{ id: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const result = await db.insert(gbpPosts).values({ ...input, userId });
+  return { id: Number((result as any).insertId) };
+}
+
+/** ユーザーのGBP投稿履歴を取得 */
+export async function getGbpPostsByUserId(
+  userId: number,
+  gbpAccountId?: number
+): Promise<GbpPost[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(gbpPosts.userId, userId)];
+  if (gbpAccountId !== undefined) {
+    conditions.push(eq(gbpPosts.gbpAccountId, gbpAccountId));
+  }
+  return db.select().from(gbpPosts)
+    .where(and(...conditions))
+    .orderBy(gbpPosts.createdAt);
+}
+
+/** 他SNS投稿から流用するための直近スケジュール一覧を取得 */
+export async function getRecentPostSchedulesForGbp(
+  userId: number,
+  companyName?: string
+): Promise<Array<{ id: number; companyName: string | null; scheduledAt: Date; contents: PostContent[] }>> {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(postSchedules.userId, userId)];
+  if (companyName) {
+    conditions.push(eq(postSchedules.companyName, companyName as any));
+  }
+  const schedules = await db.select().from(postSchedules)
+    .where(and(...conditions))
+    .orderBy(postSchedules.scheduledAt)
+    .limit(50);
+  const results = await Promise.all(schedules.map(async (s) => {
+    const contents = await db!.select().from(postContents).where(eq(postContents.postScheduleId, s.id));
+    return { id: s.id, companyName: s.companyName, scheduledAt: s.scheduledAt, contents };
+  }));
   return results;
 }
