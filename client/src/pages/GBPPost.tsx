@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -56,6 +57,21 @@ const CTA_TYPE_LABELS: Record<string, string> = {
 export default function GBPPost() {
   const { user, isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
+  const [location] = useLocation();
+
+  // URLパラメータからの自動入力（SNSスケジュールからの流用）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const summaryParam = params.get("summary");
+    const companyParam = params.get("company");
+    if (summaryParam) {
+      setSummary(summaryParam);
+      toast.info("投稿内容をSNSスケジュールから流用しました");
+    }
+    if (companyParam) {
+      setSelectedCompanyForImport(companyParam);
+    }
+  }, []);
 
   // GBPアカウント一覧
   const { data: gbpAccounts = [], refetch: refetchAccounts } = trpc.gbp.listAccounts.useQuery();

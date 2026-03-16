@@ -533,3 +533,9 @@
 - [x] DashboardLayout.tsxのサイドバーに「GBP投稿」メニューを追加
 - [ ] Google Cloud ConsoleでOAuth2クライアントIDを設定（ユーザー作業）
 - [ ] GOOGLE_CLIENT_ID・GOOGLE_CLIENT_SECRETをSecretsに設定（ユーザー作業）
+
+## SNSスケジュールからGBPへの流用ボタン（2026-03-16）
+
+- [x] ScheduledPosts.tsxの各投稿カードに「GBPに流用」ボタンを追加
+- [x] クリック時にGBP投稿画面（/gbp-post）へ投稿内容をURLパラメータで引き継いで遷移
+- [x] GBPPost.tsxでURLパラメータから内容を受け取りフォームに自動入力

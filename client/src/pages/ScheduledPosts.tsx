@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square, List, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Clock, Edit, Trash2, Instagram, Twitter, MessageSquare, Loader2, Filter, X, CheckSquare, Square, List, CalendarDays, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 // 投稿本文から事業区分を推定する
 function detectBusinessUnit(caption: string | undefined): { label: string; color: string } | null {
@@ -65,6 +66,7 @@ export default function ScheduledPosts() {
   // 一括操作用のstate
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: schedules, isLoading } = trpc.posts.schedules.useQuery();
   const { data: upcomingSchedules } = trpc.posts.upcomingSchedules.useQuery({ limit: 10 });
@@ -225,6 +227,18 @@ export default function ScheduledPosts() {
     setShowDeleteDialog(true);
   };
 
+  const handleSendToGBP = (schedule: any) => {
+    const caption = schedule.contents?.[0]?.caption || "";
+    const hashtags = schedule.contents?.[0]?.hashtags || "";
+    const summary = caption.slice(0, 1500); // GBP投稿は1500文字制限
+    const params = new URLSearchParams({
+      summary,
+      hashtags,
+      company: schedule.companyName || "",
+    });
+    navigate(`/gbp-post?${params.toString()}`);
+  };
+
   const handleViewDetail = (schedule: any) => {
     setSelectedSchedule(schedule);
     setShowDetailDialog(true);
@@ -362,6 +376,18 @@ export default function ScheduledPosts() {
                         )}
                       </div>
                       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          title="GBPに流用"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSendToGBP(schedule);
+                          }}
+                          className="text-green-700 border-green-300 hover:bg-green-50"
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -685,6 +711,15 @@ export default function ScheduledPosts() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="GBPに流用"
+                        onClick={() => handleSendToGBP(schedule)}
+                        className="text-green-700 border-green-300 hover:bg-green-50"
+                      >
+                        <MapPin className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1040,6 +1075,19 @@ export default function ScheduledPosts() {
             >
               閉じる
             </Button>
+            {selectedSchedule && (
+              <Button
+                variant="outline"
+                className="text-green-700 border-green-300 hover:bg-green-50"
+                onClick={() => {
+                  setShowDetailDialog(false);
+                  handleSendToGBP(selectedSchedule);
+                }}
+              >
+                <MapPin className="mr-2 h-4 w-4" />
+                GBPに流用
+              </Button>
+            )}
             {selectedSchedule && selectedSchedule.status !== "completed" && (
               <>
                 <Button
