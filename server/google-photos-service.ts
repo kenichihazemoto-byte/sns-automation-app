@@ -20,26 +20,10 @@ export interface GooglePhotoItem {
 }
 
 /**
- * ハゼモト建設の竣工写真アルバム一覧
+ * アルバム一覧
  */
 export const HAZEMOTO_ALBUMS: GooglePhotoAlbum[] = [
-  { url: "https://photos.app.goo.gl/JmEw1Lnr7eN13cJ68", year: "2009", title: "〜2009年竣工写真" },
-  { url: "https://photos.app.goo.gl/RDD9DbPKngWjVTbz5", year: "2010", title: "2010年竣工写真" },
-  { url: "https://photos.app.goo.gl/dSGiAuUaAQaw5UPEA", year: "2011", title: "2011年竣工写真" },
-  { url: "https://photos.app.goo.gl/7yfwAtrLYrQvnvX39", year: "2012", title: "2012年竣工写真" },
-  { url: "https://photos.app.goo.gl/gNLTxupRqMmXuKBX9", year: "2013", title: "2013年竣工写真" },
-  { url: "https://photos.app.goo.gl/5YPK2Wmkq1prqaYG7", year: "2014", title: "2014年竣工写真" },
-  { url: "https://photos.app.goo.gl/dgW4bei9uHZ67TtT8", year: "2015", title: "2015年竣工写真" },
-  { url: "https://photos.app.goo.gl/fkQ8q1b3N2Kwuer56", year: "2016", title: "2016年竣工写真" },
-  { url: "https://photos.app.goo.gl/aSebzS1qC9TYiGr47", year: "2017", title: "2017年竣工写真" },
-  { url: "https://photos.app.goo.gl/Smy6ZNFm15AcZChn7", year: "2018", title: "2018年竣工写真" },
-  { url: "https://photos.app.goo.gl/K28tHuNJRckC4qky6", year: "2019", title: "2019年竣工写真" },
-  { url: "https://photos.app.goo.gl/RUhEqxEvvpLVbzYUA", year: "2020", title: "2020年竣工写真" },
-  { url: "https://photos.app.goo.gl/oyybCnMGzoD9Gg7TA", year: "2021", title: "2021年竣工写真" },
-  { url: "https://photos.app.goo.gl/morf3MfQcn2QiRVH9", year: "2022", title: "2022年竣工写真" },
-  { url: "https://photos.app.goo.gl/4BmS9zm9XSsx27Mi6", year: "2023", title: "2023年竣工写真" },
-  { url: "https://photos.app.goo.gl/ibJ6TAfQRsnaNmoPA", year: "2024", title: "2024年竣工写真" },
-  { url: "https://photos.app.goo.gl/Bvkig8pTc6cAw4ew5", year: "2025", title: "2025年竣工写真" },
+  { url: "https://photos.app.goo.gl/qyVKRvekQFzNYcg57", year: "2026", title: "生成画像アルバム" },
 ];
 
 /**

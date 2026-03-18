@@ -556,3 +556,7 @@
 - [x] GBPSchedule.tsxを新規作成（予約一覧・キャンセル機能）
 - [x] App.tsxにGBPScheduleルートを追加
 - [x] DashboardLayout.tsxにGBP予約一覧ナビゲーションを追加
+
+## Googleフォトアルバム変更（2026-03-18）
+
+- [ ] google-photos-service.tsのアルバムリストを「生成画像アルバム」に置き換え
