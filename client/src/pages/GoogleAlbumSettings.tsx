@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, ExternalLink, ImageIcon, GripVertical, Pencil, Instagram, Twitter } from "lucide-react";
+import { Plus, Trash2, ExternalLink, ImageIcon, GripVertical, Pencil, Instagram, Twitter, Eye, Loader2 } from "lucide-react";
 
 type Album = {
   id: number;
@@ -58,6 +58,85 @@ function platformLabel(platform: string) {
 function parseTargetIds(raw: string | null | undefined): number[] {
   if (!raw) return [];
   try { return JSON.parse(raw); } catch { return []; }
+}
+
+// アルバムプレビューダイアログ
+function AlbumPreviewDialog({ album }: { album: Album }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, isError } = trpc.googlePhotoAlbums.preview.useQuery(
+    { url: album.url },
+    { enabled: open }
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-blue-600"
+          title="プレビュー"
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ImageIcon className="w-5 h-5 text-blue-500" />
+            {album.title} — プレビュー
+          </DialogTitle>
+          <DialogDescription>
+            アルバムのサムネイル画像（最大6枚）を表示します。
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>読み込み中...</span>
+            </div>
+          ) : isError ? (
+            <div className="text-center py-10 text-red-500">
+              プレビューの取得に失敗しました。
+            </div>
+          ) : data && data.thumbnails.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2">
+              {data.thumbnails.map((src, i) => (
+                <div key={i} className="aspect-square rounded-md overflow-hidden bg-muted border">
+                  <img
+                    src={src}
+                    alt={`サムネイル ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground">
+              <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">プレビュー画像が見つかりませんでした。</p>
+              <p className="text-xs mt-1">アルバムが非公開または空の可能性があります。</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <a
+            href={album.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-500 hover:underline flex items-center gap-1 mr-auto"
+          >
+            Googleフォトで開く
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <Button variant="outline" onClick={() => setOpen(false)}>閉じる</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function GoogleAlbumSettings() {
@@ -269,7 +348,6 @@ export default function GoogleAlbumSettings() {
                             <span className="text-xs text-muted-foreground">投稿先：全SNSアカウント（未指定）</span>
                           ) : (
                             <div className="flex flex-wrap gap-1.5 items-center">
-                              <span className="text-xs text-muted-foreground">投稿先：</span>
                               {targetAccounts.map(acc => (
                                 <span key={acc.id} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
                                   <PlatformIcon platform={acc.platform} />
@@ -281,16 +359,19 @@ export default function GoogleAlbumSettings() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* プレビューボタン */}
+                        <AlbumPreviewDialog album={album} />
                         <Button
                           variant="ghost"
                           size="icon"
                           className="text-muted-foreground hover:text-foreground"
                           onClick={() => openEdit(album)}
+                          title="編集"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 ml-1">
                           <Label className="text-xs text-muted-foreground">有効</Label>
                           <Switch
                             checked={album.isActive === 1}
@@ -303,6 +384,7 @@ export default function GoogleAlbumSettings() {
                           size="icon"
                           className="text-red-500 hover:text-red-600 hover:bg-red-50"
                           onClick={() => setDeleteTarget(album)}
+                          title="削除"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -324,7 +406,8 @@ export default function GoogleAlbumSettings() {
             <p>1. 「アルバムを追加」でGoogleフォトのアルバムURLを登録します</p>
             <p>2. 各アルバムに投稿先SNSアカウントを紐付けると、そのアルバムの写真は指定したアカウントにのみ投稿されます</p>
             <p>3. 投稿先を指定しない場合は全SNSアカウントが対象になります</p>
-            <p>4. 鉛筆アイコンから設定を後から変更できます</p>
+            <p>4. 目のアイコンでアルバムのサムネイルをプレビューできます</p>
+            <p>5. 鉛筆アイコンから設定を後から変更できます</p>
           </CardContent>
         </Card>
       </div>

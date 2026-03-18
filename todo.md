@@ -584,3 +584,9 @@
 - [x] routers.tsのgetRandomPhotoWithAnalysisにtargetSnsAccountIdsを追加
 - [x] SimplePost.tsxにアルバム紐付けプラットフォーム自動絞り込みを実装
 - [x] 紐付けなし（全アカウント対象）の場合は従来通り全アカウント表示
+
+## 推奨実装3点の対応（2026-03-18）
+
+- [x] 「生成画像アルバム」をサーバー起動時に自動シードする（album-seed.ts + server/_core/index.ts統合済）
+- [x] GoogleAlbumSettings.tsxにアルバムプレビュー（サムネイル表示）を追加する（目アイコンボタン + OGPサムネイルダイアログ）
+- [x] GBP予約投稿の自動実行エンジン（5分ごと定期実行ジョブ）をサーバー側に実装（gbp-scheduler.ts + server/_core/index.ts統合済）

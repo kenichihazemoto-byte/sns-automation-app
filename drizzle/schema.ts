@@ -624,8 +624,8 @@ export const gbpScheduledPosts = mysqlTable("gbp_scheduled_posts", {
   eventEndAt: timestamp("eventEndAt"),
   /** 予約投稿日時 */
   scheduledAt: timestamp("scheduledAt").notNull(),
-  /** スケジュールステータス: pending=待機中, published=投稿済み, failed=失敗, cancelled=キャンセル */
-  status: mysqlEnum("status", ["pending", "published", "failed", "cancelled"]).default("pending").notNull(),
+  /** スケジュールステータス: pending=待機中, processing=実行中, published=投稿済み, failed=失敗, cancelled=キャンセル */
+  status: mysqlEnum("status", ["pending", "processing", "published", "failed", "cancelled"]).default("pending").notNull(),
   /** 実際に投稿されたGBP投稿ID（gbp_postsのID） */
   gbpPostId: int("gbpPostId"),
   /** エラーメッセージ（失敗時） */

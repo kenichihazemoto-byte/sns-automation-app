@@ -3232,6 +3232,40 @@ ${balanceSummary}
         await db.deleteGooglePhotoAlbum(input.id);
         return { success: true };
       }),
+    /** アルバムのプレビュー画像を取得する（共有アルバムURLからOGPメタを取得） */
+    preview: protectedProcedure
+      .input(z.object({ url: z.string().url() }))
+      .query(async ({ input }) => {
+        try {
+          const res = await fetch(input.url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; SNSBot/1.0)',
+              'Accept': 'text/html',
+            },
+            redirect: 'follow',
+          });
+          if (!res.ok) return { thumbnails: [] };
+          const html = await res.text();
+          // OGP画像タグを抽出
+          const ogImages: string[] = [];
+          const ogMatches = html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi);
+          for (const m of ogMatches) {
+            if (m[1] && !ogImages.includes(m[1])) ogImages.push(m[1]);
+          }
+          // og:imageが見つからない場合はgoogleusercontent.com画像URLを抽出
+          if (ogImages.length === 0) {
+            const imgMatches = html.matchAll(/https:\/\/lh3\.googleusercontent\.com\/[^"'\s<>]+/g);
+            for (const m of imgMatches) {
+              const url = m[0].replace(/&amp;/g, '&');
+              if (!ogImages.includes(url)) ogImages.push(url);
+              if (ogImages.length >= 6) break;
+            }
+          }
+          return { thumbnails: ogImages.slice(0, 6) };
+        } catch {
+          return { thumbnails: [] };
+        }
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

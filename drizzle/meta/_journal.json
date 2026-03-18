@@ -197,6 +197,13 @@
       "when": 1773801026608,
       "tag": "0027_noisy_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1773807494018,
+      "tag": "0028_noisy_sheva_callister",
+      "breakpoints": true
     }
   ]
 }

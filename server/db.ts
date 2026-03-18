@@ -2738,7 +2738,7 @@ export async function cancelGbpScheduledPost(id: number, userId: number): Promis
 /** GBP予約スケジュールのステータスを更新する（サーバー内部用） */
 export async function updateGbpScheduledPostStatus(
   id: number,
-  status: 'published' | 'failed',
+  status: 'processing' | 'published' | 'failed',
   gbpPostId?: number,
   errorMessage?: string
 ): Promise<void> {

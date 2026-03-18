@@ -1,0 +1,1 @@
+ALTER TABLE `gbp_scheduled_posts` MODIFY COLUMN `status` enum('pending','processing','published','failed','cancelled') NOT NULL DEFAULT 'pending';

@@ -8,6 +8,8 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startReminderService } from "../reminder-service";
+import { seedDefaultAlbum } from "../album-seed";
+import { startGbpScheduler } from "../gbp-scheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -63,6 +65,12 @@ async function startServer() {
     
     // 投稿リマインダーサービスを起動
     startReminderService();
+    
+    // デフォルトアルバムをDBにシード（初回のみ）
+    seedDefaultAlbum().catch(e => console.warn('[AlbumSeed] Failed:', e));
+    
+    // GBP予約投稿の自動実行エンジンを起動
+    startGbpScheduler();
   });
 }
 
