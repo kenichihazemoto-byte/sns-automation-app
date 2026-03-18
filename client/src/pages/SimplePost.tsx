@@ -30,9 +30,12 @@ export default function SimplePost() {
   const [isRefining, setIsRefining] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [showSupportAlert, setShowSupportAlert] = useState(false);
-  const [todayEvent, setTodayEvent] = useState(""); // 今日の出来事・社長の体験
-
+   const [todayEvent, setTodayEvent] = useState(""); // 今日の出来事・社長の体験
+  /** アルバムに紐付いたSNSアカウントID（nullは全プラットフォーム表示） */
+  const [albumTargetAccountIds, setAlbumTargetAccountIds] = useState<number[] | null>(null);
   const utils = trpc.useUtils();
+  // SNSアカウント一覧を取得
+  const { data: snsAccountsList } = trpc.snsAccounts.list.useQuery();
 
   const refineMutation = trpc.postQuality.refine.useMutation();
   const scoreMutation = trpc.postQuality.score.useMutation();
@@ -76,6 +79,16 @@ export default function SimplePost() {
   const fetchPhotoMutation = trpc.demo.getRandomPhotoWithAnalysis.useMutation({
     onSuccess: (data) => {
       setSelectedImage(data);
+      // アルバムの紐付けSNSアカウントIDを保存
+      const ids = (data as any).targetSnsAccountIds as number[] | null;
+      setAlbumTargetAccountIds(ids && ids.length > 0 ? ids : null);
+      // 紐付けがある場合、最初の許可プラットフォームを自動選択
+      if (ids && ids.length > 0 && snsAccountsList) {
+        const allowedAccounts = snsAccountsList.filter(a => ids.includes(a.id));
+        if (allowedAccounts.length > 0) {
+          setPlatform(allowedAccounts[0].platform as "instagram" | "x" | "threads");
+        }
+      }
       toast.success("写真を取得しました！");
       
       // 作業履歴を記録
@@ -224,6 +237,7 @@ export default function SimplePost() {
     setScheduleDate("");
     setScheduleTime("");
     setPlatform("instagram");
+    setAlbumTargetAccountIds(null);
   };
 
   return (
@@ -400,16 +414,40 @@ export default function SimplePost() {
               <div className="space-y-4">
                 <div>
                   <Label>投稿するプラットフォーム</Label>
-                  <Select value={platform} onValueChange={(v: any) => { setPlatform(v); setEditedPostText(null); setQualityScore(null); }}>
-                    <SelectTrigger className="w-full mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="x">X (Twitter)</SelectItem>
-                      <SelectItem value="threads">Threads</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {albumTargetAccountIds && snsAccountsList && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>このアルバムは特定SNSアカウントに紐付いています（許可プラットフォームのみ表示）</span>
+                    </p>
+                  )}
+                  {(() => {
+                    // アルバム紐付けがある場合は許可プラットフォームのみ表示
+                    const allowedPlatforms: Array<"instagram" | "x" | "threads"> =
+                      albumTargetAccountIds && snsAccountsList
+                        ? [...new Set(
+                            snsAccountsList
+                              .filter(a => albumTargetAccountIds.includes(a.id))
+                              .map(a => a.platform as "instagram" | "x" | "threads")
+                          )]
+                        : ["instagram", "x", "threads"];
+                    const platformLabels: Record<string, string> = {
+                      instagram: "Instagram",
+                      x: "X (Twitter)",
+                      threads: "Threads",
+                    };
+                    return (
+                      <Select value={platform} onValueChange={(v: any) => { setPlatform(v); setEditedPostText(null); setQualityScore(null); }}>
+                        <SelectTrigger className="w-full mt-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allowedPlatforms.map(p => (
+                            <SelectItem key={p} value={p}>{platformLabels[p]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                 </div>
 
                 {/* 投稿文表示・編集エリア */}

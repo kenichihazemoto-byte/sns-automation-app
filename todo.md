@@ -576,3 +576,11 @@
 - [x] server/routers.tsのアルバム更新APIにtargetAccounts対応を追加
 - [x] SNSアカウント一覧取得APIを確認・追加
 - [x] GoogleAlbumSettings.tsxにアルバム編集ダイアログ（SNSアカウント選択）を追加
+
+## 投稿生成時のアルバム×SNS紐付け反映（2026-03-18）
+
+- [x] 現在の投稿生成フローを調査（google-photos-service.ts・routers.ts・SimplePost.tsx）
+- [x] google-photos-service.tsをDB参照に変更しアルバム紐付けSNSアカウントIDを返却
+- [x] routers.tsのgetRandomPhotoWithAnalysisにtargetSnsAccountIdsを追加
+- [x] SimplePost.tsxにアルバム紐付けプラットフォーム自動絞り込みを実装
+- [x] 紐付けなし（全アカウント対象）の場合は従来通り全アカウント表示

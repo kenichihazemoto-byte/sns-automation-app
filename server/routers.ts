@@ -534,9 +534,13 @@ export const appRouter = router({
             id: photo.url, // 一意のIDとしてURLを使用
             url: photo.url,
             thumbnailUrl: photo.thumbnailUrl,
-            fileName: photo.title || `${album.year}年竣工写真`,
+            fileName: photo.title || `${album.year}年竅工写真`,
             albumTitle: album.title,
             albumYear: album.year,
+            /** アルバムに紐付いたSNSアカウントID一覧（nullは全アカウント対象） */
+            targetSnsAccountIds: (album.targetSnsAccountIds && album.targetSnsAccountIds.length > 0)
+              ? album.targetSnsAccountIds
+              : null,
             analysis,
           };
         } catch (error) {
