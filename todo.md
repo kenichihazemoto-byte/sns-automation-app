@@ -570,3 +570,9 @@
 - [x] google-photos-service.tsをDB参照に変更（ハードコードを廃止）
 - [x] GoogleAlbumSettings.tsxを新規作成（追加・削除・有効/無効切り替え）
 - [x] App.tsxにルート追加、DashboardLayout.tsxにナビゲーション追加
+
+## アルバムごとのSNSアカウント紐付け機能（2026-03-18- [x] drizzle/schema.tsのgoogle_photo_albumsにtargetSnsAccountIdsカラムを追加 [ ] pnpm db:pushでマイグレーション実行
+- [x] server/db.tsのアルバムCRUDヘルパーにtargetAccounts対応を追加
+- [x] server/routers.tsのアルバム更新APIにtargetAccounts対応を追加
+- [x] SNSアカウント一覧取得APIを確認・追加
+- [x] GoogleAlbumSettings.tsxにアルバム編集ダイアログ（SNSアカウント選択）を追加

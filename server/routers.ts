@@ -3189,6 +3189,7 @@ ${balanceSummary}
         label: z.string().max(100).optional(),
         isActive: z.number().int().min(0).max(1).optional(),
         sortOrder: z.number().int().optional(),
+        targetSnsAccountIds: z.array(z.number()).optional(),
       }))
       .mutation(async ({ input }) => {
         return await db.createGooglePhotoAlbum({
@@ -3197,6 +3198,7 @@ ${balanceSummary}
           label: input.label ?? null,
           isActive: input.isActive ?? 1,
           sortOrder: input.sortOrder ?? 0,
+          targetSnsAccountIds: input.targetSnsAccountIds ? JSON.stringify(input.targetSnsAccountIds) : null,
         });
       }),
     /** アルバムを更新する */
@@ -3208,10 +3210,15 @@ ${balanceSummary}
         label: z.string().max(100).optional(),
         isActive: z.number().int().min(0).max(1).optional(),
         sortOrder: z.number().int().optional(),
+        targetSnsAccountIds: z.array(z.number()).nullable().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { id, ...updates } = input;
-        await db.updateGooglePhotoAlbum(id, updates);
+        const { id, targetSnsAccountIds, ...rest } = input;
+        const updates: Record<string, unknown> = { ...rest };
+        if (targetSnsAccountIds !== undefined) {
+          updates.targetSnsAccountIds = targetSnsAccountIds === null ? null : JSON.stringify(targetSnsAccountIds);
+        }
+        await db.updateGooglePhotoAlbum(id, updates as Parameters<typeof db.updateGooglePhotoAlbum>[1]);
         return { success: true };
       }),
     /** アルバムを削除する */

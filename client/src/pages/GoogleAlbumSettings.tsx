@@ -5,11 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, ExternalLink, ImageIcon, GripVertical } from "lucide-react";
+import { Plus, Trash2, ExternalLink, ImageIcon, GripVertical, Pencil, Instagram, Twitter } from "lucide-react";
 
 type Album = {
   id: number;
@@ -18,13 +27,43 @@ type Album = {
   label: string | null;
   isActive: number;
   sortOrder: number;
+  targetSnsAccountIds: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
+type SnsAccount = {
+  id: number;
+  companyName: string;
+  platform: string;
+  accountName: string;
+  isActive: boolean;
+};
+
+// プラットフォームアイコン
+function PlatformIcon({ platform }: { platform: string }) {
+  if (platform === "instagram") return <Instagram className="w-3.5 h-3.5 text-pink-500" />;
+  if (platform === "x") return <Twitter className="w-3.5 h-3.5 text-sky-500" />;
+  return <span className="text-xs font-bold text-purple-500">T</span>;
+}
+
+// プラットフォーム表示名
+function platformLabel(platform: string) {
+  if (platform === "instagram") return "Instagram";
+  if (platform === "x") return "X";
+  return "Threads";
+}
+
+// アルバムのSNSアカウントIDを配列として取得
+function parseTargetIds(raw: string | null | undefined): number[] {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 export default function GoogleAlbumSettings() {
   const utils = trpc.useUtils();
   const { data: albums = [], isLoading } = trpc.googlePhotoAlbums.list.useQuery();
+  const { data: snsAccounts = [] } = trpc.snsAccounts.list.useQuery();
 
   const createMutation = trpc.googlePhotoAlbums.create.useMutation({
     onSuccess: () => {
@@ -32,6 +71,7 @@ export default function GoogleAlbumSettings() {
       toast.success("アルバムを追加しました");
       setAddOpen(false);
       setForm({ title: "", url: "", label: "" });
+      setSelectedIds([]);
     },
     onError: (e) => toast.error(`追加失敗: ${e.message}`),
   });
@@ -40,6 +80,7 @@ export default function GoogleAlbumSettings() {
     onSuccess: () => {
       utils.googlePhotoAlbums.list.invalidate();
       toast.success("更新しました");
+      setEditTarget(null);
     },
     onError: (e) => toast.error(`更新失敗: ${e.message}`),
   });
@@ -54,7 +95,13 @@ export default function GoogleAlbumSettings() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Album | null>(null);
+  const [editTarget, setEditTarget] = useState<Album | null>(null);
   const [form, setForm] = useState({ title: "", url: "", label: "" });
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [editForm, setEditForm] = useState({ title: "", url: "", label: "" });
+  const [editSelectedIds, setEditSelectedIds] = useState<number[]>([]);
+
+  const activeSnsAccounts = (snsAccounts as SnsAccount[]).filter(a => a.isActive);
 
   const handleAdd = () => {
     if (!form.title.trim()) { toast.error("タイトルを入力してください"); return; }
@@ -64,7 +111,8 @@ export default function GoogleAlbumSettings() {
       url: form.url.trim(),
       label: form.label.trim() || undefined,
       isActive: 1,
-      sortOrder: albums.length,
+      sortOrder: (albums as Album[]).length,
+      targetSnsAccountIds: selectedIds.length > 0 ? selectedIds : undefined,
     });
   };
 
@@ -78,6 +126,29 @@ export default function GoogleAlbumSettings() {
     setDeleteTarget(null);
   };
 
+  const openEdit = (album: Album) => {
+    setEditTarget(album);
+    setEditForm({ title: album.title, url: album.url, label: album.label ?? "" });
+    setEditSelectedIds(parseTargetIds(album.targetSnsAccountIds));
+  };
+
+  const handleEdit = () => {
+    if (!editTarget) return;
+    if (!editForm.title.trim()) { toast.error("タイトルを入力してください"); return; }
+    if (!editForm.url.trim()) { toast.error("アルバムURLを入力してください"); return; }
+    updateMutation.mutate({
+      id: editTarget.id,
+      title: editForm.title.trim(),
+      url: editForm.url.trim(),
+      label: editForm.label.trim() || undefined,
+      targetSnsAccountIds: editSelectedIds.length > 0 ? editSelectedIds : null,
+    });
+  };
+
+  const toggleId = (id: number, ids: number[], setIds: (v: number[]) => void) => {
+    setIds(ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -89,7 +160,7 @@ export default function GoogleAlbumSettings() {
               Googleフォトアルバム管理
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              SNS投稿生成に使用するGoogleフォトアルバムを管理します。有効なアルバムからランダムに写真が選ばれます。
+              SNS投稿生成に使用するアルバムと、アルバムごとの投稿先SNSアカウントを管理します。
             </p>
           </div>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -99,11 +170,11 @@ export default function GoogleAlbumSettings() {
                 アルバムを追加
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>アルバムを追加</DialogTitle>
                 <DialogDescription>
-                  GoogleフォトアルバムのURLを入力してください。共有アルバムのURLが必要です。
+                  GoogleフォトアルバムのURLと投稿先SNSアカウントを設定してください。
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
@@ -134,6 +205,11 @@ export default function GoogleAlbumSettings() {
                     onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
                   />
                 </div>
+                <SnsAccountSelector
+                  accounts={activeSnsAccounts}
+                  selectedIds={selectedIds}
+                  onToggle={(id) => toggleId(id, selectedIds, setSelectedIds)}
+                />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setAddOpen(false)}>キャンセル</Button>
@@ -148,7 +224,7 @@ export default function GoogleAlbumSettings() {
         {/* アルバム一覧 */}
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">読み込み中...</div>
-        ) : albums.length === 0 ? (
+        ) : (albums as Album[]).length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <ImageIcon className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
@@ -160,53 +236,82 @@ export default function GoogleAlbumSettings() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {(albums as Album[]).map((album) => (
-              <Card key={album.id} className={album.isActive === 0 ? "opacity-60" : ""}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <GripVertical className="w-5 h-5 text-muted-foreground mt-1 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{album.title}</span>
-                        {album.label && (
-                          <Badge variant="secondary" className="text-xs">{album.label}</Badge>
-                        )}
-                        <Badge variant={album.isActive === 1 ? "default" : "outline"} className="text-xs">
-                          {album.isActive === 1 ? "有効" : "無効"}
-                        </Badge>
+            {(albums as Album[]).map((album) => {
+              const targetIds = parseTargetIds(album.targetSnsAccountIds);
+              const targetAccounts = activeSnsAccounts.filter(a => targetIds.includes(a.id));
+              return (
+                <Card key={album.id} className={album.isActive === 0 ? "opacity-60" : ""}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <GripVertical className="w-5 h-5 text-muted-foreground mt-1 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{album.title}</span>
+                          {album.label && (
+                            <Badge variant="secondary" className="text-xs">{album.label}</Badge>
+                          )}
+                          <Badge variant={album.isActive === 1 ? "default" : "outline"} className="text-xs">
+                            {album.isActive === 1 ? "有効" : "無効"}
+                          </Badge>
+                        </div>
+                        <a
+                          href={album.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:underline flex items-center gap-1 mt-1 truncate"
+                        >
+                          {album.url}
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                        {/* 投稿先SNSアカウント表示 */}
+                        <div className="mt-2">
+                          {targetAccounts.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">投稿先：全SNSアカウント（未指定）</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 items-center">
+                              <span className="text-xs text-muted-foreground">投稿先：</span>
+                              {targetAccounts.map(acc => (
+                                <span key={acc.id} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
+                                  <PlatformIcon platform={acc.platform} />
+                                  <span>{acc.accountName}</span>
+                                  <span className="text-muted-foreground">({acc.companyName})</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <a
-                        href={album.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-500 hover:underline flex items-center gap-1 mt-1 truncate"
-                      >
-                        {album.url}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs text-muted-foreground">有効</Label>
-                        <Switch
-                          checked={album.isActive === 1}
-                          onCheckedChange={() => handleToggleActive(album)}
-                          disabled={updateMutation.isPending}
-                        />
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => openEdit(album)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs text-muted-foreground">有効</Label>
+                          <Switch
+                            checked={album.isActive === 1}
+                            onCheckedChange={() => handleToggleActive(album)}
+                            disabled={updateMutation.isPending}
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => setDeleteTarget(album)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => setDeleteTarget(album)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -216,13 +321,59 @@ export default function GoogleAlbumSettings() {
             <CardTitle className="text-sm text-blue-800">使い方</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-blue-700 space-y-1">
-            <p>1. Googleフォトでアルバムを開き、「共有」→「リンクをコピー」でURLを取得</p>
-            <p>2. 「アルバムを追加」ボタンからURLとタイトルを入力して登録</p>
-            <p>3. 有効なアルバムからランダムに写真が選ばれてSNS投稿に使用されます</p>
-            <p>4. 一時的に使いたくないアルバムはスイッチで無効化できます</p>
+            <p>1. 「アルバムを追加」でGoogleフォトのアルバムURLを登録します</p>
+            <p>2. 各アルバムに投稿先SNSアカウントを紐付けると、そのアルバムの写真は指定したアカウントにのみ投稿されます</p>
+            <p>3. 投稿先を指定しない場合は全SNSアカウントが対象になります</p>
+            <p>4. 鉛筆アイコンから設定を後から変更できます</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* 編集ダイアログ */}
+      <Dialog open={!!editTarget} onOpenChange={open => !open && setEditTarget(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>アルバムを編集</DialogTitle>
+            <DialogDescription>
+              アルバムの設定と投稿先SNSアカウントを変更します。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>タイトル <span className="text-red-500">*</span></Label>
+              <Input
+                value={editForm.title}
+                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>アルバムURL <span className="text-red-500">*</span></Label>
+              <Input
+                value={editForm.url}
+                onChange={e => setEditForm(f => ({ ...f, url: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>ラベル（任意）</Label>
+              <Input
+                value={editForm.label}
+                onChange={e => setEditForm(f => ({ ...f, label: e.target.value }))}
+              />
+            </div>
+            <SnsAccountSelector
+              accounts={activeSnsAccounts}
+              selectedIds={editSelectedIds}
+              onToggle={(id) => toggleId(id, editSelectedIds, setEditSelectedIds)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>キャンセル</Button>
+            <Button onClick={handleEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "保存中..." : "保存する"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 削除確認ダイアログ */}
       <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
@@ -242,5 +393,75 @@ export default function GoogleAlbumSettings() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+// SNSアカウント選択コンポーネント
+function SnsAccountSelector({
+  accounts,
+  selectedIds,
+  onToggle,
+}: {
+  accounts: SnsAccount[];
+  selectedIds: number[];
+  onToggle: (id: number) => void;
+}) {
+  if (accounts.length === 0) {
+    return (
+      <div className="space-y-1">
+        <Label>投稿先SNSアカウント</Label>
+        <p className="text-xs text-muted-foreground">
+          SNSアカウントが登録されていません。先にSNSアカウントを登録してください。
+        </p>
+      </div>
+    );
+  }
+
+  // 会社ごとにグループ化
+  const grouped = accounts.reduce<Record<string, SnsAccount[]>>((acc, a) => {
+    if (!acc[a.companyName]) acc[a.companyName] = [];
+    acc[a.companyName].push(a);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label>投稿先SNSアカウント</Label>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          指定しない場合は全アカウントが対象になります
+        </p>
+      </div>
+      <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+        {Object.entries(grouped).map(([company, accs]) => (
+          <div key={company}>
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">{company}</p>
+            <div className="space-y-1.5">
+              {accs.map(acc => (
+                <label
+                  key={acc.id}
+                  className="flex items-center gap-2.5 cursor-pointer group"
+                >
+                  <Checkbox
+                    checked={selectedIds.includes(acc.id)}
+                    onCheckedChange={() => onToggle(acc.id)}
+                  />
+                  <span className="flex items-center gap-1.5 text-sm">
+                    <PlatformIcon platform={acc.platform} />
+                    <span className="font-medium">{acc.accountName}</span>
+                    <span className="text-muted-foreground text-xs">({platformLabel(acc.platform)})</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {selectedIds.length > 0 && (
+        <p className="text-xs text-blue-600">
+          {selectedIds.length}件のアカウントを選択中
+        </p>
+      )}
+    </div>
   );
 }

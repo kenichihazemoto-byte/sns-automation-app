@@ -653,6 +653,8 @@ export const googlePhotoAlbums = mysqlTable("google_photo_albums", {
   isActive: int("isActive").default(1).notNull(),
   /** 表示順（小さいほど先に使われる） */
   sortOrder: int("sortOrder").default(0).notNull(),
+  /** 投稿先SNSアカウントIDのJSON配列（例: "[1,3,5]"）。nullの場合は全アカウント対象 */
+  targetSnsAccountIds: text("targetSnsAccountIds"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
