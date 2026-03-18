@@ -636,3 +636,25 @@ export const gbpScheduledPosts = mysqlTable("gbp_scheduled_posts", {
 
 export type GbpScheduledPost = typeof gbpScheduledPosts.$inferSelect;
 export type InsertGbpScheduledPost = typeof gbpScheduledPosts.$inferInsert;
+
+/**
+ * Google Photos album management table
+ * Stores album URLs and metadata for photo retrieval
+ */
+export const googlePhotoAlbums = mysqlTable("google_photo_albums", {
+  id: int("id").autoincrement().primaryKey(),
+  /** アルバムタイトル（表示名） */
+  title: varchar("title", { length: 255 }).notNull(),
+  /** GoogleフォトアルバムURL（https://photos.app.goo.gl/...） */
+  url: varchar("url", { length: 512 }).notNull(),
+  /** 年度・カテゴリラベル（任意） */
+  label: varchar("label", { length: 100 }),
+  /** 有効/無効フラグ */
+  isActive: int("isActive").default(1).notNull(),
+  /** 表示順（小さいほど先に使われる） */
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type GooglePhotoAlbum = typeof googlePhotoAlbums.$inferSelect;
+export type InsertGooglePhotoAlbum = typeof googlePhotoAlbums.$inferInsert;

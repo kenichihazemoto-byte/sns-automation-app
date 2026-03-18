@@ -3174,5 +3174,53 @@ ${balanceSummary}
         return { success: true };
       }),
   }),
+
+  // Google Photo Albums Management
+  googlePhotoAlbums: router({
+    /** アルバム一覧を取得する */
+    list: protectedProcedure.query(async () => {
+      return await db.listGooglePhotoAlbums();
+    }),
+    /** アルバムを追加する */
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(255),
+        url: z.string().url().max(512),
+        label: z.string().max(100).optional(),
+        isActive: z.number().int().min(0).max(1).optional(),
+        sortOrder: z.number().int().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.createGooglePhotoAlbum({
+          title: input.title,
+          url: input.url,
+          label: input.label ?? null,
+          isActive: input.isActive ?? 1,
+          sortOrder: input.sortOrder ?? 0,
+        });
+      }),
+    /** アルバムを更新する */
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).max(255).optional(),
+        url: z.string().url().max(512).optional(),
+        label: z.string().max(100).optional(),
+        isActive: z.number().int().min(0).max(1).optional(),
+        sortOrder: z.number().int().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await db.updateGooglePhotoAlbum(id, updates);
+        return { success: true };
+      }),
+    /** アルバムを削除する */
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteGooglePhotoAlbum(input.id);
+        return { success: true };
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;

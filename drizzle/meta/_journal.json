@@ -183,6 +183,13 @@
       "when": 1773636284829,
       "tag": "0025_sturdy_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1773800090524,
+      "tag": "0026_fantastic_ink",
+      "breakpoints": true
     }
   ]
 }

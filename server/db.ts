@@ -78,6 +78,9 @@ import {
   gbpScheduledPosts,
   InsertGbpScheduledPost,
   GbpScheduledPost,
+  googlePhotoAlbums,
+  InsertGooglePhotoAlbum,
+  GooglePhotoAlbum,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2781,4 +2784,40 @@ export async function getPendingGbpScheduledPosts(): Promise<Array<GbpScheduledP
     .leftJoin(gbpAccounts, eq(gbpScheduledPosts.gbpAccountId, gbpAccounts.id))
     .where(and(eq(gbpScheduledPosts.status, 'pending'), lte(gbpScheduledPosts.scheduledAt, now)));
   return rows.map(r => ({ ...r, locationName: r.locationName ?? 'その他' }));
+}
+
+// Google Photo Albums
+export async function listGooglePhotoAlbums(): Promise<GooglePhotoAlbum[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(googlePhotoAlbums).orderBy(asc(googlePhotoAlbums.sortOrder), asc(googlePhotoAlbums.createdAt));
+}
+
+export async function listActiveGooglePhotoAlbums(): Promise<GooglePhotoAlbum[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(googlePhotoAlbums)
+    .where(eq(googlePhotoAlbums.isActive, 1))
+    .orderBy(asc(googlePhotoAlbums.sortOrder), asc(googlePhotoAlbums.createdAt));
+}
+
+export async function createGooglePhotoAlbum(data: InsertGooglePhotoAlbum): Promise<GooglePhotoAlbum> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(googlePhotoAlbums).values(data);
+  const insertedId = Number(result[0].insertId);
+  const inserted = await db.select().from(googlePhotoAlbums).where(eq(googlePhotoAlbums.id, insertedId)).limit(1);
+  return inserted[0];
+}
+
+export async function updateGooglePhotoAlbum(id: number, updates: Partial<InsertGooglePhotoAlbum>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(googlePhotoAlbums).set(updates).where(eq(googlePhotoAlbums.id, id));
+}
+
+export async function deleteGooglePhotoAlbum(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(googlePhotoAlbums).where(eq(googlePhotoAlbums.id, id));
 }

@@ -560,3 +560,13 @@
 ## Googleフォトアルバム変更（2026-03-18）
 
 - [ ] google-photos-service.tsのアルバムリストを「生成画像アルバム」に置き換え
+
+## Googleフォトアルバム管理設定画面（2026-03-18）
+
+- [x] drizzle/schema.tsにgoogle_photo_albumsテーブルを追加
+- [x] pnpm db:pushでマイグレーション実行
+- [x] server/db.tsにアルバムCRUDヘルパーを追加
+- [x] server/routers.tsにアルバム管理APIを追加
+- [x] google-photos-service.tsをDB参照に変更（ハードコードを廃止）
+- [x] GoogleAlbumSettings.tsxを新規作成（追加・削除・有効/無効切り替え）
+- [x] App.tsxにルート追加、DashboardLayout.tsxにナビゲーション追加
