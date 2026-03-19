@@ -164,14 +164,7 @@ export default function GBPPost() {
 
   // GBP OAuth2認証URLを取得して開く
   const redirectUri = `${window.location.origin}/api/gbp/oauth/callback`;
-  const [authTargetAccountId, setAuthTargetAccountId] = useState<number | null>(null);
-  const { data: authUrlData } = trpc.gbp.getAuthUrl.useQuery(
-    {
-      gbpAccountId: authTargetAccountId ?? 0,
-      redirectUri,
-    },
-    { enabled: !!authTargetAccountId }
-  );
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // OAuth2認証コードをトークンに交換するミューテーション
   const connectOAuthMutation = trpc.gbp.connectOAuth.useMutation({
@@ -204,23 +197,24 @@ export default function GBPPost() {
     return () => window.removeEventListener("message", handleMessage);
   }, [selectedAccountId, redirectUri]);
 
-  // authUrlDataが更新されたらポップアップを開く
-  const pendingAuthRef = useRef(false);
-  useEffect(() => {
-    if (pendingAuthRef.current && authUrlData?.url) {
-      pendingAuthRef.current = false;
-      window.open(authUrlData.url, "_blank", "width=600,height=700");
-    }
-  }, [authUrlData]);
-
-  const handleConnectGbp = (accountId: number) => {
-    setAuthTargetAccountId(accountId);
+  const handleConnectGbp = async (accountId: number) => {
     setSelectedAccountId(accountId);
-    pendingAuthRef.current = true;
-    // すでにデータがキャッシュされていれば即座に開く
-    if (authUrlData?.url) {
-      pendingAuthRef.current = false;
-      window.open(authUrlData.url, "_blank", "width=600,height=700");
+    setIsConnecting(true);
+    try {
+      // 直接fetchでURLを取得（キャッシュの問題を回避）
+      const result = await utils.gbp.getAuthUrl.fetch({
+        gbpAccountId: accountId,
+        redirectUri,
+      });
+      if (result?.url) {
+        window.open(result.url, "_blank", "width=600,height=700");
+      } else {
+        toast.error("認証URLの取得に失敗しました");
+      }
+    } catch (err: any) {
+      toast.error(`認証URL取得エラー: ${err.message}`);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -417,13 +411,18 @@ export default function GBPPost() {
                       variant="outline"
                       size="sm"
                       className="w-full text-xs"
+                      disabled={isConnecting}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleConnectGbp(account.id);
                       }}
                     >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      Google認証
+                      {isConnecting ? (
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                      )}
+                      {isConnecting ? "認証中..." : "Google認証"}
                     </Button>
                   )}
                   {account.isConnected && (

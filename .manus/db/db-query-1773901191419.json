@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, userId, locationName, isConnected, accessToken IS NOT NULL as hasToken, tokenExpiresAt FROM gbp_accounts LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, userId, locationName, isConnected, accessToken IS NOT NULL as hasToken, tokenExpiresAt FROM gbp_accounts LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "locationName": "ハゼモト建設",
+      "isConnected": "0",
+      "hasToken": "0",
+      "tokenExpiresAt": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tlocationName\tisConnected\thasToken\ttokenExpiresAt\n1\t1\tハゼモト建設\t0\t0\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1658
+}
