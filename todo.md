@@ -590,3 +590,10 @@
 - [x] 「生成画像アルバム」をサーバー起動時に自動シードする（album-seed.ts + server/_core/index.ts統合済）
 - [x] GoogleAlbumSettings.tsxにアルバムプレビュー（サムネイル表示）を追加する（目アイコンボタン + OGPサムネイルダイアログ）
 - [x] GBP予約投稿の自動実行エンジン（5分ごと定期実行ジョブ）をサーバー側に実装（gbp-scheduler.ts + server/_core/index.ts統合済）
+
+## GBP OAuth2 redirect_uri_mismatch修正（2026-03-19）
+
+- [x] GBPOAuthCallback.tsxを新規作成（ポップアップ → postMessage → 親ウィンドウ方式）
+- [x] App.tsxに /api/gbp/oauth/callback ルートを追加
+- [x] GBPPost.tsxにpostMessageリスナーとconnectOAuthミューテーションを追加
+- [x] redirectUriを変数化してgetAuthUrl・connectOAuth両方で同じ値を使用

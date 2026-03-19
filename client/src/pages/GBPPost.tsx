@@ -163,13 +163,45 @@ export default function GBPPost() {
   };
 
   // GBP OAuth2認証URLを取得して開く
+  const redirectUri = `${window.location.origin}/api/gbp/oauth/callback`;
   const { data: authUrlData } = trpc.gbp.getAuthUrl.useQuery(
     {
       gbpAccountId: selectedAccountId ?? 0,
-      redirectUri: `${window.location.origin}/api/gbp/oauth/callback`,
+      redirectUri,
     },
     { enabled: !!selectedAccountId }
   );
+
+  // OAuth2認証コードをトークンに交換するミューテーション
+  const connectOAuthMutation = trpc.gbp.connectOAuth.useMutation({
+    onSuccess: () => {
+      toast.success("Google認証が完了しました！");
+      refetchAccounts();
+    },
+    onError: (err) => toast.error(`認証失敗: ${err.message}`),
+  });
+
+  // ポップアップからのOAuthコールバックを受け取る
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "GBP_OAUTH_SUCCESS") {
+        const { code, state } = event.data;
+        // stateから gbpAccountId を取得（形式: "userId:gbpAccountId"）
+        const parts = String(state ?? "").split(":");
+        const gbpAccountId = parts.length >= 2 ? parseInt(parts[1]) : (selectedAccountId ?? 0);
+        connectOAuthMutation.mutate({
+          code,
+          gbpAccountId,
+          redirectUri,
+        });
+      } else if (event.data?.type === "GBP_OAUTH_ERROR") {
+        toast.error(`Google認証エラー: ${event.data.error}`);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [selectedAccountId, redirectUri]);
 
   const handleConnectGbp = () => {
     if (authUrlData?.url) {
