@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -164,12 +164,13 @@ export default function GBPPost() {
 
   // GBP OAuth2認証URLを取得して開く
   const redirectUri = `${window.location.origin}/api/gbp/oauth/callback`;
+  const [authTargetAccountId, setAuthTargetAccountId] = useState<number | null>(null);
   const { data: authUrlData } = trpc.gbp.getAuthUrl.useQuery(
     {
-      gbpAccountId: selectedAccountId ?? 0,
+      gbpAccountId: authTargetAccountId ?? 0,
       redirectUri,
     },
-    { enabled: !!selectedAccountId }
+    { enabled: !!authTargetAccountId }
   );
 
   // OAuth2認証コードをトークンに交換するミューテーション
@@ -203,11 +204,23 @@ export default function GBPPost() {
     return () => window.removeEventListener("message", handleMessage);
   }, [selectedAccountId, redirectUri]);
 
-  const handleConnectGbp = () => {
-    if (authUrlData?.url) {
+  // authUrlDataが更新されたらポップアップを開く
+  const pendingAuthRef = useRef(false);
+  useEffect(() => {
+    if (pendingAuthRef.current && authUrlData?.url) {
+      pendingAuthRef.current = false;
       window.open(authUrlData.url, "_blank", "width=600,height=700");
-    } else {
-      toast.error("Google Client IDが設定されていません。管理者に設定を依頼してください。");
+    }
+  }, [authUrlData]);
+
+  const handleConnectGbp = (accountId: number) => {
+    setAuthTargetAccountId(accountId);
+    setSelectedAccountId(accountId);
+    pendingAuthRef.current = true;
+    // すでにデータがキャッシュされていれば即座に開く
+    if (authUrlData?.url) {
+      pendingAuthRef.current = false;
+      window.open(authUrlData.url, "_blank", "width=600,height=700");
     }
   };
 
@@ -406,8 +419,7 @@ export default function GBPPost() {
                       className="w-full text-xs"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedAccountId(account.id);
-                        handleConnectGbp();
+                        handleConnectGbp(account.id);
                       }}
                     >
                       <ExternalLink className="h-3 w-3 mr-1" />
