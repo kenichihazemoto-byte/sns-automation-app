@@ -1,11 +1,18 @@
 /**
  * Google Business Profile (GBP) API ヘルパー
  * OAuth2認証フロー・投稿作成・拠点一覧取得
+ *
+ * 使用するAPIエンドポイント（2024年以降の最新版）:
+ * - アカウント管理: https://mybusinessaccountmanagement.googleapis.com/v1
+ * - 拠点情報: https://mybusinessbusinessinformation.googleapis.com/v1
+ * - 投稿: https://mybusiness.googleapis.com/v4（投稿はv4が現在も有効）
  */
 
 import { ENV } from "./_core/env";
 
-const GBP_API_BASE = "https://mybusiness.googleapis.com/v4";
+const GBP_ACCOUNT_API_BASE = "https://mybusinessaccountmanagement.googleapis.com/v1";
+const GBP_BUSINESS_INFO_API_BASE = "https://mybusinessbusinessinformation.googleapis.com/v1";
+const GBP_POST_API_BASE = "https://mybusiness.googleapis.com/v4";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
@@ -91,14 +98,14 @@ export async function refreshAccessToken(
 }
 
 /**
- * GBP APIリクエストの共通ヘルパー
+ * Account Management API用リクエストヘルパー
  */
-async function gbpFetch(
+async function accountApiFetch(
   path: string,
   accessToken: string,
   options: RequestInit = {}
 ): Promise<any> {
-  const res = await fetch(`${GBP_API_BASE}${path}`, {
+  const res = await fetch(`${GBP_ACCOUNT_API_BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -110,29 +117,87 @@ async function gbpFetch(
     const err = await res.text();
     throw new Error(`GBP API error (${res.status}): ${err}`);
   }
-  // 204 No Content の場合はnullを返す
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+/**
+ * Business Information API用リクエストヘルパー
+ */
+async function businessInfoFetch(
+  path: string,
+  accessToken: string,
+  options: RequestInit = {}
+): Promise<any> {
+  const res = await fetch(`${GBP_BUSINESS_INFO_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GBP API error (${res.status}): ${err}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+/**
+ * Post API用リクエストヘルパー（v4）
+ */
+async function postApiFetch(
+  path: string,
+  accessToken: string,
+  options: RequestInit = {}
+): Promise<any> {
+  const res = await fetch(`${GBP_POST_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GBP API error (${res.status}): ${err}`);
+  }
   if (res.status === 204) return null;
   return res.json();
 }
 
 /**
  * 認証済みユーザーのGBPアカウント一覧を取得する
+ * Account Management API v1を使用
  */
 export async function listGbpAccounts(
   accessToken: string
 ): Promise<Array<{ name: string; accountName: string; type: string }>> {
-  const data = await gbpFetch("/accounts", accessToken);
+  const data = await accountApiFetch("/accounts", accessToken);
   return data?.accounts ?? [];
 }
 
 /**
  * 指定アカウントのロケーション一覧を取得する
+ * Business Information API v1を使用
+ * parentはaccounts/{accountId}形式（例: accounts/123456789）
  */
 export async function listGbpLocations(
   accessToken: string,
   accountId: string
-): Promise<Array<{ name: string; locationName: string; storeCode?: string }>> {
-  const data = await gbpFetch(`/${accountId}/locations`, accessToken);
+): Promise<Array<{ name: string; title: string; storeCode?: string }>> {
+  // readMaskは必須パラメータ（取得するフィールドを指定）
+  const params = new URLSearchParams({
+    readMask: "name,title,storeCode,storefrontAddress",
+    pageSize: "100",
+  });
+  const data = await businessInfoFetch(
+    `/${accountId}/locations?${params.toString()}`,
+    accessToken
+  );
   return data?.locations ?? [];
 }
 
@@ -155,6 +220,7 @@ export interface GbpPostPayload {
 
 /**
  * Googleビジネスプロフィールに投稿を作成する
+ * v4 APIを使用: POST /v4/{accountId}/{locationId}/localPosts
  */
 export async function createGbpPost(
   accessToken: string,
@@ -196,7 +262,8 @@ export async function createGbpPost(
     };
   }
 
-  const result = await gbpFetch(
+  // v4 APIのパスは /{accountId}/{locationId}/localPosts
+  const result = await postApiFetch(
     `/${accountId}/${locationId}/localPosts`,
     accessToken,
     {
@@ -214,5 +281,5 @@ export async function deleteGbpPost(
   accessToken: string,
   postName: string
 ): Promise<void> {
-  await gbpFetch(`/${postName}`, accessToken, { method: "DELETE" });
+  await postApiFetch(`/${postName}`, accessToken, { method: "DELETE" });
 }

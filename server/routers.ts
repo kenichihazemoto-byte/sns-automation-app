@@ -2931,7 +2931,7 @@ ${balanceSummary}
     upsertAccount: protectedProcedure
       .input(z.object({
         id: z.number().optional(),
-        locationName: z.string(),
+        locationName: z.string().optional(),
         accountId: z.string().optional(),
         locationId: z.string().optional(),
         accessToken: z.string().optional(),
@@ -2956,9 +2956,10 @@ ${balanceSummary}
         if (!clientId || !clientSecret) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Google OAuth認証情報が設定されていません' });
         }
-        const { exchangeCodeForTokens } = await import('./gbp');
+        const { exchangeCodeForTokens, listGbpAccounts, listGbpLocations } = await import('./gbp');
         const tokens = await exchangeCodeForTokens(input.code, clientId, clientSecret, input.redirectUri);
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+        // トークンを先に保存
         await db.upsertGbpAccount(ctx.user.id, {
           id: input.gbpAccountId,
           accessToken: tokens.access_token,
@@ -2966,7 +2967,35 @@ ${balanceSummary}
           tokenExpiresAt: expiresAt,
           isConnected: true,
         });
-        return { success: true };
+        // GBP APIからアカウント・拠点情報を自動取得して保存
+        try {
+          const gbpAccounts = await listGbpAccounts(tokens.access_token);
+          const locations: Array<{ accountId: string; locationId: string; locationName: string }> = [];
+          for (const acc of gbpAccounts) {
+            const locs = await listGbpLocations(tokens.access_token, acc.name);
+            for (const loc of locs) {
+              locations.push({
+                accountId: acc.name,
+                locationId: loc.name,
+                locationName: loc.title,
+              });
+            }
+          }
+          if (locations.length > 0) {
+            // 最初の拠点を自動設定
+            const firstLoc = locations[0];
+            await db.upsertGbpAccount(ctx.user.id, {
+              id: input.gbpAccountId,
+              accountId: firstLoc.accountId,
+              locationId: firstLoc.locationId,
+            });
+            return { success: true, locations, autoSelected: firstLoc };
+          }
+        } catch (e) {
+          // 拠点取得に失敗しても認証自体は成功とする
+          console.error('[GBP] Failed to fetch locations after OAuth:', e);
+        }
+        return { success: true, locations: [], autoSelected: null };
       }),
 
     /** GBP OAuth2認証 URLを生成する */
@@ -3017,7 +3046,7 @@ ${balanceSummary}
               accountId: acc.name,
               accountName: acc.accountName,
               locationId: loc.name,
-              locationName: loc.locationName,
+              locationName: loc.title,
             });
           }
         }

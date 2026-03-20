@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, locationName, accountId, locationId, isConnected, tokenExpiresAt, LEFT(accessToken, 50) as accessTokenPreview, LEFT(refreshToken, 50) as refreshTokenPreview FROM gbp_accounts WHERE id = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, locationName, accountId, locationId, isConnected, tokenExpiresAt, LEFT(accessToken, 50) as accessTokenPreview, LEFT(refreshToken, 50) as refreshTokenPreview FROM gbp_accounts WHERE id = 1;",
+  "rows": [
+    {
+      "id": "1",
+      "locationName": "ハゼモト建設",
+      "accountId": "NULL",
+      "locationId": "NULL",
+      "isConnected": "1",
+      "tokenExpiresAt": "2026-03-20 00:30:56",
+      "accessTokenPreview": "ya29.a0ATkoCc6sBj8wKw5_fg2j5YrRBZ15B67z9vW0Bo3DvyF",
+      "refreshTokenPreview": "1//05QfSBMflkxLhCgYIARAAGAUSNwF-L9Ir354ll1J5FCRb8s"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tlocationName\taccountId\tlocationId\tisConnected\ttokenExpiresAt\taccessTokenPreview\trefreshTokenPreview\n1\tハゼモト建設\tNULL\tNULL\t1\t2026-03-20 00:30:56\tya29.a0ATkoCc6sBj8wKw5_fg2j5YrRBZ15B67z9vW0Bo3DvyF\t1//05QfSBMflkxLhCgYIARAAGAUSNwF-L9Ir354ll1J5FCRb8s\n",
+  "stderr": "",
+  "execution_time_ms": 1551
+}

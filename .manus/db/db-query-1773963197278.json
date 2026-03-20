@@ -1,0 +1,13 @@
+{
+  "query": "SELECT accessToken FROM gbp_accounts WHERE id = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT accessToken FROM gbp_accounts WHERE id = 1;",
+  "rows": [
+    {
+      "accessToken": "ya29.a0ATkoCc6sBj8wKw5_fg2j5YrRBZ15B67z9vW0Bo3DvyF2cRSz9TqyBf8GgQGIp3AV2Iyth8gE4lP132j6gnJKzhs8K4PmUG5-Jwsic7xKZNrASm9EfW9wa6D8LIm7UQX0PRR4qsgQQhb0JgTxHRi10E_HIBtgYzopD97G8n2HG9Wj6aNDTI0WhMeYWmgs_jnlcxQE5l12aCgYKAaQSARYSFQHGX2MiJoj4lwzexFbXHloQKwS77A0207"
+    }
+  ],
+  "messages": [],
+  "stdout": "accessToken\nya29.a0ATkoCc6sBj8wKw5_fg2j5YrRBZ15B67z9vW0Bo3DvyF2cRSz9TqyBf8GgQGIp3AV2Iyth8gE4lP132j6gnJKzhs8K4PmUG5-Jwsic7xKZNrASm9EfW9wa6D8LIm7UQX0PRR4qsgQQhb0JgTxHRi10E_HIBtgYzopD97G8n2HG9Wj6aNDTI0WhMeYWmgs_jnlcxQE5l12aCgYKAaQSARYSFQHGX2MiJoj4lwzexFbXHloQKwS77A0207\n",
+  "stderr": "",
+  "execution_time_ms": 1567
+}

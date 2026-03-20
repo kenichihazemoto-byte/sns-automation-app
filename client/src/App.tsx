@@ -34,6 +34,7 @@ import GBPPost from "./pages/GBPPost";
 import GBPSchedule from "./pages/GBPSchedule";
 import GBPOAuthCallback from "./pages/GBPOAuthCallback";
 import GoogleAlbumSettings from "./pages/GoogleAlbumSettings";
+import WorkflowGuide from "./pages/WorkflowGuide";
 function Router() {
   return (
     <Switch>
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/gbp-schedule" component={GBPSchedule} />
       <Route path="/api/gbp/oauth/callback" component={GBPOAuthCallback} />
       <Route path="/google-album-settings" component={GoogleAlbumSettings} />
+      <Route path="/workflow-guide" component={WorkflowGuide} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

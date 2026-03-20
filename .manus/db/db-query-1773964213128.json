@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE gbp_accounts SET accountId = '12365975', locationId = '14039132526234422237' WHERE id = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute UPDATE gbp_accounts SET accountId = '12365975', locationId = '14039132526234422237' WHERE id = 1;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1568
+}

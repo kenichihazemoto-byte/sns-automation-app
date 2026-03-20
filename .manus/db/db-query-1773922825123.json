@@ -1,0 +1,100 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "analytics"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "approval_history"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "cloud_storage_configs"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "comments"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "custom_templates"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "daily_task_progress"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "data_sources"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "draft_posts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "errorLogs"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "favorite_images"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "gbp_accounts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "gbp_posts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "gbp_scheduled_posts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "google_photo_albums"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "images"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "notion_settings"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "post_contents"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "post_drafts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "post_history"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "post_schedules"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "post_templates"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "sns_accounts"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "template_data_sources"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "template_performance_stats"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "upload_history"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "user_activity_log"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "user_badges"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "user_feedback"
+    },
+    {
+      "Tables_in_KLcCPGbUiVTGcL4JdWp2yv": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_KLcCPGbUiVTGcL4JdWp2yv\n__drizzle_migrations\nanalytics\napproval_history\ncloud_storage_configs\ncomments\ncustom_templates\ndaily_task_progress\ndata_sources\ndraft_posts\nerrorLogs\nfavorite_images\ngbp_accounts\ngbp_posts\ngbp_scheduled_posts\ngoogle_photo_albums\nimages\nnotion_settings\npost_contents\npost_drafts\npost_history\npost_schedules\npost_templates\nsns_accounts\ntemplate_data_sources\ntemplate_performance_stats\nupload_history\nuser_activity_log\nuser_badges\nuser_feedback\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 1616
+}

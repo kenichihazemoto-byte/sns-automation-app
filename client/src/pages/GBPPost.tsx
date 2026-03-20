@@ -103,11 +103,59 @@ export default function GBPPost() {
   const [isAddingLocation, setIsAddingLocation] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
 
+  // GBP拠点選択ダイアログ（接続済みだがlocationId未設定の場合）
+  const [showLocationSelectDialog, setShowLocationSelectDialog] = useState(false);
+  const [locationSelectAccountId, setLocationSelectAccountId] = useState<number | null>(null);
+  const [availableLocations, setAvailableLocations] = useState<Array<{ accountId: string; accountName: string; locationId: string; locationName: string }>>([]);
+  const [isFetchingLocations, setIsFetchingLocations] = useState(false);
+
   // 投稿履歴
   const [selectedHistoryAccountId, setSelectedHistoryAccountId] = useState<number | undefined>(undefined);
   const { data: postHistory = [], refetch: refetchHistory } = trpc.gbp.listPosts.useQuery(
     { gbpAccountId: selectedHistoryAccountId }
   );
+
+  // GBP拠点情報を取得して選択ダイアログを開く
+  const handleSetLocation = async (accountId: number) => {
+    setLocationSelectAccountId(accountId);
+    setIsFetchingLocations(true);
+    setShowLocationSelectDialog(true);
+    try {
+      const locations = await utils.gbp.listLocations.fetch({ gbpAccountId: accountId });
+      setAvailableLocations(locations);
+      if (locations.length === 1) {
+        // 拠点が1つだけなら自動設定
+        await upsertAccountMutation.mutateAsync({
+          id: accountId,
+          accountId: locations[0].accountId,
+          locationId: locations[0].locationId,
+        });
+        setShowLocationSelectDialog(false);
+        toast.success(`拠点「${locations[0].locationName}」を設定しました`);
+      }
+    } catch (err: any) {
+      toast.error(`拠点取得エラー: ${err.message}`);
+      setShowLocationSelectDialog(false);
+    } finally {
+      setIsFetchingLocations(false);
+    }
+  };
+
+  // 拠点を選択してDBに保存
+  const handleSelectLocation = async (loc: { accountId: string; locationId: string; locationName: string }) => {
+    if (!locationSelectAccountId) return;
+    try {
+      await upsertAccountMutation.mutateAsync({
+        id: locationSelectAccountId,
+        accountId: loc.accountId,
+        locationId: loc.locationId,
+      });
+      setShowLocationSelectDialog(false);
+      toast.success(`拠点「${loc.locationName}」を設定しました`);
+    } catch (err: any) {
+      toast.error(`拠点設定エラー: ${err.message}`);
+    }
+  };
 
   // 拠点登録ミューテーション
   const upsertAccountMutation = trpc.gbp.upsertAccount.useMutation({
@@ -168,8 +216,14 @@ export default function GBPPost() {
 
   // OAuth2認証コードをトークンに交換するミューテーション
   const connectOAuthMutation = trpc.gbp.connectOAuth.useMutation({
-    onSuccess: () => {
-      toast.success("Google認証が完了しました！");
+    onSuccess: (data) => {
+      if (data?.autoSelected) {
+        toast.success(`Google認証完了！拠点「${data.autoSelected.locationName}」を自動設定しました`);
+      } else if (data?.locations && data.locations.length > 1) {
+        toast.success("Google認証が完了しました。拠点を選択してください。");
+      } else {
+        toast.success("Google認証が完了しました！");
+      }
       refetchAccounts();
     },
     onError: (err) => toast.error(`認証失敗: ${err.message}`),
@@ -425,7 +479,21 @@ export default function GBPPost() {
                       {isConnecting ? "認証中..." : "Google認証"}
                     </Button>
                   )}
-                  {account.isConnected && (
+                  {account.isConnected && !account.locationId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs text-orange-600 border-orange-300 hover:bg-orange-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSetLocation(account.id);
+                      }}
+                    >
+                      <MapPin className="h-3 w-3 mr-1" />
+                      拠点を設定
+                    </Button>
+                  )}
+                  {account.isConnected && account.locationId && (
                     <p className="text-xs text-muted-foreground text-center">クリックして選択</p>
                   )}
                 </CardContent>
@@ -801,6 +869,44 @@ export default function GBPPost() {
           </CardContent>
         </Card>
       </div>
+
+      {/* GBP拠点選択ダイアログ */}
+      <Dialog open={showLocationSelectDialog} onOpenChange={setShowLocationSelectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>GBP拠点を選択</DialogTitle>
+            <DialogDescription>
+              Googleビジネスプロフィールに登録されている拠点を選択してください。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            {isFetchingLocations ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">拠点情報を取得中...</span>
+              </div>
+            ) : availableLocations.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                <AlertCircle className="h-8 w-8 mx-auto mb-2 text-orange-400" />
+                <p>GBP拠点が見つかりませんでした。</p>
+                <p className="text-xs mt-1">Googleビジネスプロフィールに拠点が登録されているか確認してください。</p>
+              </div>
+            ) : (
+              availableLocations.map((loc) => (
+                <button
+                  key={loc.locationId}
+                  className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors"
+                  onClick={() => handleSelectLocation(loc)}
+                >
+                  <div className="font-medium text-sm">{loc.locationName}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{loc.accountName}</div>
+                  <div className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{loc.locationId}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -1,0 +1,23 @@
+{
+  "query": "SELECT * FROM gbp_accounts;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT * FROM gbp_accounts;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "locationName": "ハゼモト建設",
+      "accountId": "NULL",
+      "locationId": "NULL",
+      "accessToken": "ya29.a0ATkoCc5l_BkAtbnUEGMHIX5YWrmHOqs6uVIWlKBmj1kb4dirLvVHsq5nNI62CetWgfEpOXwZi5IOEsdKNQtvdB1YQjXD5yf5_k_7Z2lW6ndD9NmtL-A9W_Nl2Z9001bBfp4zku_QWRefNpVZ7Clhv15EFWU62TQso-RMNL2VtewE4QmfBoDmZqfI0IFI6qQrqb8pS2AaCgYKAX0SARYSFQHGX2MiatvkRSzfy7LESjFnN8grDg0206",
+      "refreshToken": "1//05QfSBMflkxLhCgYIARAAGAUSNwF-L9Ir354ll1J5FCRb8svBKnOJw6inHF8dOnDPEDVNzJlXYXdtdji_PLAeI7t8TdC7hvbISYs",
+      "tokenExpiresAt": "2026-03-19 13:14:09",
+      "isConnected": "1",
+      "createdAt": "2026-03-18 05:24:18",
+      "updatedAt": "2026-03-19 12:14:10"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tlocationName\taccountId\tlocationId\taccessToken\trefreshToken\ttokenExpiresAt\tisConnected\tcreatedAt\tupdatedAt\n1\t1\tハゼモト建設\tNULL\tNULL\tya29.a0ATkoCc5l_BkAtbnUEGMHIX5YWrmHOqs6uVIWlKBmj1kb4dirLvVHsq5nNI62CetWgfEpOXwZi5IOEsdKNQtvdB1YQjXD5yf5_k_7Z2lW6ndD9NmtL-A9W_Nl2Z9001bBfp4zku_QWRefNpVZ7Clhv15EFWU62TQso-RMNL2VtewE4QmfBoDmZqfI0IFI6qQrqb8pS2AaCgYKAX0SARYSFQHGX2MiatvkRSzfy7LESjFnN8grDg0206\t1//05QfSBMflkxLhCgYIARAAGAUSNwF-L9Ir354ll1J5FCRb8svBKnOJw6inHF8dOnDPEDVNzJlXYXdtdji_PLAeI7t8TdC7hvbISYs\t2026-03-19 13:14:09\t1\t2026-03-18 05:24:18\t2026-03-19 12:14:10\n",
+  "stderr": "",
+  "execution_time_ms": 1897
+}
