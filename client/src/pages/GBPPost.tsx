@@ -76,6 +76,19 @@ export default function GBPPost() {
   // GBPアカウント一覧
   const { data: gbpAccounts = [], refetch: refetchAccounts } = trpc.gbp.listAccounts.useQuery();
 
+  // GBP予約投稿一覧
+  const { data: gbpSchedules = [], refetch: refetchSchedules } = trpc.gbp.listSchedules.useQuery({ status: 'pending' });
+  const { data: gbpFailedSchedules = [] } = trpc.gbp.listSchedules.useQuery({ status: 'failed' });
+
+  // GBP予約キャンセルミューテーション
+  const cancelScheduleMutation = trpc.gbp.cancelSchedule.useMutation({
+    onSuccess: () => {
+      toast.success('予約をキャンセルしました');
+      refetchSchedules();
+    },
+    onError: (err) => toast.error(`キャンセル失敗: ${err.message}`),
+  });
+
   // 直近のSNS投稿一覧（流用用）
   const [selectedCompanyForImport, setSelectedCompanyForImport] = useState<string>("");
   const { data: recentSchedules = [] } = trpc.gbp.listRecentSchedules.useQuery(
@@ -108,6 +121,16 @@ export default function GBPPost() {
   const [locationSelectAccountId, setLocationSelectAccountId] = useState<number | null>(null);
   const [availableLocations, setAvailableLocations] = useState<Array<{ accountId: string; accountName: string; locationId: string; locationName: string }>>([]);
   const [isFetchingLocations, setIsFetchingLocations] = useState(false);
+
+  // 接続テスト結果の詳細表示
+  const [testResults, setTestResults] = useState<Record<number, {
+    success: boolean;
+    message: string;
+    accountCount?: number;
+    locationCount?: number;
+    accountId?: string | null;
+    locationId?: string | null;
+  }>>({});
 
   // 投稿履歴
   const [selectedHistoryAccountId, setSelectedHistoryAccountId] = useState<number | undefined>(undefined);
@@ -170,10 +193,30 @@ export default function GBPPost() {
 
   // GBP接続テストミューテーション
   const testConnectionMutation = trpc.gbp.testConnection.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(data.message);
+      setTestResults(prev => ({
+        ...prev,
+        [variables.gbpAccountId]: {
+          success: data.success,
+          message: data.message,
+          accountCount: data.accountCount,
+          locationCount: data.locationCount,
+          accountId: data.accountId,
+          locationId: data.locationId,
+        },
+      }));
     },
-    onError: (err) => toast.error(`接続テスト失敗: ${err.message}`),
+    onError: (err, variables) => {
+      toast.error(`接続テスト失敗: ${err.message}`);
+      setTestResults(prev => ({
+        ...prev,
+        [variables.gbpAccountId]: {
+          success: false,
+          message: err.message,
+        },
+      }));
+    },
   });
 
   // HTMLエラークリーンアップミューテーション
@@ -554,6 +597,41 @@ export default function GBPPost() {
                           再認証
                         </Button>
                       </div>
+                      {/* 接続テスト結果詳細表示 */}
+                      {testResults[account.id] && (
+                        <div className={`p-2 rounded-md text-xs border ${
+                          testResults[account.id].success
+                            ? 'bg-green-50 border-green-200'
+                            : 'bg-red-50 border-red-200'
+                        }`}>
+                          <div className="flex items-center gap-1 font-medium mb-1">
+                            {testResults[account.id].success ? (
+                              <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-red-600" />
+                            )}
+                            <span className={testResults[account.id].success ? 'text-green-700' : 'text-red-700'}>
+                              {testResults[account.id].success ? '接続成功' : '接続失敗'}
+                            </span>
+                          </div>
+                          {testResults[account.id].success && (
+                            <div className="space-y-0.5 text-gray-600">
+                              {testResults[account.id].accountCount !== undefined && (
+                                <p>アカウント数: {testResults[account.id].accountCount}件</p>
+                              )}
+                              {testResults[account.id].locationCount !== undefined && (
+                                <p>拠点数: {testResults[account.id].locationCount}件</p>
+                              )}
+                              {testResults[account.id].accountId && (
+                                <p className="font-mono text-xs truncate" title={testResults[account.id].accountId ?? ''}>ID: {testResults[account.id].accountId}</p>
+                              )}
+                            </div>
+                          )}
+                          {!testResults[account.id].success && (
+                            <p className="text-red-600 mt-0.5">{testResults[account.id].message}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -863,54 +941,69 @@ export default function GBPPost() {
                           </Button>
                         </div>
                       )}
-                      {postHistory.slice().reverse().slice(0, 10).map((post) => (
-                        <div key={post.id} className="p-2 border rounded-md">
-                          <div className="flex items-center justify-between mb-1">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs py-0 h-4 ${
-                                post.status === "published"
-                                  ? "text-green-600 border-green-300"
-                                  : post.status === "failed"
-                                  ? "text-red-600 border-red-300"
-                                  : "text-gray-600"
-                              }`}
-                            >
-                              {post.status === "published" ? (
-                                <CheckCircle2 className="h-3 w-3 mr-0.5" />
-                              ) : post.status === "failed" ? (
-                                <XCircle className="h-3 w-3 mr-0.5" />
-                              ) : null}
-                              {post.status === "published" ? "投稿済" : post.status === "failed" ? "失敗" : "下書き"}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(post.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
-                            </span>
-                          </div>
-                          <p className="text-xs line-clamp-2">{post.summary}</p>
-                          {post.errorMessage && (
-                            <div className="mt-1">
-                              <p className="text-xs text-red-500">
-                                {post.errorMessage.startsWith('<')
-                                  ? 'APIエラー（上の『エラーを整理する』ボタンを押してください）'
-                                  : post.errorMessage}
-                              </p>
-                              {post.status === 'failed' && (
+                      {postHistory.slice().reverse().slice(0, 10).map((post) => {
+                        const isHtmlError = post.errorMessage?.startsWith('<');
+                        const errorType = isHtmlError
+                          ? 'APIエラー（URL不正）'
+                          : post.errorMessage?.includes('401') || post.errorMessage?.includes('Unauthorized')
+                          ? '認証エラー（再認証が必要）'
+                          : post.errorMessage?.includes('403') || post.errorMessage?.includes('Forbidden')
+                          ? '権限エラー（アクセス権限不足）'
+                          : post.errorMessage?.includes('404')
+                          ? '拠点が見つかりません（再認証してください）'
+                          : post.errorMessage
+                          ? 'エラー'
+                          : null;
+                        return (
+                          <div key={post.id} className={`p-2 border rounded-md ${
+                            post.status === 'failed' ? 'border-red-200 bg-red-50/30' : ''
+                          }`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs py-0 h-4 ${
+                                  post.status === "published"
+                                    ? "text-green-600 border-green-300 bg-green-50"
+                                    : post.status === "failed"
+                                    ? "text-red-600 border-red-300 bg-red-50"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {post.status === "published" ? (
+                                  <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                                ) : post.status === "failed" ? (
+                                  <XCircle className="h-3 w-3 mr-0.5" />
+                                ) : null}
+                                {post.status === "published" ? "投稿済" : post.status === "failed" ? "失敗" : "下書き"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(post.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                            <p className="text-xs line-clamp-2">{post.summary}</p>
+                            {post.status === 'failed' && (
+                              <div className="mt-1.5 space-y-1">
+                                {errorType && (
+                                  <div className="flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                    <p className="text-xs text-red-600 font-medium">{errorType}</p>
+                                  </div>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="w-full mt-1 h-6 text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
+                                  className="w-full h-6 text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
                                   disabled={retryPostMutation.isPending}
                                   onClick={() => retryPostMutation.mutate({ gbpPostId: post.id })}
                                 >
                                   <RefreshCw className={`h-3 w-3 mr-1 ${retryPostMutation.isPending ? 'animate-spin' : ''}`} />
                                   再投稿する
                                 </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </>
                   )}
                 </div>
@@ -918,6 +1011,81 @@ export default function GBPPost() {
             </Card>
           </div>
         </div>
+
+        {/* GBP予約投稿一覧 */}
+        {(gbpSchedules.length > 0 || gbpFailedSchedules.length > 0) && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                GBP予約投稿一覧
+                {gbpSchedules.length > 0 && (
+                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 bg-blue-50">
+                    待機中 {gbpSchedules.length}件
+                  </Badge>
+                )}
+                {gbpFailedSchedules.length > 0 && (
+                  <Badge variant="outline" className="text-xs text-red-600 border-red-300 bg-red-50">
+                    失敗 {gbpFailedSchedules.length}件
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {[...gbpSchedules, ...gbpFailedSchedules].map((schedule) => (
+                  <div key={schedule.id} className={`p-3 border rounded-md flex items-start justify-between gap-3 ${
+                    schedule.status === 'failed' ? 'border-red-200 bg-red-50/30' : 'border-blue-200 bg-blue-50/30'
+                  }`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge
+                          variant="outline"
+                          className={`text-xs py-0 h-4 ${
+                            schedule.status === 'pending'
+                              ? 'text-blue-600 border-blue-300 bg-blue-50'
+                              : 'text-red-600 border-red-300 bg-red-50'
+                          }`}
+                        >
+                          {schedule.status === 'pending' ? (
+                            <Clock className="h-3 w-3 mr-0.5" />
+                          ) : (
+                            <XCircle className="h-3 w-3 mr-0.5" />
+                          )}
+                          {schedule.status === 'pending' ? '予約中' : '失敗'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(schedule.scheduledAt).toLocaleString('ja-JP', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-xs line-clamp-2">{schedule.summary}</p>
+                      {schedule.errorMessage && (
+                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                          {schedule.errorMessage.startsWith('<') ? 'APIエラー（再認証して再投稿してください）' : schedule.errorMessage}
+                        </p>
+                      )}
+                    </div>
+                    {schedule.status === 'pending' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                        disabled={cancelScheduleMutation.isPending}
+                        onClick={() => cancelScheduleMutation.mutate({ id: schedule.id })}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        キャンセル
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* GBP接続ガイド */}
         <Card className="bg-blue-50/30 border-blue-200">
