@@ -597,3 +597,10 @@
 - [x] App.tsxに /api/gbp/oauth/callback ルートを追加
 - [x] GBPPost.tsxにpostMessageリスナーとconnectOAuthミューテーションを追加
 - [x] redirectUriを変数化してgetAuthUrl・connectOAuth両方で同じ値を使用
+
+## GBP投稿バグ修正・機能改善（2026-03-20）
+
+- [x] GBP投稿ボタン押下時の404エラーを根本修正（APIパス正規化の確認・再テスト）
+- [x] Google認証の再接続フロー改善（再認証ボタン・拠点Id選択UI）
+- [x] 投稿履歴のHTMLエラーメッセージをDBからクリーンアップし再投稿ボタンを追加
+- [x] GBP接続診断（接続テスト）機能を追加

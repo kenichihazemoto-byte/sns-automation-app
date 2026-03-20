@@ -3206,6 +3206,120 @@ ${balanceSummary}
         await db.cancelGbpScheduledPost(input.id, ctx.user.id);
         return { success: true };
       }),
+
+    /** GBP接続テスト：アカウント一覧取得を試みてAPIが正常に動作するか確認する */
+    testConnection: protectedProcedure
+      .input(z.object({ gbpAccountId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const account = await db.getGbpAccountById(input.gbpAccountId, ctx.user.id);
+        if (!account?.accessToken) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Google認証が完了していません。先にGoogle認証を行ってください。' });
+        }
+        const clientId = process.env.GOOGLE_CLIENT_ID!;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+        const { listGbpAccounts, listGbpLocations, refreshAccessToken } = await import('./gbp');
+        let token = account.accessToken;
+        // トークン期限切れの場合は自動更新
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          try {
+            const refreshed = await refreshAccessToken(account.refreshToken!, clientId, clientSecret);
+            token = refreshed.access_token;
+            await db.upsertGbpAccount(ctx.user.id, {
+              id: account.id,
+              accessToken: token,
+              tokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+            });
+          } catch (e: any) {
+            throw new TRPCError({ code: 'UNAUTHORIZED', message: `トークンの更新に失敗しました。再認証が必要です: ${e.message}` });
+          }
+        }
+        // GBP APIにアクセスしてアカウント一覧を取得
+        const accounts = await listGbpAccounts(token);
+        const locationCount = await Promise.all(
+          accounts.map(async (acc) => {
+            try {
+              const locs = await listGbpLocations(token, acc.name);
+              return locs.length;
+            } catch {
+              return 0;
+            }
+          })
+        );
+        const totalLocations = locationCount.reduce((a, b) => a + b, 0);
+        return {
+          success: true,
+          accountCount: accounts.length,
+          locationCount: totalLocations,
+          accountId: account.accountId,
+          locationId: account.locationId,
+          message: `接続成功！${accounts.length}件のアカウント、${totalLocations}件の拠点が見つかりました。`,
+        };
+      }),
+
+    /** 投稿履歴のHTMLエラーメッセージをクリーンアップする */
+    cleanupHtmlErrors: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const drizzleDb = await db.getDb();
+        if (!drizzleDb) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB接続エラー' });
+        const { gbpPosts } = await import('../drizzle/schema');
+        const { like, eq, and } = await import('drizzle-orm');
+        // HTMLタグを含むエラーメッセージを特定して更新
+        await drizzleDb
+          .update(gbpPosts)
+          .set({ errorMessage: 'APIパスエラー（修正済み）：再投稿してください' })
+          .where(
+            and(
+              eq(gbpPosts.userId, ctx.user.id),
+              like(gbpPosts.errorMessage, '<%')
+            )
+          );
+        return { success: true };
+      }),
+
+    /** 失敗した投稿を再投稿する */
+    retryPost: protectedProcedure
+      .input(z.object({ gbpPostId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const posts = await db.getGbpPostsByUserId(ctx.user.id);
+        const post = posts.find((p: any) => p.id === input.gbpPostId);
+        if (!post) throw new TRPCError({ code: 'NOT_FOUND', message: '投稿が見つかりません' });
+        const account = await db.getGbpAccountById(post.gbpAccountId, ctx.user.id);
+        if (!account?.accessToken || !account.accountId || !account.locationId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'GBP拠点情報が不完全です' });
+        }
+        const clientId = process.env.GOOGLE_CLIENT_ID!;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+        const { createGbpPost, refreshAccessToken } = await import('./gbp');
+        let token = account.accessToken;
+        if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
+          const refreshed = await refreshAccessToken(account.refreshToken!, clientId, clientSecret);
+          token = refreshed.access_token;
+          await db.upsertGbpAccount(ctx.user.id, {
+            id: account.id,
+            accessToken: token,
+            tokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+          });
+        }
+        const payload: any = {
+          summary: post.summary,
+          topicType: post.topicType,
+          mediaUrl: post.mediaUrl ?? undefined,
+        };
+        if (post.callToActionType && post.callToActionUrl) {
+          payload.callToAction = { actionType: post.callToActionType, url: post.callToActionUrl };
+        }
+        const result = await createGbpPost(token, account.accountId, account.locationId, payload);
+        // DBの投稿ステータスを更新
+        const drizzleDb = await db.getDb();
+        if (drizzleDb) {
+          const { gbpPosts } = await import('../drizzle/schema');
+          const { eq } = await import('drizzle-orm');
+          await drizzleDb.update(gbpPosts)
+            .set({ status: 'published', gbpPostId: result.name, errorMessage: null })
+            .where(eq(gbpPosts.id, post.id));
+        }
+        return { success: true, gbpPostId: result.name };
+      }),
   }),
 
   // Google Photo Albums Management

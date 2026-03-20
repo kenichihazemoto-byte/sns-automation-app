@@ -168,6 +168,32 @@ export default function GBPPost() {
     onError: (err) => toast.error(`登録失敗: ${err.message}`),
   });
 
+  // GBP接続テストミューテーション
+  const testConnectionMutation = trpc.gbp.testConnection.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+    },
+    onError: (err) => toast.error(`接続テスト失敗: ${err.message}`),
+  });
+
+  // HTMLエラークリーンアップミューテーション
+  const cleanupHtmlErrorsMutation = trpc.gbp.cleanupHtmlErrors.useMutation({
+    onSuccess: () => {
+      toast.success('エラーメッセージをクリーンアップしました。失敗した投稿を再投稿してください。');
+      refetchHistory();
+    },
+    onError: (err) => toast.error(`クリーンアップ失敗: ${err.message}`),
+  });
+
+  // 失敗投稿の再投稿ミューテーション
+  const retryPostMutation = trpc.gbp.retryPost.useMutation({
+    onSuccess: () => {
+      toast.success('再投稿が完了しました！');
+      refetchHistory();
+    },
+    onError: (err) => toast.error(`再投稿失敗: ${err.message}`),
+  });
+
   // GBP投稿ミューテーション
   const createPostMutation = trpc.gbp.createPost.useMutation({
     onSuccess: () => {
@@ -494,7 +520,41 @@ export default function GBPPost() {
                     </Button>
                   )}
                   {account.isConnected && account.locationId && (
-                    <p className="text-xs text-muted-foreground text-center">クリックして選択</p>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground text-center">クリックして選択</p>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          disabled={testConnectionMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            testConnectionMutation.mutate({ gbpAccountId: account.id });
+                          }}
+                        >
+                          {testConnectionMutation.isPending ? (
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                          )}
+                          接続テスト
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-xs h-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          disabled={isConnecting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConnectGbp(account.id);
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          再認証
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -787,36 +847,71 @@ export default function GBPPost() {
                       投稿履歴がありません
                     </p>
                   ) : (
-                    postHistory.slice().reverse().slice(0, 10).map((post) => (
-                      <div key={post.id} className="p-2 border rounded-md">
-                        <div className="flex items-center justify-between mb-1">
-                          <Badge
+                    <>
+                      {postHistory.some((p) => p.status === 'failed' && p.errorMessage?.startsWith('<')) && (
+                        <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+                          <p className="text-xs text-orange-700 font-medium">古いエラーデータが残っています</p>
+                          <Button
                             variant="outline"
-                            className={`text-xs py-0 h-4 ${
-                              post.status === "published"
-                                ? "text-green-600 border-green-300"
-                                : post.status === "failed"
-                                ? "text-red-600 border-red-300"
-                                : "text-gray-600"
-                            }`}
+                            size="sm"
+                            className="w-full mt-1 h-7 text-xs text-orange-600 border-orange-300"
+                            disabled={cleanupHtmlErrorsMutation.isPending}
+                            onClick={() => cleanupHtmlErrorsMutation.mutate()}
                           >
-                            {post.status === "published" ? (
-                              <CheckCircle2 className="h-3 w-3 mr-0.5" />
-                            ) : post.status === "failed" ? (
-                              <XCircle className="h-3 w-3 mr-0.5" />
-                            ) : null}
-                            {post.status === "published" ? "投稿済" : post.status === "failed" ? "失敗" : "下書き"}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(post.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
-                          </span>
+                            <RefreshCw className={`h-3 w-3 mr-1 ${cleanupHtmlErrorsMutation.isPending ? 'animate-spin' : ''}`} />
+                            エラーを整理する
+                          </Button>
                         </div>
-                        <p className="text-xs line-clamp-2">{post.summary}</p>
-                        {post.errorMessage && (
-                          <p className="text-xs text-red-500 mt-1">{post.errorMessage}</p>
-                        )}
-                      </div>
-                    ))
+                      )}
+                      {postHistory.slice().reverse().slice(0, 10).map((post) => (
+                        <div key={post.id} className="p-2 border rounded-md">
+                          <div className="flex items-center justify-between mb-1">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs py-0 h-4 ${
+                                post.status === "published"
+                                  ? "text-green-600 border-green-300"
+                                  : post.status === "failed"
+                                  ? "text-red-600 border-red-300"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {post.status === "published" ? (
+                                <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                              ) : post.status === "failed" ? (
+                                <XCircle className="h-3 w-3 mr-0.5" />
+                              ) : null}
+                              {post.status === "published" ? "投稿済" : post.status === "failed" ? "失敗" : "下書き"}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(post.createdAt).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
+                            </span>
+                          </div>
+                          <p className="text-xs line-clamp-2">{post.summary}</p>
+                          {post.errorMessage && (
+                            <div className="mt-1">
+                              <p className="text-xs text-red-500">
+                                {post.errorMessage.startsWith('<')
+                                  ? 'APIエラー（上の『エラーを整理する』ボタンを押してください）'
+                                  : post.errorMessage}
+                              </p>
+                              {post.status === 'failed' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full mt-1 h-6 text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
+                                  disabled={retryPostMutation.isPending}
+                                  onClick={() => retryPostMutation.mutate({ gbpPostId: post.id })}
+                                >
+                                  <RefreshCw className={`h-3 w-3 mr-1 ${retryPostMutation.isPending ? 'animate-spin' : ''}`} />
+                                  再投稿する
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
               </CardContent>

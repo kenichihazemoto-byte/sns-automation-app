@@ -280,20 +280,25 @@ export async function createGbpPost(
     };
   }
 
-  // v4 APIの正しいパス: /v4/{parent=accounts/*/locations/*}/localPosts
-  // locationIdが "accounts/xxx/locations/yyy" の完全パス形式の場合はそのまま使用
-  // locationIdが "locations/yyy" の短縮形式の場合は accountId と結合
-  // locationIdが数字のみの場合は accountId/locations/{locationId} と結合
+  // v4 APIの正しいパス: /v4/accounts/{accountId}/locations/{locationId}/localPosts
+  // DBには数字のみ（例: "12365975"）または "accounts/12365975" 形式で保存されている
+  // locationIdも数字のみ（例: "14039132526234422237"）または完全パス形式
   let parent: string;
   if (locationId.startsWith("accounts/")) {
-    // 完全パス形式: "accounts/123/locations/456" → そのまま使用
+    // locationIdが完全パス形式: "accounts/123/locations/456" → そのまま使用
     parent = locationId;
-  } else if (locationId.startsWith("locations/")) {
-    // 短縮形式: accountId + "/" + locationId
-    parent = `${accountId}/${locationId}`;
   } else {
-    // 数字のみなど: accountId/locations/{locationId}
-    parent = `${accountId}/locations/${locationId}`;
+    // accountIdを正規化（数字のみの場合は "accounts/" を付与）
+    const normalizedAccountId = accountId.startsWith("accounts/")
+      ? accountId
+      : `accounts/${accountId}`;
+    if (locationId.startsWith("locations/")) {
+      // locationIdが "locations/456" 形式
+      parent = `${normalizedAccountId}/${locationId}`;
+    } else {
+      // locationIdが数字のみ
+      parent = `${normalizedAccountId}/locations/${locationId}`;
+    }
   }
 
   const result = await postApiFetch(

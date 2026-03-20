@@ -1,0 +1,26 @@
+{
+  "query": "SELECT id, userId, locationName, accountId, locationId, createdAt FROM gbp_accounts LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 248jTqkugypfXtv.root --database KLcCPGbUiVTGcL4JdWp2yv --execute SELECT id, userId, locationName, accountId, locationId, createdAt FROM gbp_accounts LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "locationName": "ハゼモト建設",
+      "accountId": "12365975",
+      "locationId": "14039132526234422237",
+      "createdAt": "2026-03-18 05:24:18"
+    },
+    {
+      "id": "30001",
+      "userId": "1",
+      "locationName": "クリニックアーキプロ",
+      "accountId": "NULL",
+      "locationId": "NULL",
+      "createdAt": "2026-03-19 12:16:02"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tlocationName\taccountId\tlocationId\tcreatedAt\n1\t1\tハゼモト建設\t12365975\t14039132526234422237\t2026-03-18 05:24:18\n30001\t1\tクリニックアーキプロ\tNULL\tNULL\t2026-03-19 12:16:02\n",
+  "stderr": "",
+  "execution_time_ms": 1622
+}
