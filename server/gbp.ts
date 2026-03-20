@@ -162,8 +162,22 @@ async function postApiFetch(
     },
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`GBP API error (${res.status}): ${err}`);
+    const errText = await res.text();
+    // HTMLレスポンス（404ページなど）はユーザー向けのメッセージに変換
+    if (errText.trim().startsWith("<")) {
+      if (res.status === 404) {
+        throw new Error(`GBP APIエラー (404): 指定された拠点またはアカウントが見つかりません。アカウントIDと拠点IDを確認してください。`);
+      }
+      throw new Error(`GBP APIエラー (${res.status}): Googleサーバーからエラーレスポンスが返ってきました。時間をおいて再試行してください。`);
+    }
+    // JSONエラーの場合はエラーメッセージを抽出
+    try {
+      const errJson = JSON.parse(errText);
+      const message = errJson?.error?.message ?? errJson?.message ?? errText;
+      throw new Error(`GBP APIエラー (${res.status}): ${message}`);
+    } catch {
+      throw new Error(`GBP APIエラー (${res.status}): ${errText}`);
+    }
   }
   if (res.status === 204) return null;
   return res.json();
@@ -220,7 +234,11 @@ export interface GbpPostPayload {
 
 /**
  * Googleビジネスプロフィールに投稿を作成する
- * v4 APIを使用: POST /v4/{accountId}/{locationId}/localPosts
+ * v4 APIを使用: POST /v4/accounts-STAR-SLASH-locs-STAR/localPosts
+ *
+ * accountId例: "accounts/123456789"
+ * locationId例: "accounts/123456789/locs/987654321" (完全パス) または "locs/987654321" (短縮)
+ * どちらの形式でも正しく動作するよう正規化する
  */
 export async function createGbpPost(
   accessToken: string,
@@ -262,9 +280,24 @@ export async function createGbpPost(
     };
   }
 
-  // v4 APIのパスは /{accountId}/{locationId}/localPosts
+  // v4 APIの正しいパス: /v4/{parent=accounts/*/locations/*}/localPosts
+  // locationIdが "accounts/xxx/locations/yyy" の完全パス形式の場合はそのまま使用
+  // locationIdが "locations/yyy" の短縮形式の場合は accountId と結合
+  // locationIdが数字のみの場合は accountId/locations/{locationId} と結合
+  let parent: string;
+  if (locationId.startsWith("accounts/")) {
+    // 完全パス形式: "accounts/123/locations/456" → そのまま使用
+    parent = locationId;
+  } else if (locationId.startsWith("locations/")) {
+    // 短縮形式: accountId + "/" + locationId
+    parent = `${accountId}/${locationId}`;
+  } else {
+    // 数字のみなど: accountId/locations/{locationId}
+    parent = `${accountId}/locations/${locationId}`;
+  }
+
   const result = await postApiFetch(
-    `/${accountId}/${locationId}/localPosts`,
+    `/${parent}/localPosts`,
     accessToken,
     {
       method: "POST",
