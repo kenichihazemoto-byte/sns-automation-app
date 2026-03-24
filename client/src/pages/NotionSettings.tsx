@@ -481,10 +481,10 @@ export default function NotionSettings() {
         <Card className="border-2 border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              📊 Notionデータベーステンプレート
+              📊 Notionデータベースの作成手順
             </CardTitle>
             <CardDescription>
-              投稿管理に最適なNotionデータベーステンプレートを用意しました。ワンクリックで自分のNotionに複製できます。
+              投稿管理用のNotionデータベースを手動で作成してください。以下の手順に従ってください。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -492,35 +492,36 @@ export default function NotionSettings() {
               <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
                 <span className="text-2xl">📅</span>
                 <div>
-                  <p className="font-medium">投稿管理テンプレート</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">プラットフォーム・会社名・ステータス・投稿文・予約日時・ハッシュタグのカラムが設定済み</p>
+                  <p className="font-medium">投稿管理データベース</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">プラットフォーム・会社名・ステータス・投稿文・予約日時・ハッシュタグのカラムが必要です</p>
                 </div>
               </div>
             </div>
 
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
-              <p className="font-medium text-amber-800 dark:text-amber-300 mb-1">テンプレートの使い方</p>
+              <p className="font-medium text-amber-800 dark:text-amber-300 mb-1">データベースの作成手順</p>
               <ol className="list-decimal list-inside space-y-1 text-amber-700 dark:text-amber-400 text-xs">
-                <li>下のボタンからNotionテンプレートを開く</li>
-                <li>右上の「複製」ボタンをクリックして自分のNotionに複製</li>
-                <li>複製したデータベースのURLからIDをコピーして上のフォームに貼り付け</li>
+                <li>Notionを開き、新しいページを作成する</li>
+                <li>「データベース」→「テーブルビュー」を選択する</li>
+                <li>下の「必要なプロパティ一覧」を参考にカラムを追加する</li>
+                <li>作成したデータベースのURLからIDをコピーして上のフォームに貼り付ける</li>
               </ol>
             </div>
 
             <a
-              href="https://www.notion.so/templates/sns-post-management"
+              href="https://www.notion.so/"
               target="_blank"
               rel="noopener noreferrer"
               className="block"
             >
               <Button className="w-full" variant="outline">
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Notionテンプレートを開く（ワンクリックで複製）
+                Notionを開く
               </Button>
             </a>
 
             <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-              <p className="font-medium mb-1">必要なNotionプロパティ一覧（テンプレートに含まれています）</p>
+              <p className="font-medium mb-1">必要なNotionプロパティ一覧（データベースに追加してください）</p>
               <div className="grid grid-cols-2 gap-1">
                 <span>• Name （タイトル）</span>
                 <span>• プラットフォーム （セレクト）</span>

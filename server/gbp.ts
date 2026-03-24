@@ -301,8 +301,11 @@ export async function createGbpPost(
     }
   }
 
+  const apiPath = `/${parent}/localPosts`;
+  console.log(`[GBP] createGbpPost called: accountId=${accountId}, locationId=${locationId}`);
+  console.log(`[GBP] Resolved API path: ${apiPath}`);
   const result = await postApiFetch(
-    `/${parent}/localPosts`,
+    apiPath,
     accessToken,
     {
       method: "POST",

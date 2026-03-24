@@ -15,6 +15,7 @@ import { invokeLLM } from "./_core/llm";
 import { getSystemPrompt } from "../shared/companyProfiles";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { exchangeCodeForTokens, listGbpAccounts, listGbpLocations, getGbpAuthUrl, createGbpPost, refreshAccessToken } from "./gbp";
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -2956,8 +2957,7 @@ ${balanceSummary}
         if (!clientId || !clientSecret) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Google OAuth認証情報が設定されていません' });
         }
-        const { exchangeCodeForTokens, listGbpAccounts, listGbpLocations } = await import('./gbp');
-        const tokens = await exchangeCodeForTokens(input.code, clientId, clientSecret, input.redirectUri);
+                const tokens = await exchangeCodeForTokens(input.code, clientId, clientSecret, input.redirectUri);
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
         // トークンを先に保存
         await db.upsertGbpAccount(ctx.user.id, {
@@ -3009,8 +3009,7 @@ ${balanceSummary}
         if (!clientId) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Google Client IDが設定されていません' });
         }
-        const { getGbpAuthUrl } = await import('./gbp');
-        const state = `${ctx.user.id}:${input.gbpAccountId}`;
+                const state = `${ctx.user.id}:${input.gbpAccountId}`;
         const url = getGbpAuthUrl(clientId, input.redirectUri, state);
         return { url };
       }),
@@ -3023,8 +3022,7 @@ ${balanceSummary}
         if (!account?.accessToken) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'GBPアカウントが未接続です' });
         }
-        const { listGbpAccounts, listGbpLocations, refreshAccessToken } = await import('./gbp');
-        const clientId = process.env.GOOGLE_CLIENT_ID!;
+                const clientId = process.env.GOOGLE_CLIENT_ID!;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
         // トークン有効期限チェック
         let token = account.accessToken;
@@ -3072,8 +3070,7 @@ ${balanceSummary}
         if (!account?.accessToken || !account.accountId || !account.locationId) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'GBP拠点情報が不完全です。アカウントIDと拠点IDを設定してください' });
         }
-        const { createGbpPost, refreshAccessToken } = await import('./gbp');
-        const clientId = process.env.GOOGLE_CLIENT_ID!;
+                const clientId = process.env.GOOGLE_CLIENT_ID!;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
         let token = account.accessToken;
         if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
@@ -3217,8 +3214,7 @@ ${balanceSummary}
         }
         const clientId = process.env.GOOGLE_CLIENT_ID!;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-        const { listGbpAccounts, listGbpLocations, refreshAccessToken } = await import('./gbp');
-        let token = account.accessToken;
+                let token = account.accessToken;
         // トークン期限切れの場合は自動更新
         if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
           try {
@@ -3289,8 +3285,7 @@ ${balanceSummary}
         }
         const clientId = process.env.GOOGLE_CLIENT_ID!;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-        const { createGbpPost, refreshAccessToken } = await import('./gbp');
-        let token = account.accessToken;
+                let token = account.accessToken;
         if (account.tokenExpiresAt && new Date(account.tokenExpiresAt) < new Date()) {
           const refreshed = await refreshAccessToken(account.refreshToken!, clientId, clientSecret);
           token = refreshed.access_token;
