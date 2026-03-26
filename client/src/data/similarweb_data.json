@@ -1,0 +1,651 @@
+{
+  "suumo.jp": {
+    "domain": "suumo.jp",
+    "globalRank": 545,
+    "visits": [
+      {
+        "date": "2025-03",
+        "visits": 61079533
+      },
+      {
+        "date": "2025-04",
+        "visits": 50960542
+      },
+      {
+        "date": "2025-05",
+        "visits": 52389673
+      },
+      {
+        "date": "2025-06",
+        "visits": 52659418
+      },
+      {
+        "date": "2025-07",
+        "visits": 52409406
+      },
+      {
+        "date": "2025-08",
+        "visits": 55616935
+      },
+      {
+        "date": "2025-09",
+        "visits": 57350302
+      },
+      {
+        "date": "2025-10",
+        "visits": 56932340
+      },
+      {
+        "date": "2025-11",
+        "visits": 56104534
+      },
+      {
+        "date": "2025-12",
+        "visits": 50631479
+      },
+      {
+        "date": "2026-01",
+        "visits": 63411957
+      },
+      {
+        "date": "2026-02",
+        "visits": 56970054
+      }
+    ],
+    "uniqueVisits": [],
+    "bounceRate": [
+      {
+        "date": "2025-03",
+        "bounceRate": 42.8
+      },
+      {
+        "date": "2025-04",
+        "bounceRate": 42.4
+      },
+      {
+        "date": "2025-05",
+        "bounceRate": 42.1
+      },
+      {
+        "date": "2025-06",
+        "bounceRate": 42.8
+      },
+      {
+        "date": "2025-07",
+        "bounceRate": 42.6
+      },
+      {
+        "date": "2025-08",
+        "bounceRate": 42.6
+      },
+      {
+        "date": "2025-09",
+        "bounceRate": 43.1
+      },
+      {
+        "date": "2025-10",
+        "bounceRate": 43.5
+      },
+      {
+        "date": "2025-11",
+        "bounceRate": 43.4
+      },
+      {
+        "date": "2025-12",
+        "bounceRate": 43.1
+      },
+      {
+        "date": "2026-01",
+        "bounceRate": 42.9
+      },
+      {
+        "date": "2026-02",
+        "bounceRate": 42.5
+      }
+    ],
+    "trafficSources": {
+      "Search": 21018629,
+      "Social": 208210,
+      "Mail": 118448,
+      "Display Ads": 1479038,
+      "Direct": 15989414,
+      "Referrals": 2377776
+    },
+    "trafficByCountry": [
+      {
+        "country": "Japan",
+        "share": 99.09,
+        "visits": 169465458,
+        "bounceRate": 42.9,
+        "pagesPerVisit": 7.5,
+        "avgTime": 409,
+        "rank": 52
+      },
+      {
+        "country": "United States",
+        "share": 0.27,
+        "visits": 470272,
+        "bounceRate": 29.8,
+        "pagesPerVisit": 9.6,
+        "avgTime": 620,
+        "rank": 27963
+      },
+      {
+        "country": "Korea, Republic of",
+        "share": 0.09,
+        "visits": 159054,
+        "bounceRate": 56.9,
+        "pagesPerVisit": 5.6,
+        "avgTime": 396,
+        "rank": 11240
+      },
+      {
+        "country": "China",
+        "share": 0.08,
+        "visits": 134508,
+        "bounceRate": 26.4,
+        "pagesPerVisit": 2.8,
+        "avgTime": 166,
+        "rank": 27575
+      },
+      {
+        "country": "Australia",
+        "share": 0.04,
+        "visits": 75561,
+        "bounceRate": 40.7,
+        "pagesPerVisit": 7.0,
+        "avgTime": 193,
+        "rank": 14328
+      }
+    ]
+  },
+  "homes.co.jp": {
+    "domain": "homes.co.jp",
+    "globalRank": 1156,
+    "visits": [
+      {
+        "date": "2025-03",
+        "visits": 37590819
+      },
+      {
+        "date": "2025-04",
+        "visits": 33616918
+      },
+      {
+        "date": "2025-05",
+        "visits": 33163626
+      },
+      {
+        "date": "2025-06",
+        "visits": 34592593
+      },
+      {
+        "date": "2025-07",
+        "visits": 31975100
+      },
+      {
+        "date": "2025-08",
+        "visits": 31629444
+      },
+      {
+        "date": "2025-09",
+        "visits": 32264631
+      },
+      {
+        "date": "2025-10",
+        "visits": 31147509
+      },
+      {
+        "date": "2025-11",
+        "visits": 30164568
+      },
+      {
+        "date": "2025-12",
+        "visits": 27403417
+      },
+      {
+        "date": "2026-01",
+        "visits": 34119837
+      },
+      {
+        "date": "2026-02",
+        "visits": 33743544
+      }
+    ],
+    "uniqueVisits": [],
+    "bounceRate": [
+      {
+        "date": "2025-03",
+        "bounceRate": 50.7
+      },
+      {
+        "date": "2025-04",
+        "bounceRate": 50.9
+      },
+      {
+        "date": "2025-05",
+        "bounceRate": 50.2
+      },
+      {
+        "date": "2025-06",
+        "bounceRate": 51.3
+      },
+      {
+        "date": "2025-07",
+        "bounceRate": 51.0
+      },
+      {
+        "date": "2025-08",
+        "bounceRate": 50.9
+      },
+      {
+        "date": "2025-09",
+        "bounceRate": 50.7
+      },
+      {
+        "date": "2025-10",
+        "bounceRate": 50.3
+      },
+      {
+        "date": "2025-11",
+        "bounceRate": 50.2
+      },
+      {
+        "date": "2025-12",
+        "bounceRate": 50.1
+      },
+      {
+        "date": "2026-01",
+        "bounceRate": 50.2
+      },
+      {
+        "date": "2026-02",
+        "bounceRate": 50.5
+      }
+    ],
+    "trafficSources": {
+      "Search": 16644346,
+      "Social": 72629,
+      "Mail": 48112,
+      "Display Ads": 792707,
+      "Direct": 6619402,
+      "Referrals": 1250012
+    },
+    "trafficByCountry": [
+      {
+        "country": "Japan",
+        "share": 98.76,
+        "visits": 94087866,
+        "bounceRate": 50.5,
+        "pagesPerVisit": 5.1,
+        "avgTime": 289,
+        "rank": 120
+      },
+      {
+        "country": "United States",
+        "share": 0.34,
+        "visits": 319219,
+        "bounceRate": 39.8,
+        "pagesPerVisit": 6.3,
+        "avgTime": 462,
+        "rank": 55947
+      },
+      {
+        "country": "Australia",
+        "share": 0.17,
+        "visits": 160028,
+        "bounceRate": 34.9,
+        "pagesPerVisit": 5.3,
+        "avgTime": 249,
+        "rank": 8833
+      },
+      {
+        "country": "Korea, Republic of",
+        "share": 0.14,
+        "visits": 129958,
+        "bounceRate": 31.5,
+        "pagesPerVisit": 11.2,
+        "avgTime": 554,
+        "rank": 9307
+      },
+      {
+        "country": "Taiwan",
+        "share": 0.11,
+        "visits": 108393,
+        "bounceRate": 33.1,
+        "pagesPerVisit": 7.3,
+        "avgTime": 335,
+        "rank": 5904
+      }
+    ]
+  },
+  "athome.co.jp": {
+    "domain": "athome.co.jp",
+    "globalRank": 1436,
+    "visits": [
+      {
+        "date": "2025-03",
+        "visits": 25880856
+      },
+      {
+        "date": "2025-04",
+        "visits": 23066770
+      },
+      {
+        "date": "2025-05",
+        "visits": 23301897
+      },
+      {
+        "date": "2025-06",
+        "visits": 21861544
+      },
+      {
+        "date": "2025-07",
+        "visits": 21090361
+      },
+      {
+        "date": "2025-08",
+        "visits": 20121328
+      },
+      {
+        "date": "2025-09",
+        "visits": 20679810
+      },
+      {
+        "date": "2025-10",
+        "visits": 20642277
+      },
+      {
+        "date": "2025-11",
+        "visits": 19198817
+      },
+      {
+        "date": "2025-12",
+        "visits": 16564103
+      },
+      {
+        "date": "2026-01",
+        "visits": 20600654
+      },
+      {
+        "date": "2026-02",
+        "visits": 21660773
+      }
+    ],
+    "uniqueVisits": [],
+    "bounceRate": [
+      {
+        "date": "2025-03",
+        "bounceRate": 37.4
+      },
+      {
+        "date": "2025-04",
+        "bounceRate": 38.0
+      },
+      {
+        "date": "2025-05",
+        "bounceRate": 37.7
+      },
+      {
+        "date": "2025-06",
+        "bounceRate": 36.7
+      },
+      {
+        "date": "2025-07",
+        "bounceRate": 36.4
+      },
+      {
+        "date": "2025-08",
+        "bounceRate": 36.5
+      },
+      {
+        "date": "2025-09",
+        "bounceRate": 36.0
+      },
+      {
+        "date": "2025-10",
+        "bounceRate": 34.4
+      },
+      {
+        "date": "2025-11",
+        "bounceRate": 34.5
+      },
+      {
+        "date": "2025-12",
+        "bounceRate": 34.0
+      },
+      {
+        "date": "2026-01",
+        "bounceRate": 34.3
+      },
+      {
+        "date": "2026-02",
+        "bounceRate": 35.2
+      }
+    ],
+    "trafficSources": {
+      "Search": 12808819,
+      "Social": 95988,
+      "Mail": 100839,
+      "Display Ads": 1205096,
+      "Direct": 10343464,
+      "Referrals": 1628417
+    },
+    "trafficByCountry": [
+      {
+        "country": "Japan",
+        "share": 98.45,
+        "visits": 57913763,
+        "bounceRate": 34.5,
+        "pagesPerVisit": 8.1,
+        "avgTime": 487,
+        "rank": 147
+      },
+      {
+        "country": "Australia",
+        "share": 0.49,
+        "visits": 289286,
+        "bounceRate": 33.0,
+        "pagesPerVisit": 6.6,
+        "avgTime": 205,
+        "rank": 4329
+      },
+      {
+        "country": "United States",
+        "share": 0.25,
+        "visits": 144593,
+        "bounceRate": 39.3,
+        "pagesPerVisit": 7.2,
+        "avgTime": 297,
+        "rank": 71117
+      },
+      {
+        "country": "Taiwan",
+        "share": 0.18,
+        "visits": 104862,
+        "bounceRate": 57.2,
+        "pagesPerVisit": 7.9,
+        "avgTime": 432,
+        "rank": 5220
+      },
+      {
+        "country": "Singapore",
+        "share": 0.17,
+        "visits": 100561,
+        "bounceRate": 32.3,
+        "pagesPerVisit": 18.4,
+        "avgTime": 602,
+        "rank": 2767
+      }
+    ]
+  },
+  "sekisui-house.co.jp": {
+    "domain": "sekisui-house.co.jp",
+    "globalRank": null,
+    "visits": [],
+    "uniqueVisits": [],
+    "bounceRate": [],
+    "trafficSources": {},
+    "trafficByCountry": []
+  },
+  "daiwahouse.co.jp": {
+    "domain": "daiwahouse.co.jp",
+    "globalRank": 39010,
+    "visits": [
+      {
+        "date": "2025-03",
+        "visits": 1029638
+      },
+      {
+        "date": "2025-04",
+        "visits": 850318
+      },
+      {
+        "date": "2025-05",
+        "visits": 948790
+      },
+      {
+        "date": "2025-06",
+        "visits": 981227
+      },
+      {
+        "date": "2025-07",
+        "visits": 1035170
+      },
+      {
+        "date": "2025-08",
+        "visits": 930224
+      },
+      {
+        "date": "2025-09",
+        "visits": 992822
+      },
+      {
+        "date": "2025-10",
+        "visits": 970349
+      },
+      {
+        "date": "2025-11",
+        "visits": 997539
+      },
+      {
+        "date": "2025-12",
+        "visits": 1011131
+      },
+      {
+        "date": "2026-01",
+        "visits": 1134461
+      },
+      {
+        "date": "2026-02",
+        "visits": 1101510
+      }
+    ],
+    "uniqueVisits": [],
+    "bounceRate": [
+      {
+        "date": "2025-03",
+        "bounceRate": 54.1
+      },
+      {
+        "date": "2025-04",
+        "bounceRate": 54.3
+      },
+      {
+        "date": "2025-05",
+        "bounceRate": 57.0
+      },
+      {
+        "date": "2025-06",
+        "bounceRate": 56.9
+      },
+      {
+        "date": "2025-07",
+        "bounceRate": 57.2
+      },
+      {
+        "date": "2025-08",
+        "bounceRate": 57.9
+      },
+      {
+        "date": "2025-09",
+        "bounceRate": 57.4
+      },
+      {
+        "date": "2025-10",
+        "bounceRate": 55.3
+      },
+      {
+        "date": "2025-11",
+        "bounceRate": 57.1
+      },
+      {
+        "date": "2025-12",
+        "bounceRate": 54.1
+      },
+      {
+        "date": "2026-01",
+        "bounceRate": 57.1
+      },
+      {
+        "date": "2026-02",
+        "bounceRate": 54.2
+      }
+    ],
+    "trafficSources": {
+      "Search": 719115,
+      "Social": 9838,
+      "Mail": 12519,
+      "Display Ads": 39614,
+      "Direct": 650283,
+      "Referrals": 166325
+    },
+    "trafficByCountry": [
+      {
+        "country": "Japan",
+        "share": 97.56,
+        "visits": 3167831,
+        "bounceRate": 56.2,
+        "pagesPerVisit": 3.6,
+        "avgTime": 155,
+        "rank": 2642
+      },
+      {
+        "country": "Thailand",
+        "share": 0.44,
+        "visits": 14134,
+        "bounceRate": 83.3,
+        "pagesPerVisit": 1.3,
+        "avgTime": 11,
+        "rank": 29105
+      },
+      {
+        "country": "Korea, Republic of",
+        "share": 0.43,
+        "visits": 13891,
+        "bounceRate": 70.7,
+        "pagesPerVisit": 1.2,
+        "avgTime": 13,
+        "rank": 342503
+      },
+      {
+        "country": "United States",
+        "share": 0.27,
+        "visits": 8792,
+        "bounceRate": 51.3,
+        "pagesPerVisit": 1.7,
+        "avgTime": 50,
+        "rank": 1568146
+      },
+      {
+        "country": "Brazil",
+        "share": 0.17,
+        "visits": 5627,
+        "bounceRate": 64.0,
+        "pagesPerVisit": 2.1,
+        "avgTime": 312,
+        "rank": 280535
+      }
+    ]
+  }
+}
