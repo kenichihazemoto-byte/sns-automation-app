@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Link, ExternalLink, ToggleLeft } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,49 @@ export default function Settings() {
     }
   });
   const [newAlbumUrl, setNewAlbumUrl] = useState("");
+
+  // HP誤導リンク設定
+  const { data: hpLinks, isLoading: hpLinksLoading } = trpc.hpLinks.get.useQuery();
+  const [hpLinkForm, setHpLinkForm] = useState({
+    constructionCasesUrl: "",
+    visitReservationUrl: "",
+    catalogRequestUrl: "",
+    googleReviewUrl: "",
+    modelHouseUrl: "",
+    companyTopUrl: "",
+    enableInstagram: true,
+    enableX: true,
+    enableThreads: true,
+    enableGbp: true,
+  });
+
+  // DBから読み込み
+  useEffect(() => {
+    if (hpLinks) {
+      setHpLinkForm({
+        constructionCasesUrl: hpLinks.constructionCasesUrl ?? "",
+        visitReservationUrl: hpLinks.visitReservationUrl ?? "",
+        catalogRequestUrl: hpLinks.catalogRequestUrl ?? "",
+        googleReviewUrl: hpLinks.googleReviewUrl ?? "",
+        modelHouseUrl: hpLinks.modelHouseUrl ?? "",
+        companyTopUrl: hpLinks.companyTopUrl ?? "",
+        enableInstagram: hpLinks.enableInstagram,
+        enableX: hpLinks.enableX,
+        enableThreads: hpLinks.enableThreads,
+        enableGbp: hpLinks.enableGbp,
+      });
+    }
+  }, [hpLinks]);
+
+  const saveHpLinksMutation = trpc.hpLinks.save.useMutation({
+    onSuccess: () => {
+      toast.success("HP誤導リンク設定を保存しました");
+      utils.hpLinks.get.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`エラー: ${error.message}`);
+    },
+  });
 
   const updateProfileMutation = trpc.user.updateProfile.useMutation({
     onSuccess: () => {
@@ -63,6 +107,15 @@ export default function Settings() {
   const handleRemoveAlbum = (index: number) => {
     setAlbums(albums.filter((_, i) => i !== index));
     toast.success("アルバムを削除しました");
+  };
+
+  const hpLinkLabels: Record<string, string> = {
+    constructionCasesUrl: "施工事例ページ",
+    visitReservationUrl: "来場予約ページ",
+    catalogRequestUrl: "資料請求ページ",
+    googleReviewUrl: "Google口コミ投稿URL",
+    modelHouseUrl: "モデルハウス見学予約",
+    companyTopUrl: "会社トップページ",
   };
 
   return (
@@ -215,6 +268,96 @@ export default function Settings() {
                 </Badge>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* HP誤導リンク設定 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link className="h-5 w-5 text-blue-500" />
+              HP誤導リンク設定
+            </CardTitle>
+            <CardDescription>
+              SNS投稿末尾に自動挿入するHP導線用URLを登録します。永友メソッドの「投稿からHPへ連動」を実現します。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {hpLinksLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>読み込み中...</span>
+              </div>
+            ) : (
+              <>
+                {/* URL入力フィールド */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(Object.keys(hpLinkLabels) as Array<keyof typeof hpLinkLabels>).map((key) => (
+                    <div key={key}>
+                      <Label htmlFor={key}>{hpLinkLabels[key]}</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          id={key}
+                          value={hpLinkForm[key as keyof typeof hpLinkForm] as string}
+                          onChange={(e) => setHpLinkForm(prev => ({ ...prev, [key]: e.target.value }))}
+                          placeholder="https://..."
+                          className="flex-1"
+                        />
+                        {(hpLinkForm[key as keyof typeof hpLinkForm] as string) && (
+                          <a
+                            href={hpLinkForm[key as keyof typeof hpLinkForm] as string}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center"
+                          >
+                            <Button size="icon" variant="ghost" type="button">
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* プラットフォーム別自動挿入トグル */}
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">自動挿入するプラットフォーム</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {([
+                      { key: 'enableInstagram', label: 'Instagram' },
+                      { key: 'enableX', label: 'X (Twitter)' },
+                      { key: 'enableThreads', label: 'Threads' },
+                      { key: 'enableGbp', label: 'GBP投稿' },
+                    ] as const).map(({ key, label }) => (
+                      <div key={key} className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                        <Switch
+                          checked={hpLinkForm[key]}
+                          onCheckedChange={(checked) => setHpLinkForm(prev => ({ ...prev, [key]: checked }))}
+                        />
+                        <span className="text-sm">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <p className="font-medium mb-1">自動挿入の仕組み</p>
+                  <p>AI投稿文生成時に、投稿タイプに合わせた導線リンクが自動で末尾に追加されます。施工事例投稿には施工事例URL、見学会投稿には来場予約URLが自動選択されます。</p>
+                </div>
+
+                <Button
+                  onClick={() => saveHpLinksMutation.mutate(hpLinkForm)}
+                  disabled={saveHpLinksMutation.isPending}
+                >
+                  {saveHpLinksMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</>
+                  ) : (
+                    <><Save className="mr-2 h-4 w-4" />HP誤導リンクを保存</>
+                  )}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 

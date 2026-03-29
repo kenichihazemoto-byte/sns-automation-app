@@ -307,6 +307,38 @@ export default function Demo() {
 
   const utils = trpc.useUtils();
   const { data: customTemplates } = trpc.customTemplates.list.useQuery();
+
+  // HP誤導リンク設定を取得
+  const { data: hpLinks } = trpc.hpLinks.get.useQuery();
+
+  // 投稿タイプに応じたHP誤導リンクURLを返すヘルパー
+  const getHpLinkForContent = (caption: string, platform: 'instagram' | 'x' | 'threads') => {
+    if (!hpLinks) return null;
+    const enabled = platform === 'instagram' ? hpLinks.enableInstagram
+      : platform === 'x' ? hpLinks.enableX
+      : hpLinks.enableThreads;
+    if (!enabled) return null;
+    // 投稿内容に応じた導線リンクURLを自動選択
+    if (/施工事例|完成事例|建築事例|工事事例/.test(caption) && hpLinks.constructionCasesUrl)
+      return { label: '施工事例はこちら', url: hpLinks.constructionCasesUrl };
+    if (/見学会|オープンハウス|展示会|イベント/.test(caption) && hpLinks.visitReservationUrl)
+      return { label: '来場予約はこちら', url: hpLinks.visitReservationUrl };
+    if (/資料|カタログ|パンフレット/.test(caption) && hpLinks.catalogRequestUrl)
+      return { label: '資料請求はこちら', url: hpLinks.catalogRequestUrl };
+    if (/モデルハウス|ショールーム/.test(caption) && hpLinks.modelHouseUrl)
+      return { label: 'モデルハウス見学はこちら', url: hpLinks.modelHouseUrl };
+    // デフォルトは会社トップ
+    if (hpLinks.companyTopUrl)
+      return { label: '詳しくはこちら', url: hpLinks.companyTopUrl };
+    return null;
+  };
+
+  // 投稿文に導線リンクを自動挿入する関数
+  const appendHpLink = (caption: string, platform: 'instagram' | 'x' | 'threads') => {
+    const link = getHpLinkForContent(caption, platform);
+    if (!link) return caption;
+    return `${caption}\n\n▶ ${link.label}\n${link.url}`;
+  };
   
   // 作業履歴記録
   const logActivityMutation = trpc.activityLog.create.useMutation();
@@ -439,7 +471,18 @@ export default function Demo() {
 
   const generateAllContentsMutation = trpc.demo.generateAllPlatformContents.useMutation({
     onSuccess: (data) => {
-      setContents(data);
+      // HP誤導リンクを自動挿入
+      const enrichedData = { ...data };
+      if (enrichedData.instagram?.caption) {
+        enrichedData.instagram = { ...enrichedData.instagram, caption: appendHpLink(enrichedData.instagram.caption, 'instagram') };
+      }
+      if (enrichedData.x?.caption) {
+        enrichedData.x = { ...enrichedData.x, caption: appendHpLink(enrichedData.x.caption, 'x') };
+      }
+      if (enrichedData.threads?.caption) {
+        enrichedData.threads = { ...enrichedData.threads, caption: appendHpLink(enrichedData.threads.caption, 'threads') };
+      }
+      setContents(enrichedData);
       setViewMode("single");
       toast.success("全プラットフォームの投稿文を生成しました");
       
@@ -808,7 +851,17 @@ export default function Demo() {
           }
         }
 
-        setContents(templateContents);
+        // HP誤導リンクを自動挿入
+        const enrichedTemplate = { ...templateContents };
+        for (const platform of ['instagram', 'x', 'threads'] as const) {
+          if (enrichedTemplate[platform]?.caption) {
+            enrichedTemplate[platform] = {
+              ...enrichedTemplate[platform],
+              caption: appendHpLink(enrichedTemplate[platform].caption, platform),
+            };
+          }
+        }
+        setContents(enrichedTemplate);
         setViewMode("single");
         toast.success("テンプレートで投稿文を生成しました");
       } catch (error: any) {

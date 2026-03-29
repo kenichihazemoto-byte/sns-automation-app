@@ -216,6 +216,25 @@ export default function GBPPost() {
   // GBPアカウント一覧
   const { data: gbpAccounts = [], refetch: refetchAccounts } = trpc.gbp.listAccounts.useQuery();
 
+  // HP誤導リンク設定
+  const { data: hpLinks } = trpc.hpLinks.get.useQuery();
+
+  // GBP投稿タイプに応じたHP誤導リンクURLを返すヘルパー
+  const getGbpHpLink = (contentType: string): { label: string; url: string } | null => {
+    if (!hpLinks || !hpLinks.enableGbp) return null;
+    if ((contentType === 'construction_case') && hpLinks.constructionCasesUrl)
+      return { label: '施工事例はこちら', url: hpLinks.constructionCasesUrl };
+    if ((contentType === 'open_house' || contentType === 'event') && hpLinks.visitReservationUrl)
+      return { label: '来場予約はこちら', url: hpLinks.visitReservationUrl };
+    if (contentType === 'model_house' && hpLinks.modelHouseUrl)
+      return { label: 'モデルハウス見学はこちら', url: hpLinks.modelHouseUrl };
+    if (contentType === 'review_request' && hpLinks.googleReviewUrl)
+      return { label: '口コミを書く', url: hpLinks.googleReviewUrl };
+    if (hpLinks.companyTopUrl)
+      return { label: '詳しくはこちら', url: hpLinks.companyTopUrl };
+    return null;
+  };
+
   // GBP予約投稿一覧
   const { data: gbpSchedules = [], refetch: refetchSchedules } = trpc.gbp.listSchedules.useQuery({ status: 'pending' });
   const { data: gbpFailedSchedules = [] } = trpc.gbp.listSchedules.useQuery({ status: 'failed' });
@@ -262,7 +281,12 @@ export default function GBPPost() {
   // AI生成ミューテーション
   const generatePostMutation = trpc.gbp.generatePost.useMutation({
     onSuccess: (data) => {
-      const text = typeof data.content === 'string' ? data.content : '';
+      let text = typeof data.content === 'string' ? data.content : '';
+      // HP誤導リンクを自動挿入
+      const link = getGbpHpLink(aiContentType);
+      if (link && text) {
+        text = `${text}\n\n▶ ${link.label}\n${link.url}`;
+      }
       setAiGeneratedText(text);
       setIsAiGenerating(false);
     },

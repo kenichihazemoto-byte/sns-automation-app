@@ -660,3 +660,37 @@ export const googlePhotoAlbums = mysqlTable("google_photo_albums", {
 });
 export type GooglePhotoAlbum = typeof googlePhotoAlbums.$inferSelect;
 export type InsertGooglePhotoAlbum = typeof googlePhotoAlbums.$inferInsert;
+
+/**
+ * HP誤導リンク設定テーブル
+ * SNS投稿末尾に自動挿入するHP導線用URLを登録する
+ */
+export const hpLinkSettings = mysqlTable("hp_link_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  /** 施工事例ページURL */
+  constructionCasesUrl: text("constructionCasesUrl"),
+  /** 来場予約ページURL */
+  visitReservationUrl: text("visitReservationUrl"),
+  /** 資料請求ページURL */
+  catalogRequestUrl: text("catalogRequestUrl"),
+  /** 口コミ投稿依頼用GoogleMap口コミURL */
+  googleReviewUrl: text("googleReviewUrl"),
+  /** モデルハウス見学予約URL */
+  modelHouseUrl: text("modelHouseUrl"),
+  /** 会社トップページURL */
+  companyTopUrl: text("companyTopUrl"),
+  /** Instagram投稿時にURLを自動挿入するか */
+  enableInstagram: boolean("enableInstagram").default(true).notNull(),
+  /** X投稿時にURLを自動挿入するか */
+  enableX: boolean("enableX").default(true).notNull(),
+  /** Threads投稿時にURLを自動挿入するか */
+  enableThreads: boolean("enableThreads").default(true).notNull(),
+  /** GBP投稿時にURLを自動挿入するか */
+  enableGbp: boolean("enableGbp").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type HpLinkSetting = typeof hpLinkSettings.$inferSelect;
+export type InsertHpLinkSetting = typeof hpLinkSettings.$inferInsert;
