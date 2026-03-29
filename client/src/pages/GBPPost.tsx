@@ -29,6 +29,14 @@ import {
   Link as LinkIcon,
   RefreshCw,
   AlertCircle,
+  Sparkles,
+  ChevronDown,
+  MessageSquare,
+  Star,
+  Users,
+  Heart,
+  FileText,
+  Gift,
 } from "lucide-react";
 
 // 拠点の初期データ（未接続状態で表示）
@@ -44,6 +52,19 @@ const TOPIC_TYPE_LABELS: Record<string, string> = {
   EVENT: "イベント",
   OFFER: "特典・キャンペーン",
 };
+
+const CONTENT_TYPE_OPTIONS = [
+  { value: 'construction_case', label: '施工事例', icon: Building2, topicType: 'STANDARD' as const },
+  { value: 'open_house', label: '見学会・完成見学会', icon: Calendar, topicType: 'EVENT' as const },
+  { value: 'blog_update', label: 'ブログ更新', icon: FileText, topicType: 'STANDARD' as const },
+  { value: 'local_activity', label: '地域活動', icon: Heart, topicType: 'STANDARD' as const },
+  { value: 'staff_intro', label: 'スタッフ紹介', icon: Users, topicType: 'STANDARD' as const },
+  { value: 'review_request', label: '口コミ依頼文', icon: Star, topicType: 'STANDARD' as const },
+  { value: 'review_reply_positive', label: '口コミ返信（高評価）', icon: MessageSquare, topicType: 'STANDARD' as const },
+  { value: 'review_reply_negative', label: '口コミ返信（低評価）', icon: MessageSquare, topicType: 'STANDARD' as const },
+  { value: 'campaign', label: 'キャンペーン・特典', icon: Gift, topicType: 'OFFER' as const },
+  { value: 'custom', label: 'カスタム', icon: Sparkles, topicType: 'STANDARD' as const },
+] as const;
 
 const CTA_TYPE_LABELS: Record<string, string> = {
   LEARN_MORE: "詳しく見る",
@@ -110,6 +131,49 @@ export default function GBPPost() {
   // 投稿モード: 'immediate' = 即時投稿, 'scheduled' = 予約投稿
   const [postMode, setPostMode] = useState<'immediate' | 'scheduled'>('immediate');
   const [scheduledAt, setScheduledAt] = useState("");
+
+  // AI生成パネルの状態
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiContentType, setAiContentType] = useState<string>('construction_case');
+  const [aiAdditionalInfo, setAiAdditionalInfo] = useState("");
+  const [aiReviewContent, setAiReviewContent] = useState("");
+  const [aiGeneratedText, setAiGeneratedText] = useState("");
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+
+  // AI生成ミューテーション
+  const generatePostMutation = trpc.gbp.generatePost.useMutation({
+    onSuccess: (data) => {
+      const text = typeof data.content === 'string' ? data.content : '';
+      setAiGeneratedText(text);
+      setIsAiGenerating(false);
+    },
+    onError: (err) => {
+      toast.error(`AI生成失敗: ${err.message}`);
+      setIsAiGenerating(false);
+    },
+  });
+
+  const handleAiGenerate = () => {
+    const locationName = gbpAccounts.find((a) => a.id === selectedAccountId)?.locationName ||
+      DEFAULT_LOCATIONS[0].name;
+    setIsAiGenerating(true);
+    setAiGeneratedText("");
+    generatePostMutation.mutate({
+      locationName,
+      contentType: aiContentType as any,
+      additionalInfo: aiAdditionalInfo || undefined,
+      reviewContent: aiReviewContent || undefined,
+    });
+  };
+
+  const handleApplyAiText = () => {
+    if (!aiGeneratedText) return;
+    setSummary(aiGeneratedText.slice(0, 1500));
+    // コンテンツタイプに応じて投稿タイプを自動設定
+    const selectedOption = CONTENT_TYPE_OPTIONS.find((o) => o.value === aiContentType);
+    if (selectedOption) setTopicType(selectedOption.topicType);
+    toast.success("AI生成テキストを投稿本文に適用しました");
+  };
 
   // 新規拠点登録ダイアログ
   const [newLocationName, setNewLocationName] = useState("");
@@ -639,6 +703,138 @@ export default function GBPPost() {
             ))
           )}
         </div>
+
+        {/* AI投稿文生成パネル */}
+        <Card className="border-purple-200 bg-gradient-to-r from-purple-50/50 to-blue-50/50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2 text-purple-700">
+                <Sparkles className="h-5 w-5" />
+                AI投稿文生成（永友メソッド準拠）
+              </CardTitle>
+              <button
+                type="button"
+                className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                onClick={() => setShowAiPanel(!showAiPanel)}
+              >
+                {showAiPanel ? '閉じる' : '開く'}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAiPanel ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            <CardDescription className="text-xs">
+              ハゼモト建設の強み・地域密着・導線を包含した投稿文をAIが自動作成。口コミ依頼文・返信文も生成できます。
+            </CardDescription>
+          </CardHeader>
+          {showAiPanel && (
+            <CardContent className="space-y-4">
+              {/* コンテンツタイプ選択 */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">コンテンツタイプ</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                  {CONTENT_TYPE_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs transition-all ${
+                          aiContentType === option.value
+                            ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
+                            : 'border-border hover:border-purple-300 hover:bg-purple-50/50'
+                        }`}
+                        onClick={() => setAiContentType(option.value)}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="leading-tight text-center">{option.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 口コミ返信用：元の口コミ内容 */}
+              {(aiContentType === 'review_reply_positive' || aiContentType === 'review_reply_negative') && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">元の口コミ内容（入力するとより具体的な返信になります）</Label>
+                  <Textarea
+                    placeholder="口コミの内容を貼り付けてください..."
+                    value={aiReviewContent}
+                    onChange={(e) => setAiReviewContent(e.target.value)}
+                    rows={3}
+                    className="resize-none text-sm"
+                  />
+                </div>
+              )}
+
+              {/* 追加情報 */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  追加情報・メモ（任意）
+                </Label>
+                <Textarea
+                  placeholder={
+                    aiContentType === 'construction_case' ? '例：小倉市の狭小地に2階建て。延床面穀28坪。光熱費削減が大きなポイント。' :
+                    aiContentType === 'open_house' ? '例：小倉市で完成見学会を開催。来週土日、先着10組限定。' :
+                    aiContentType === 'review_request' ? '例：小倉市のお客様。狭小地に建てた注文住宅。先週お引き渡し完了。' :
+                    '投稿に入れたい内容やエピソードをメモしてください...'
+                  }
+                  value={aiAdditionalInfo}
+                  onChange={(e) => setAiAdditionalInfo(e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              {/* 生成ボタン */}
+              <Button
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={handleAiGenerate}
+                disabled={isAiGenerating}
+              >
+                {isAiGenerating ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                {isAiGenerating ? 'AIが投稿文を作成中...' : 'AIで投稿文を生成する'}
+              </Button>
+
+              {/* 生成結果 */}
+              {aiGeneratedText && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium text-purple-700">生成された投稿文</Label>
+                    <span className="text-xs text-muted-foreground">{aiGeneratedText.length}文字</span>
+                  </div>
+                  <div className="p-3 bg-white border border-purple-200 rounded-md text-sm whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                    {aiGeneratedText}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                      onClick={handleApplyAiText}
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1.5" />
+                      投稿本文に適用する
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-purple-600 border-purple-300"
+                      onClick={handleAiGenerate}
+                      disabled={isAiGenerating}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      再生成
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
 
         {/* 投稿フォーム */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -3134,6 +3134,133 @@ ${balanceSummary}
         return { success: true, gbpPostId, id: saved.id };
       }),
 
+    /** GBP投稿文をAIで生成する（永友一郎メソッド準拠） */
+    generatePost: protectedProcedure
+      .input(z.object({
+        locationName: z.string(),
+        contentType: z.enum([
+          'construction_case',   // 施工事例
+          'open_house',          // 見学会・完成見学会
+          'blog_update',         // ブログ更新
+          'local_activity',      // 地域活動
+          'staff_intro',         // スタッフ紹介
+          'review_request',      // 口コミ依頼文
+          'review_reply_positive', // 口コミ返信（高評価）
+          'review_reply_negative', // 口コミ返信（低評価）
+          'campaign',            // キャンペーン・特典
+          'custom',              // カスタム
+        ]),
+        additionalInfo: z.string().optional(),
+        reviewContent: z.string().optional(), // 口コミ返信用：元の口コミ内容
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+
+        const companyContext = input.locationName.includes('ハゼモト') ? `
+【会社情報】
+- 会社名：ハゼモト建設（福岡県北九州市）
+- 創業60年以上の地域密着型工務店
+- 強み：狭小地・擁壁土地・コンパクトハウスの実績、自前の多能工職人、高性能住宅・省エネ設計
+- 地域活動：L'Atelier de Ash（パン屋）、未来のとびら（就労支援B型）、子ども食堂
+- キーワード：光熱費削減、土地提案、動線設計、担当者対応、北九州市` :
+        input.locationName.includes('クリニック') ? `
+【会社情報】
+- 会社名：クリニックアーキプロ
+- 医療クリニック建設の専門会社` :
+        input.locationName.includes('Ash') || input.locationName.includes('アッシュ') ? `
+【会社情報】
+- 会社名：L'Atelier de Ash（ラトリエルアッシュ）
+- 北九州市の手作りパン屋` :
+        input.locationName.includes('とびら') ? `
+【会社情報】
+- 会社名：未来のとびら
+- 就労支援B型事業所` : `【会社名】${input.locationName}`;
+
+        const contentTypePrompts: Record<string, string> = {
+          construction_case: `Googleビジネスプロフィール用の「施工事例」投稿文を作成してください。
+以下の要素を含めてください：
+- 施工内容・場所（北九州市内の地域名があれば入れる）
+- お客様が感じたメリット（光熱費削減・広い動線・土地活用など）
+- ハゼモト建設の強み（狭小地対応・多能工・高性能住宅）
+- 末尾に導線CTA：「施工事例の詳細はウェブサイトをご覧ください」または「お気軽にご相談ください」`,
+          open_house: `Googleビジネスプロフィール用の「見学会・完成見学会」告知投稿文を作成してください。
+以下の要素を含めてください：
+- イベント内容（完成見学会 or 構造見学会 or 相談会）
+- 参加メリット（実際の住まいを体感できる、専門家に直接相談できる等）
+- 「予約制・限定〇組」などの希少性
+- 末尾に導線CTA：「ご予約・お問い合わせはお電話またはウェブサイトから」`,
+          blog_update: `Googleビジネスプロフィール用の「ブログ更新」告知投稿文を作成してください。
+以下の要素を含めてください：
+- ブログのテーマ（住まいの豆知識・施工事例・スタッフ日記など）
+- 読者へのメリット（役立つ情報・実例紹介）
+- 末尾に導線CTA：「詳しくはブログをご覧ください」`,
+          local_activity: `Googleビジネスプロフィール用の「地域活動」投稿文を作成してください。
+以下の要素を含めてください：
+- 活動内容（地域イベント・子ども食堂・就労支援・地域清掃など）
+- 地域への想い・創業60年以上の地域密着の姿勢
+- 温かみのある語り口で`,
+          staff_intro: `Googleビジネスプロフィール用の「スタッフ紹介」投稿文を作成してください。
+以下の要素を含めてください：
+- スタッフの役割・専門性（設計・現場監督・多能工職人など）
+- お客様への安心感（担当者対応・丁寧なコミュニケーション）
+- 親しみやすい語り口で`,
+          review_request: `施工完了後にお客様へ送る「Googleマップ口コミ依頼文」を作成してください。
+以下の要素を必ず含めてください：
+- 感謝の言葉
+- 口コミを書いてほしい具体的なポイント：「土地提案」「動線の使いやすさ」「光熱費の変化」「担当者の対応」
+- QRコードやURLへの誘導文
+- 丁寧で押しつけがましくない文体
+文字数：200〜300文字`,
+          review_reply_positive: `Googleマップの高評価口コミへの「返信文」を作成してください。
+以下の要素を含めてください：
+- 感謝の言葉（具体的に）
+- 口コミ内容に触れた具体的な返信
+- 今後のサポートへの言及
+- 末尾に「またのご相談をお待ちしております」などの導線
+文字数：150〜250文字`,
+          review_reply_negative: `Googleマップの低評価・ご不満の口コミへの「誠実な返信文」を作成してください。
+以下の要素を含めてください：
+- 真摯な謝罪（言い訳をしない）
+- 改善への具体的な取り組み姿勢
+- 直接連絡を促す（電話・メール）
+- 他のユーザーへの信頼性アピール
+文字数：150〜250文字`,
+          campaign: `Googleビジネスプロフィール用の「キャンペーン・特典」投稿文を作成してください。
+以下の要素を含めてください：
+- キャンペーン内容・特典
+- 期間・条件
+- お客様へのメリット
+- 末尾に導線CTA：「詳しくはお問い合わせください」`,
+          custom: `Googleビジネスプロフィール用の投稿文を作成してください。
+お客様目線で、読んだ人が行動したくなるような内容にしてください。
+末尾に適切な導線CTAを含めてください。`,
+        };
+
+        const basePrompt = contentTypePrompts[input.contentType] || contentTypePrompts.custom;
+        const additionalContext = input.additionalInfo ? `\n\n【追加情報・メモ】\n${input.additionalInfo}` : '';
+        const reviewContext = input.reviewContent ? `\n\n【元の口コミ内容】\n${input.reviewContent}` : '';
+
+        const systemPrompt = `あなたはGoogleビジネスプロフィール（GBP）の投稿文作成の専門家です。
+Webコンサルタント永友一郎氏のメソッドに基づき、以下の原則で投稿文を作成します：
+1. お客様目線で書く（自社目線ではなく、読んだ人へのメリットを前面に）
+2. 具体的なエピソードや数字を使う（「光熱費が月〇〇円削減」「〇〇坪の狭小地に対応」など）
+3. 不安と疑問を解消する内容にする
+4. 自然な語り口で、書いている人の顔が見えるような文体
+5. 専門用語を避け、暮らしの豊かさが伝わるようにする
+6. 末尾には必ず行動を促すCTA（導線）を入れる
+7. GBP投稿の文字数制限（1500文字）を意識し、400〜800文字程度にまとめる`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `${companyContext}\n\n${basePrompt}${additionalContext}${reviewContext}` },
+          ],
+        });
+
+        const content = response.choices?.[0]?.message?.content ?? '';
+        return { content };
+      }),
+
     /** GBP投稿履歴一覧 */
     listPosts: protectedProcedure
       .input(z.object({ gbpAccountId: z.number().optional() }))
