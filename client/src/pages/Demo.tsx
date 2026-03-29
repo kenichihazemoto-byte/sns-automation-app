@@ -2659,31 +2659,104 @@ export default function Demo() {
   );
 }
 
-// テンプレートに対応するアルバムヒントコンポーネント
+// テンプレートに対応するアルバムヒントコンポーネント（サムネイル表示付き）
+const POST_CATEGORY_LABELS: Record<string, string> = {
+  construction_case: "🏠 施工事例",
+  open_house: "📍 見学会・イベント",
+  blog_update: "📝 ブログ更新",
+  local_activity: "🌿 地域活動",
+  staff_intro: "👤 スタッフ紹介",
+  campaign: "🎉 キャンペーン",
+  general: "📸 その他一般",
+};
+
+const TEMPLATE_TO_ALBUM_CATEGORY: Record<string, string> = {
+  construction: "construction_case",
+  renovation: "construction_case",
+  event: "open_house",
+  staff: "staff_intro",
+  local: "local_activity",
+  blog: "blog_update",
+};
+
+// 個別アルバムのサムネイルパネル
+function AlbumThumbnailPanel({ album }: { album: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data, isFetching } = trpc.googlePhotoAlbums.preview.useQuery(
+    { url: album.url },
+    { enabled: expanded }
+  );
+
+  return (
+    <div className="border border-green-200 rounded-md overflow-hidden bg-white">
+      {/* アルバムヘッダー */}
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-green-50 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="font-medium text-green-800 truncate">{album.title}</span>
+        <span className="text-green-600 ml-2 flex-shrink-0 flex items-center gap-1">
+          {expanded ? (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+              <span className="text-xs">閉じる</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              <span className="text-xs">サムネイルを見る</span>
+            </>
+          )}
+        </span>
+      </button>
+
+      {/* サムネイルグリッド */}
+      {expanded && (
+        <div className="px-3 pb-3">
+          {isFetching ? (
+            <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground text-xs">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              読み込み中...
+            </div>
+          ) : data && data.thumbnails.length > 0 ? (
+            <div className="grid grid-cols-4 gap-1.5 mt-1">
+              {data.thumbnails.slice(0, 4).map((src: string, i: number) => (
+                <div key={i} className="aspect-square rounded overflow-hidden bg-muted border">
+                  <img
+                    src={src}
+                    alt={`サムネイル ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-3 text-xs text-muted-foreground">
+              <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-40" />
+              プレビュー画像を取得できませんでした
+            </div>
+          )}
+          <a
+            href={album.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1 text-xs text-blue-500 hover:underline"
+          >
+            Googleフォトで開く
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AlbumMatchHint({ postCategory }: { postCategory: string | null }) {
   const { data: albums = [] } = trpc.googlePhotoAlbums.list.useQuery();
 
   if (!postCategory) return null;
-
-  const POST_CATEGORY_LABELS: Record<string, string> = {
-    construction_case: "🏠 施工事例",
-    open_house: "📍 見学会・イベント",
-    blog_update: "📝 ブログ更新",
-    local_activity: "🌿 地域活動",
-    staff_intro: "👤 スタッフ紹介",
-    campaign: "🎉 キャンペーン",
-    general: "📸 その他一般",
-  };
-
-  // テンプレートのpostCategoryとアルバムのpostCategoryをマッピング
-  const TEMPLATE_TO_ALBUM_CATEGORY: Record<string, string> = {
-    construction: "construction_case",
-    renovation: "construction_case",
-    event: "open_house",
-    staff: "staff_intro",
-    local: "local_activity",
-    blog: "blog_update",
-  };
 
   const albumCategory = TEMPLATE_TO_ALBUM_CATEGORY[postCategory] ?? postCategory;
   const matchingAlbums = (albums as any[]).filter(
@@ -2694,15 +2767,23 @@ function AlbumMatchHint({ postCategory }: { postCategory: string | null }) {
 
   if (matchingAlbums.length > 0) {
     return (
-      <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-        <span className="text-green-600 text-base">✅</span>
-        <div>
-          <p className="font-medium text-green-800">
-            「{categoryLabel}」用のアルバムが{matchingAlbums.length}件設定されています
-          </p>
-          <p className="text-green-700 mt-0.5 text-xs">
-            {matchingAlbums.map((a: any) => a.title).join("、")} — このアルバムから優先的に写真が取得されます
-          </p>
+      <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-green-600 text-base">✅</span>
+          <div>
+            <p className="font-medium text-green-800">
+              「{categoryLabel}」用のアルバムが{matchingAlbums.length}件設定されています
+            </p>
+            <p className="text-green-700 mt-0.5 text-xs">
+              このアルバムから優先的に写真が取得されます。サムネイルで内容を確認できます。
+            </p>
+          </div>
+        </div>
+        {/* アルバムサムネイルパネル（アルバムごとに展開可能） */}
+        <div className="space-y-1.5">
+          {matchingAlbums.map((album: any) => (
+            <AlbumThumbnailPanel key={album.id} album={album} />
+          ))}
         </div>
       </div>
     );
