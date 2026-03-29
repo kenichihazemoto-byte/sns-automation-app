@@ -66,6 +66,125 @@ const CONTENT_TYPE_OPTIONS = [
   { value: 'custom', label: 'カスタム', icon: Sparkles, topicType: 'STANDARD' as const },
 ] as const;
 
+// 投稿タイプ別写真撮影ガイド（永友メソッド準拠）
+const PHOTO_GUIDE: Record<string, {
+  title: string;
+  description: string;
+  shots: { label: string; tip: string }[];
+  ng: string[];
+  gbpNote: string;
+}> = {
+  construction_case: {
+    title: '施工事例写真の撮り方',
+    description: '「完成後の暮らし」を想像させる写真が最も効果的です。広い角度と生活感のあるシーンを意識しましょう。',
+    shots: [
+      { label: '外観全景', tip: '正面から全体を撃。更山時間帯（朝・夕方）が最高。車や雑物を片付けする' },
+      { label: 'LDK全体', tip: '屋内の広さを伝えるため、隔面の角から対角線で撮影。自然光を活用する' },
+      { label: 'キッチン・洗面台', tip: '水回りは清潔にして撮影。收納力や使いやすさが伝わる構図で' },
+      { label: '狭小地・動線の工夫', tip: '山手の工夫や収納スペースをアップで撮影。「ここが工夫」と分かる構図に' },
+      { label: '施工中の現場', tip: '職人が作業しているシーン。「人の気配」が信頼性を高める' },
+    ],
+    ng: ['暗すぎる屋内写真（電球をつける）', '雑物や工具が散らかったままの写真', '建物の一部だけで全体像が分からない写真'],
+    gbpNote: 'GBPは正方形写真が表示されやすい。屋外全景やLDK全体は横型より正方形で撮ると最高。',
+  },
+  open_house: {
+    title: '見学会・完成見学会写真の撮り方',
+    description: '「実際に行きたくなる」気持ちにさせる写真が大切。イベントの雰囲気と山手の工夫を伝えましょう。',
+    shots: [
+      { label: '外観＋看板', tip: '見学会の看板やのぼりを外観と一緒に撮影。「今日開催中」感を演出' },
+      { label: '展示スペース全体', tip: '展示内容が分かる全体像。訪問者が多い場合は人を入れると「賞がい」が伝わる' },
+      { label: 'スタッフ・相談シーン', tip: 'スタッフが笑顔で説明しているシーン。「人の気配」が信頼感を高める' },
+      { label: 'ポイントアップ', tip: '断熱材や構造など見学会ならではの詳細をアップで撮影' },
+    ],
+    ng: ['人がいない設備だけの写真（雰囲気が伝わらない）', '暗い屋内写真', '看板や標識が見えない写真'],
+    gbpNote: 'GBPのイベント投稿には写真が必須ではありませんが、外観写真を添付するとクリック率が大幅向上します。',
+  },
+  blog_update: {
+    title: 'ブログ更新写真の撮り方',
+    description: 'ブログのテーマを象徴する写真を使いましょう。記事の内容が一目で分かるものが理想です。',
+    shots: [
+      { label: '記事のメインビジュアル', tip: 'ブログのテーマを象徴する写真。1枚で内容が伝わる構図に' },
+      { label: '施工中・施工後のワンポイント', tip: '記事に登場する工夫や素材のアップ写真' },
+      { label: 'スタッフのコメントシーン', tip: '記事を書いたスタッフの写真を入れると「人の気配」が出る' },
+    ],
+    ng: ['テキストだけのスクリーンショット', '関係のないストック写真の流用'],
+    gbpNote: 'GBPの通常投稿に写真を添付すると表示領域が広がります。ブログのサムネイル写真をそのまま流用するのがおすすめ。',
+  },
+  local_activity: {
+    title: '地域活動写真の撮り方',
+    description: '地域とのつながりや温かみを伝える写真が大切。「人の気配」を必ず入れましょう。',
+    shots: [
+      { label: 'スタッフ・参加者の笑顔', tip: '活動中の自然な笑顔を撮影。ポーズを取らず「その瞬間」を捕捉する' },
+      { label: '活動の全体像', tip: '会場全体や参加人数が分かる広角度写真' },
+      { label: '地域の風景・特産品', tip: '地域の名所や風景と組み合わせると地域密着感が出る' },
+      { label: '子ども食堂・パン屋・就労支援', tip: '各事業の現場写真。商品や活動の様子を生き生きと' },
+    ],
+    ng: ['人が写っていない空の会場写真', 'ブレた写真や暗すぎる写真'],
+    gbpNote: '地域活動は「GBP写真」タブにも登録すると二重効果があります。投稿用写真と別に1枚登録しましょう。',
+  },
+  staff_intro: {
+    title: 'スタッフ紹介写真の撮り方',
+    description: '「この人に相談したい」と思わせる写真が目標。自然な表情と仕事への情熱が伝わる構図にしましょう。',
+    shots: [
+      { label: '現場での作業シーン', tip: '実際に作業している自然なシーン。ヘルメット姿や工具を持った姿がプロ感を出す' },
+      { label: 'スタッフの笑顔ポートレート', tip: '明るい場所で自然な笑顔を撮影。背景は現場や会社前がおすすめ' },
+      { label: 'お客様との相談シーン', tip: '許可を得た上で撮影。丁寧に説明している様子が信頼感を高める' },
+    ],
+    ng: ['表情が硬いプロフィール写真', '暗い場所での写真', 'スマホ横向き写真（正方形で撮る）'],
+    gbpNote: 'GBPの「写真」タブに「スタッフ」カテゴリで登録すると、投稿と別に常時表示されます。必ずセットで登録しましょう。',
+  },
+  review_request: {
+    title: '口コミ依頼時の写真撮影ヒント',
+    description: '口コミ依頼文は写真不要ですが、依頼時に添付する写真を準備するとより信頼感が高まります。',
+    shots: [
+      { label: '完成後の外観写真', tip: 'お引き渡し直後のきれいな外観。「この家が完成しました」感を演出' },
+      { label: 'お客様とスタッフの集合写真', tip: '許可を得た上で撮影。笑顔で撮ることで温かい印象に' },
+    ],
+    ng: ['特になし（写真は任意）'],
+    gbpNote: '口コミ依頼文はメッセージやカードで渡すものです。GBP投稿として公開する場合は完成後の写真を添付すると効果的です。',
+  },
+  review_reply_positive: {
+    title: '高評価口コミ返信写真の撮り方',
+    description: '口コミ返信に写真は不要ですが、実際の施工事例写真を併せて投稿すると信頼性が高まります。',
+    shots: [
+      { label: '該当施工事例の写真', tip: '口コミで言及された内容に関連する写真を添付すると読み手の理解が深まる' },
+    ],
+    ng: ['特になし（写真は任意）'],
+    gbpNote: '口コミ返信に写真は添付できませんが、同時期に別投稿として施工事例写真を投稿することで信頼性を視覚化できます。',
+  },
+  review_reply_negative: {
+    title: '低評価口コミ返信写真の撮り方',
+    description: '低評価口コミの返信時は写真不要です。誠実な返信文で信頼性を回復することに集中しましょう。',
+    shots: [
+      { label: '写真は不要', tip: '低評価口コミ返信に写真を添付する必要はありません。対応内容と改善姿勢を文章で伝えましょう。' },
+    ],
+    ng: ['特になし'],
+    gbpNote: '低評価口コミへの返信は他のユーザーも見ています。誠実で丁寧な返信文そのものが「信頼性の証明」になります。',
+  },
+  campaign: {
+    title: 'キャンペーン・特典写真の撮り方',
+    description: '「お得感」を視覚的に伝える写真が効果的。キャンペーン内容が一目で分かる構図にしましょう。',
+    shots: [
+      { label: 'キャンペーン内容を象徴する写真', tip: '特典内容やサービスを象徴する写真。文字入り画像より写真の方が信頼性が高い' },
+      { label: '施工事例・サービスの写真', tip: 'キャンペーン対象の工事・サービスの実際の写真を使うと説得力が高まる' },
+    ],
+    ng: ['テキストが多すぎるチラシ風写真', '小さすぎて読めない文字入り画像'],
+    gbpNote: 'GBPの「特典・キャンペーン」投稿タイプは期間設定が必須です。投稿タイプを「特典・キャンペーン」に変更することをお忘れなく。',
+  },
+  custom: {
+    title: 'GBP写真の基本ルール',
+    description: 'どの投稿タイプでも共通する写真の基本ルールです。これだけ守ればクリック率が大きく向上します。',
+    shots: [
+      { label: '明るさ・骮清さ', tip: '自然光が入る場所で撮影。屋内は電球をすべてつける' },
+      { label: '正方形構図', tip: 'GBPは正方形表示が基本。横型写真は上下が切れるので注意' },
+      { label: '人を入れる', tip: '人が写っている写真はクリック率が高い。許可を得た上でスタッフやお客様を入れる' },
+      { label: 'ブレ・ドンをなくす', tip: '三脚や山手で固定して撮影。特に屋内写真はブレやすい' },
+    ],
+    ng: ['暗すぎる写真', 'ピントがぼけた写真', 'テキストだけの投稿（写真なし）'],
+    gbpNote: 'GBPの写真は最低宽720px以上・最大宽3000px以下、サイズ10MB以下が推奨です。JPGまたはPNG形式で保存してください。',
+  },
+};
+
 const CTA_TYPE_LABELS: Record<string, string> = {
   LEARN_MORE: "詳しく見る",
   BOOK: "予約する",
@@ -835,6 +954,68 @@ export default function GBPPost() {
             </CardContent>
           )}
         </Card>
+
+        {/* 写真撮影ガイドパネル */}
+        {PHOTO_GUIDE[aiContentType] && (
+          <Card className="border-amber-200 bg-gradient-to-r from-amber-50/50 to-orange-50/50">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700">
+                  <ImageIcon className="h-5 w-5" />
+                  {PHOTO_GUIDE[aiContentType].title}
+                </CardTitle>
+                <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">投稿タイプ連動</span>
+              </div>
+              <CardDescription className="text-xs">
+                {PHOTO_GUIDE[aiContentType].description}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 撮り方リスト */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  おすすめのショット
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {PHOTO_GUIDE[aiContentType].shots.map((shot, i) => (
+                    <div key={i} className="flex gap-2 p-2.5 bg-white rounded-md border border-amber-100">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center font-bold">{i + 1}</span>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">{shot.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{shot.tip}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* NGポイント */}
+              {PHOTO_GUIDE[aiContentType].ng.length > 0 && PHOTO_GUIDE[aiContentType].ng[0] !== '特になし' && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
+                    <XCircle className="h-3.5 w-3.5" />
+                    NGポイント
+                  </p>
+                  <ul className="space-y-1">
+                    {PHOTO_GUIDE[aiContentType].ng.map((item, i) => (
+                      <li key={i} className="text-xs text-red-700 flex items-start gap-1.5">
+                        <span className="mt-0.5 flex-shrink-0">×</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* GBP注意事項 */}
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs font-semibold text-blue-700 mb-1">GBP投稿のポイント</p>
+                <p className="text-xs text-blue-700 leading-relaxed">{PHOTO_GUIDE[aiContentType].gbpNote}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 投稿フォーム */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
