@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -6,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Plus, Trash2, Link, ExternalLink, ToggleLeft } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Link, ExternalLink, ToggleLeft, QrCode, Download, Printer } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import ReviewQRCard from "@/components/ReviewQRCard";
 import { Badge } from "@/components/ui/badge";
 
 export default function Settings() {
@@ -358,6 +360,22 @@ export default function Settings() {
                 </Button>
               </>
             )}
+          </CardContent>
+        </Card>
+
+        {/* 口コミ依頼 QRコードカード生成 */}
+        <Card className="border-rose-200 bg-gradient-to-r from-rose-50/50 to-pink-50/50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2 text-rose-700">
+              <QrCode className="h-5 w-5" />
+              口コミ依頼 QRコードカード
+            </CardTitle>
+            <CardDescription>
+              Google口コミ投稿URLからQRコードを自動生成し、印刷用の口コミ依頼カードPDFを作成できます。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ReviewQRCard googleReviewUrl={hpLinkForm.googleReviewUrl} companyName={companyName} />
           </CardContent>
         </Card>
 
