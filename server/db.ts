@@ -2821,3 +2821,10 @@ export async function deleteGooglePhotoAlbum(id: number): Promise<void> {
   if (!db) throw new Error("Database not available");
   await db.delete(googlePhotoAlbums).where(eq(googlePhotoAlbums.id, id));
 }
+
+export async function getGooglePhotoAlbumByUrl(url: string): Promise<GooglePhotoAlbum | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(googlePhotoAlbums).where(eq(googlePhotoAlbums.url, url)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
