@@ -270,6 +270,79 @@ export default function GBPPost() {
   const [postMode, setPostMode] = useState<'immediate' | 'scheduled'>('immediate');
   const [scheduledAt, setScheduledAt] = useState("");
 
+  // イベント告知専用フォームの状態
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventTemplate, setEventTemplate] = useState<'completion_tour' | 'structure_tour' | 'consultation' | 'local_event' | 'campaign_event' | 'custom'>('completion_tour');
+  const [eventFormTitle, setEventFormTitle] = useState("");
+  const [eventFormDate, setEventFormDate] = useState("");
+  const [eventFormTime, setEventFormTime] = useState("");
+  const [eventFormVenue, setEventFormVenue] = useState("");
+  const [eventFormCapacity, setEventFormCapacity] = useState("");
+  const [eventFormApplyUrl, setEventFormApplyUrl] = useState("");
+  const [eventFormPhone, setEventFormPhone] = useState("");
+  const [eventFormStaff, setEventFormStaff] = useState("");
+  const [eventFormAdditional, setEventFormAdditional] = useState("");
+  const [eventFormGenerateReminder, setEventFormGenerateReminder] = useState(false);
+  const [eventGeneratedMain, setEventGeneratedMain] = useState("");
+  const [eventGeneratedReminder3, setEventGeneratedReminder3] = useState("");
+  const [eventGeneratedReminder1, setEventGeneratedReminder1] = useState("");
+  const [isEventGenerating, setIsEventGenerating] = useState(false);
+
+  // イベント告知AI生成ミューテーション
+  const generateEventPostMutation = trpc.gbp.generateEventPost.useMutation({
+    onSuccess: (data) => {
+      const mainText = typeof data.mainContent === 'string' ? data.mainContent : '';
+      const r3Text = typeof data.reminderContent3days === 'string' ? data.reminderContent3days : '';
+      const r1Text = typeof data.reminderContent1day === 'string' ? data.reminderContent1day : '';
+      setEventGeneratedMain(mainText);
+      setEventGeneratedReminder3(r3Text);
+      setEventGeneratedReminder1(r1Text);
+      setIsEventGenerating(false);
+      toast.success("イベント告知文を生成しました");
+    },
+    onError: (err) => {
+      toast.error(`イベント投稿文生成失敗: ${err.message}`);
+      setIsEventGenerating(false);
+    },
+  });
+
+  const handleEventGenerate = () => {
+    if (!eventFormDate) { toast.error("開催日を入力してください"); return; }
+    const locationName = gbpAccounts.find((a) => a.id === selectedAccountId)?.locationName || DEFAULT_LOCATIONS[0].name;
+    setIsEventGenerating(true);
+    setEventGeneratedMain("");
+    setEventGeneratedReminder3("");
+    setEventGeneratedReminder1("");
+    generateEventPostMutation.mutate({
+      locationName,
+      eventTemplate,
+      eventTitle: eventFormTitle || undefined,
+      eventDate: eventFormDate,
+      eventTime: eventFormTime || undefined,
+      venue: eventFormVenue || undefined,
+      capacity: eventFormCapacity || undefined,
+      applyUrl: eventFormApplyUrl || undefined,
+      contactPhone: eventFormPhone || undefined,
+      staffName: eventFormStaff || undefined,
+      additionalInfo: eventFormAdditional || undefined,
+      generateReminder: eventFormGenerateReminder,
+    });
+  };
+
+  const handleApplyEventText = (text: string) => {
+    setSummary(text.slice(0, 1500));
+    setTopicType('EVENT');
+    // イベントタイトルを自動設定
+    const templateNames: Record<string, string> = {
+      completion_tour: '完成見学会', structure_tour: '構造見学会',
+      consultation: '家づくり相談会', local_event: '地域イベント',
+      campaign_event: 'キャンペーンイベント', custom: 'イベント',
+    };
+    if (!eventTitle) setEventTitle(eventFormTitle || templateNames[eventTemplate] || 'イベント');
+    if (!eventStartAt && eventFormDate) setEventStartAt(eventFormDate + 'T10:00');
+    toast.success("投稿本文に適用しました（投稿タイプ: EVENT）");
+  };
+
   // AI生成パネルの状態
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiContentType, setAiContentType] = useState<string>('construction_case');
@@ -973,6 +1046,240 @@ export default function GBPPost() {
                       再生成
                     </Button>
                   </div>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* イベント告知専用フォーム */}
+        <Card className="border-green-200 bg-gradient-to-r from-green-50/50 to-emerald-50/50">
+          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowEventForm(!showEventForm)}>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2 text-green-700">
+                <Calendar className="h-5 w-5" />
+                イベント告知専用フォーム
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">完成見学会・相談会・地域イベント</span>
+                <ChevronDown className={`h-4 w-4 text-green-600 transition-transform ${showEventForm ? 'rotate-180' : ''}`} />
+              </div>
+            </div>
+            <CardDescription className="text-xs">
+              開催日・場所・申込URLを入力するだけで、GBPイベント告知投稿文をAIが自動生成。リマインド投稿（3日前・前日）も同時生成できます。
+            </CardDescription>
+          </CardHeader>
+          {showEventForm && (
+            <CardContent className="space-y-4">
+              {/* イベントテンプレート選択 */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-green-700">イベント種別</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {([
+                    { value: 'completion_tour', label: '完成見学会', icon: Building2 },
+                    { value: 'structure_tour', label: '構造見学会', icon: Building2 },
+                    { value: 'consultation', label: '家づくり相談会', icon: MessageSquare },
+                    { value: 'local_event', label: '地域イベント', icon: Heart },
+                    { value: 'campaign_event', label: 'キャンペーン', icon: Gift },
+                    { value: 'custom', label: 'カスタム', icon: FileText },
+                  ] as const).map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setEventTemplate(value)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                        eventTemplate === value
+                          ? 'bg-green-600 text-white border-green-600'
+                          : 'bg-white text-foreground border-border hover:border-green-400'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* イベント詳細入力 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">イベントタイトル（任意）</Label>
+                  <Input
+                    placeholder="例：北九州市小倉地完成見学会"
+                    value={eventFormTitle}
+                    onChange={(e) => setEventFormTitle(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">担当者名（任意）</Label>
+                  <Input
+                    placeholder="例：波多野"
+                    value={eventFormStaff}
+                    onChange={(e) => setEventFormStaff(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">開催日 <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="例：2026年4月5日（土）・6日（日）"
+                    value={eventFormDate}
+                    onChange={(e) => setEventFormDate(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">開催時間（任意）</Label>
+                  <Input
+                    placeholder="例：10:00〜17:00"
+                    value={eventFormTime}
+                    onChange={(e) => setEventFormTime(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">開催場所（任意）</Label>
+                  <Input
+                    placeholder="例：北九州市小倉区○○町モデルハウス"
+                    value={eventFormVenue}
+                    onChange={(e) => setEventFormVenue(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">定員（任意）</Label>
+                  <Input
+                    placeholder="例：先着【6組限定"
+                    value={eventFormCapacity}
+                    onChange={(e) => setEventFormCapacity(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">申込URL（任意）</Label>
+                  <Input
+                    placeholder="https://..."
+                    value={eventFormApplyUrl}
+                    onChange={(e) => setEventFormApplyUrl(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">問い合わせ電話（任意）</Label>
+                  <Input
+                    placeholder="例：093-XXX-XXXX"
+                    value={eventFormPhone}
+                    onChange={(e) => setEventFormPhone(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">補足情報（任意）</Label>
+                <Textarea
+                  placeholder="例：完全予約制です。小さなお子様連れでも大丈夫です。騐車場あり。"
+                  value={eventFormAdditional}
+                  onChange={(e) => setEventFormAdditional(e.target.value)}
+                  rows={2}
+                  className="text-sm resize-none"
+                />
+              </div>
+
+              {/* リマインド投稿生成オプション */}
+              <div className="flex items-center gap-2 p-2.5 bg-green-50 border border-green-200 rounded-md">
+                <input
+                  type="checkbox"
+                  id="generateReminder"
+                  checked={eventFormGenerateReminder}
+                  onChange={(e) => setEventFormGenerateReminder(e.target.checked)}
+                  className="h-4 w-4 accent-green-600"
+                />
+                <label htmlFor="generateReminder" className="text-xs text-green-700 cursor-pointer">
+                  <span className="font-semibold">リマインド投稿文も同時生成</span>（3日前・前日の2本を自動作成）
+                </label>
+              </div>
+
+              {/* 生成ボタン */}
+              <Button
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                onClick={handleEventGenerate}
+                disabled={isEventGenerating || !eventFormDate}
+              >
+                {isEventGenerating ? (
+                  <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />イベント告知文を生成中...</>
+                ) : (
+                  <><Sparkles className="h-4 w-4 mr-2" />AIでイベント告知文を生成する</>
+                )}
+              </Button>
+
+              {/* 生成結果 */}
+              {eventGeneratedMain && (
+                <div className="space-y-3">
+                  {/* メイン告知文 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-green-700">🎉 イベント告知投稿文</Label>
+                      <span className="text-xs text-muted-foreground">{eventGeneratedMain.length}文字</span>
+                    </div>
+                    <div className="p-3 bg-white border border-green-200 rounded-md text-sm whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                      {eventGeneratedMain}
+                    </div>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => handleApplyEventText(eventGeneratedMain)}
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1.5" />
+                      投稿本文に適用（EVENTタイプで登録）
+                    </Button>
+                  </div>
+
+                  {/* 3日前リマインド */}
+                  {eventGeneratedReminder3 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-orange-600">⏰ 3日前リマインド投稿文</Label>
+                        <span className="text-xs text-muted-foreground">{eventGeneratedReminder3.length}文字</span>
+                      </div>
+                      <div className="p-3 bg-orange-50 border border-orange-200 rounded-md text-sm whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+                        {eventGeneratedReminder3}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-orange-600 border-orange-300 hover:bg-orange-50"
+                        onClick={() => handleApplyEventText(eventGeneratedReminder3)}
+                      >
+                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                        3日前リマインド文を適用
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* 前日リマインド */}
+                  {eventGeneratedReminder1 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold text-blue-600">📌 前日リマインド投稿文</Label>
+                        <span className="text-xs text-muted-foreground">{eventGeneratedReminder1.length}文字</span>
+                      </div>
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+                        {eventGeneratedReminder1}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-blue-600 border-blue-300 hover:bg-blue-50"
+                        onClick={() => handleApplyEventText(eventGeneratedReminder1)}
+                      >
+                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                        前日リマインド文を適用
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
