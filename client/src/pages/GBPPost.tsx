@@ -37,6 +37,7 @@ import {
   Heart,
   FileText,
   Gift,
+  CalendarPlus,
 } from "lucide-react";
 
 // 拠点の初期データ（未接続状態で表示）
@@ -327,6 +328,49 @@ export default function GBPPost() {
       additionalInfo: eventFormAdditional || undefined,
       generateReminder: eventFormGenerateReminder,
     });
+  };
+
+  // Googleカレンダー追加ヘルパー
+  const handleAddToGoogleCalendar = () => {
+    if (!eventFormDate) {
+      toast.error("開催日を入力してください");
+      return;
+    }
+    const templateNames: Record<string, string> = {
+      completion_tour: '完成見学会',
+      structure_tour: '構造見学会',
+      consultation: '家づくり相談会',
+      local_event: '地域イベント',
+      campaign_event: 'キャンペーンイベント',
+      custom: 'イベント',
+    };
+    const title = eventFormTitle || templateNames[eventTemplate] || 'イベント';
+    const startTime = eventFormTime || '10:00';
+    const [startH, startM] = startTime.split(':');
+    const dateStr = eventFormDate.replace(/-/g, '');
+    const startDt = `${dateStr}T${startH.padStart(2, '0')}${(startM || '00').padStart(2, '0')}00`;
+    const endHour = String(parseInt(startH) + 2).padStart(2, '0');
+    const endDt = `${dateStr}T${endHour}${(startM || '00').padStart(2, '0')}00`;
+    const locationName = gbpAccounts.find((a) => a.id === selectedAccountId)?.locationName || 'ハゼモト建設';
+    const detailParts = [
+      eventGeneratedMain ? `【告知文】\n${eventGeneratedMain}` : '',
+      eventFormApplyUrl ? `【申込URL】 ${eventFormApplyUrl}` : '',
+      eventFormPhone ? `【お問い合わせ】 ${eventFormPhone}` : '',
+      eventFormStaff ? `【担当】 ${eventFormStaff}` : '',
+      eventFormCapacity ? `【定員】 ${eventFormCapacity}名` : '',
+    ].filter(Boolean).join('\n\n');
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `【${locationName}】${title}`,
+      dates: `${startDt}/${endDt}`,
+      location: eventFormVenue || '北九州市',
+      details: detailParts || `${locationName}の${title}です。`,
+      sf: 'true',
+      output: 'xml',
+    });
+    const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    toast.success('Googleカレンダーを開きました。「保存」ボタンでイベントを登録できます。');
   };
 
   const handleApplyEventText = (text: string) => {
@@ -1282,6 +1326,23 @@ export default function GBPPost() {
                   )}
                 </div>
               )}
+
+              {/* Googleカレンダー連携ボタン */}
+              <div className="pt-2 border-t border-green-200">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  onClick={handleAddToGoogleCalendar}
+                  disabled={!eventFormDate}
+                >
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Googleカレンダーに追加する
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1.5 text-center">
+                  クリック後、Googleカレンダーが開きます。「保存」でイベントを登録してください。
+                </p>
+              </div>
             </CardContent>
           )}
         </Card>
