@@ -20,6 +20,18 @@ import {
 import { toast } from "sonner";
 import { Plus, Trash2, ExternalLink, ImageIcon, GripVertical, Pencil, Instagram, Twitter, Eye, Loader2 } from "lucide-react";
 
+// 投稿タイプ選択肢
+ const POST_CATEGORIES = [
+  { value: null, label: "すべての投稿タイプで使用" },
+  { value: "construction_case", label: "🏠 施工事例" },
+  { value: "open_house", label: "📍 見学会・イベント" },
+  { value: "blog_update", label: "📝 ブログ更新" },
+  { value: "local_activity", label: "🌿 地域活動" },
+  { value: "staff_intro", label: "👤 スタッフ紹介" },
+  { value: "campaign", label: "🎉 キャンペーン" },
+  { value: "general", label: "📸 その他一般" },
+] as const;
+
 type Album = {
   id: number;
   title: string;
@@ -28,6 +40,7 @@ type Album = {
   isActive: number;
   sortOrder: number;
   targetSnsAccountIds: string | null;
+  postCategory: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -149,7 +162,7 @@ export default function GoogleAlbumSettings() {
       utils.googlePhotoAlbums.list.invalidate();
       toast.success("アルバムを追加しました");
       setAddOpen(false);
-      setForm({ title: "", url: "", label: "" });
+      setForm({ title: "", url: "", label: "", postCategory: null });
       setSelectedIds([]);
     },
     onError: (e) => toast.error(`追加失敗: ${e.message}`),
@@ -175,9 +188,9 @@ export default function GoogleAlbumSettings() {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Album | null>(null);
   const [editTarget, setEditTarget] = useState<Album | null>(null);
-  const [form, setForm] = useState({ title: "", url: "", label: "" });
+  const [form, setForm] = useState({ title: "", url: "", label: "", postCategory: null as string | null });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [editForm, setEditForm] = useState({ title: "", url: "", label: "" });
+  const [editForm, setEditForm] = useState({ title: "", url: "", label: "", postCategory: null as string | null });
   const [editSelectedIds, setEditSelectedIds] = useState<number[]>([]);
 
   const activeSnsAccounts = (snsAccounts as SnsAccount[]).filter(a => a.isActive);
@@ -192,6 +205,7 @@ export default function GoogleAlbumSettings() {
       isActive: 1,
       sortOrder: (albums as Album[]).length,
       targetSnsAccountIds: selectedIds.length > 0 ? selectedIds : undefined,
+      postCategory: form.postCategory,
     });
   };
 
@@ -207,7 +221,7 @@ export default function GoogleAlbumSettings() {
 
   const openEdit = (album: Album) => {
     setEditTarget(album);
-    setEditForm({ title: album.title, url: album.url, label: album.label ?? "" });
+    setEditForm({ title: album.title, url: album.url, label: album.label ?? "", postCategory: album.postCategory ?? null });
     setEditSelectedIds(parseTargetIds(album.targetSnsAccountIds));
   };
 
@@ -221,6 +235,7 @@ export default function GoogleAlbumSettings() {
       url: editForm.url.trim(),
       label: editForm.label.trim() || undefined,
       targetSnsAccountIds: editSelectedIds.length > 0 ? editSelectedIds : null,
+      postCategory: editForm.postCategory,
     });
   };
 
@@ -284,6 +299,21 @@ export default function GoogleAlbumSettings() {
                     onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label>投稿タイプ（任意）</Label>
+                  <select
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                    value={form.postCategory ?? ""}
+                    onChange={e => setForm(f => ({ ...f, postCategory: e.target.value || null }))}
+                  >
+                    {POST_CATEGORIES.map(c => (
+                      <option key={String(c.value)} value={c.value ?? ""}>{c.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    設定すると、そのタイプの投稿生成時にこのアルバムが優先的に使われます
+                  </p>
+                </div>
                 <SnsAccountSelector
                   accounts={activeSnsAccounts}
                   selectedIds={selectedIds}
@@ -328,6 +358,11 @@ export default function GoogleAlbumSettings() {
                           <span className="font-medium">{album.title}</span>
                           {album.label && (
                             <Badge variant="secondary" className="text-xs">{album.label}</Badge>
+                          )}
+                          {album.postCategory && (
+                            <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 bg-purple-50">
+                              {POST_CATEGORIES.find(c => c.value === album.postCategory)?.label ?? album.postCategory}
+                            </Badge>
                           )}
                           <Badge variant={album.isActive === 1 ? "default" : "outline"} className="text-xs">
                             {album.isActive === 1 ? "有効" : "無効"}
@@ -442,6 +477,21 @@ export default function GoogleAlbumSettings() {
                 value={editForm.label}
                 onChange={e => setEditForm(f => ({ ...f, label: e.target.value }))}
               />
+            </div>
+            <div className="space-y-1">
+              <Label>投稿タイプ（任意）</Label>
+              <select
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                value={editForm.postCategory ?? ""}
+                onChange={e => setEditForm(f => ({ ...f, postCategory: e.target.value || null }))}
+              >
+                {POST_CATEGORIES.map(c => (
+                  <option key={String(c.value)} value={c.value ?? ""}>{c.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                設定すると、そのタイプの投稿生成時にこのアルバムが優先的に使われます
+              </p>
             </div>
             <SnsAccountSelector
               accounts={activeSnsAccounts}

@@ -170,6 +170,19 @@ export default function Demo() {
   const [viewMode, setViewMode] = useState<"single" | "individual" | "carousel">("single");
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+
+  // テンプレート名からpostCategoryへのマッピング（アルバム自動選択用）
+  const TEMPLATE_TO_CATEGORY: Record<string, string> = {
+    new_construction: "construction",
+    renovation: "renovation",
+    open_house: "event",
+    staff: "staff",
+    local_activity: "local",
+    blog: "blog",
+  };
+  const currentPostCategory = selectedTemplate
+    ? (TEMPLATE_TO_CATEGORY[selectedTemplate] ?? null)
+    : null;
   const [useTemplate, setUseTemplate] = useState<boolean>(false);
   const [beforeImage, setBeforeImage] = useState<any>(null);
   const [afterImage, setAfterImage] = useState<any>(null);
@@ -1666,6 +1679,8 @@ export default function Demo() {
               <CardDescription>写真をアップロードするか、Google フォトから取得してください</CardDescription>
             </CardHeader>
           <CardContent className="space-y-4">
+            {/* テンプレート対応アルバムヒント */}
+            <AlbumMatchHint postCategory={currentPostCategory} />
             {/* ドラッグ&ドロップエリア */}
             <div
               onDragOver={handleDragOver}
@@ -1730,7 +1745,7 @@ export default function Demo() {
 
             <div className="flex gap-2">
               <Button
-                onClick={() => fetchPhotoMutation.mutate()}
+                onClick={() => fetchPhotoMutation.mutate({ postCategory: currentPostCategory })}
                 disabled={fetchPhotoMutation.isPending || uploadProgress.uploading}
                 variant="outline"
                 className="flex-1"
@@ -1983,6 +1998,45 @@ export default function Demo() {
                   </div>
                 </div>
               )}
+              {/* テンプレートと写真の整合性チェック */}
+              {analysis && useTemplate && selectedTemplate && currentPostCategory && (() => {
+                const categoryLabel: Record<string, string> = {
+                  construction: "施工事例",
+                  renovation: "リフォーム",
+                  event: "イベント",
+                  staff: "スタッフ",
+                  local: "地域活動",
+                  blog: "ブログ",
+                };
+                const analysisCategory = (analysis.category || "").toLowerCase();
+                const expectedCategory = currentPostCategory;
+                // 簡易的な不一致判定：施工事例テンプレートなのにスタッフ写真など
+                const mismatchMap: Record<string, string[]> = {
+                  construction: ["建築", "建物", "居室", "外観", "内装", "キッチン", "バスルーム", "競工"],
+                  staff: ["人物", "スタッフ", "担当者"],
+                  event: ["会場", "イベント", "見学会"],
+                  local: ["地域", "山", "海", "公園", "街並み"],
+                };
+                const expectedKeywords = mismatchMap[expectedCategory] ?? [];
+                const hasMatch = expectedKeywords.some(kw =>
+                  analysisCategory.includes(kw) ||
+                  (analysis.keywords || []).some((k: string) => k.includes(kw))
+                );
+                const isMismatch = expectedKeywords.length > 0 && !hasMatch;
+                if (!isMismatch) return null;
+                return (
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                    <span className="text-amber-500 text-base">⚠️</span>
+                    <div>
+                      <p className="font-medium text-amber-800">写真とテンプレートが不一致の可能性があります</p>
+                      <p className="text-amber-700 mt-0.5">
+                        選択中のテンプレートは「{categoryLabel[expectedCategory] ?? expectedCategory}」用ですが、写真の内容が異なる可能性があります。
+                        アルバム設定で「{categoryLabel[expectedCategory] ?? expectedCategory}」フォルダを指定すると自動判別されます。
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* テンプレート選択 */}
               <div className="space-y-4 pb-4 border-b">
                 <div className="flex items-center space-x-2">
@@ -2602,5 +2656,72 @@ export default function Demo() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+// テンプレートに対応するアルバムヒントコンポーネント
+function AlbumMatchHint({ postCategory }: { postCategory: string | null }) {
+  const { data: albums = [] } = trpc.googlePhotoAlbums.list.useQuery();
+
+  if (!postCategory) return null;
+
+  const POST_CATEGORY_LABELS: Record<string, string> = {
+    construction_case: "🏠 施工事例",
+    open_house: "📍 見学会・イベント",
+    blog_update: "📝 ブログ更新",
+    local_activity: "🌿 地域活動",
+    staff_intro: "👤 スタッフ紹介",
+    campaign: "🎉 キャンペーン",
+    general: "📸 その他一般",
+  };
+
+  // テンプレートのpostCategoryとアルバムのpostCategoryをマッピング
+  const TEMPLATE_TO_ALBUM_CATEGORY: Record<string, string> = {
+    construction: "construction_case",
+    renovation: "construction_case",
+    event: "open_house",
+    staff: "staff_intro",
+    local: "local_activity",
+    blog: "blog_update",
+  };
+
+  const albumCategory = TEMPLATE_TO_ALBUM_CATEGORY[postCategory] ?? postCategory;
+  const matchingAlbums = (albums as any[]).filter(
+    (a) => a.isActive === 1 && a.postCategory === albumCategory
+  );
+  const allActiveAlbums = (albums as any[]).filter((a) => a.isActive === 1);
+  const categoryLabel = POST_CATEGORY_LABELS[albumCategory] ?? albumCategory;
+
+  if (matchingAlbums.length > 0) {
+    return (
+      <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+        <span className="text-green-600 text-base">✅</span>
+        <div>
+          <p className="font-medium text-green-800">
+            「{categoryLabel}」用のアルバムが{matchingAlbums.length}件設定されています
+          </p>
+          <p className="text-green-700 mt-0.5 text-xs">
+            {matchingAlbums.map((a: any) => a.title).join("、")} — このアルバムから優先的に写真が取得されます
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (allActiveAlbums.length === 0) return null;
+
+  return (
+    <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+      <span className="text-blue-500 text-base">💡</span>
+      <div>
+        <p className="font-medium text-blue-800">
+          「{categoryLabel}」専用アルバムが未設定です
+        </p>
+        <p className="text-blue-700 mt-0.5 text-xs">
+          アルバム管理ページで投稿タイプを「{categoryLabel}」に設定すると、このテンプレート使用時に自動で優先取得されます。
+          現在は全アルバムからランダムに取得します。
+        </p>
+      </div>
+    </div>
   );
 }

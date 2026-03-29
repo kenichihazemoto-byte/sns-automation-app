@@ -655,6 +655,12 @@ export const googlePhotoAlbums = mysqlTable("google_photo_albums", {
   sortOrder: int("sortOrder").default(0).notNull(),
   /** 投稿先SNSアカウントIDのJSON配列（例: "[1,3,5]"）。nullの場合は全アカウント対象 */
   targetSnsAccountIds: text("targetSnsAccountIds"),
+  /**
+   * 投稿タイプ（テンプレート）との紐付け。
+   * 例: "construction_case" | "open_house" | "blog_update" | "local_activity" | "staff_intro" | "campaign" | "general"
+   * nullの場合はすべてのテンプレートで使用可能
+   */
+  postCategory: varchar("postCategory", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

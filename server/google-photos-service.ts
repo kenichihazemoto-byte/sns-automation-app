@@ -11,6 +11,8 @@ export interface GooglePhotoAlbum {
   title: string;
   /** 紐付けSNSアカウントID（nullまたは空配列は全アカウント対象） */
   targetSnsAccountIds?: number[] | null;
+  /** 投稿タイプカテゴリ（nullは全タイプ対応） */
+  postCategory?: string | null;
 }
 
 export interface GooglePhotoItem {
@@ -51,6 +53,7 @@ async function getActiveAlbumsFromDb(): Promise<GooglePhotoAlbum[]> {
       targetSnsAccountIds: row.targetSnsAccountIds
         ? (() => { try { return JSON.parse(row.targetSnsAccountIds!); } catch { return null; } })()
         : null,
+      postCategory: row.postCategory ?? null,
     }));
   } catch (e) {
     console.warn("[GooglePhotos] Failed to load albums from DB, using fallback:", e);
@@ -165,16 +168,28 @@ export function selectRandomPhoto(photos: GooglePhotoItem[]): GooglePhotoItem {
 }
 
 /**
- * ランダムな竣工写真を1枚取得（DBのアルバム設定を反映）
+ * ランダムな競工写真を１枚取得（DBのアルバム設定を反映）
  * albumオブジェクトにtargetSnsAccountIdsを含めて返す
+ * postCategoryを指定するとそのカテゴリのアルバムを優先選択
  */
-export async function getRandomConstructionPhoto(): Promise<{
+export async function getRandomConstructionPhoto(postCategory?: string | null): Promise<{
   photo: GooglePhotoItem;
   album: GooglePhotoAlbum;
 }> {
   try {
     const activeAlbums = await getActiveAlbumsFromDb();
-    const album = selectRandomAlbum(activeAlbums);
+    // postCategoryが指定された場合、一致するアルバムを優先選択
+    let candidateAlbums = activeAlbums;
+    if (postCategory) {
+      const matched = activeAlbums.filter(a => a.postCategory === postCategory);
+      if (matched.length > 0) {
+        candidateAlbums = matched;
+        console.log(`[GooglePhotos] Filtered by postCategory="${postCategory}": ${matched.length} album(s)`);
+      } else {
+        console.log(`[GooglePhotos] No album matched postCategory="${postCategory}", using all albums`);
+      }
+    }
+    const album = selectRandomAlbum(candidateAlbums);
     console.log(`[GooglePhotos] Selected album: ${album.title} (${album.year}) targetSnsAccountIds:`, album.targetSnsAccountIds);
     
     const photos = await fetchPhotosFromAlbum(album.url, activeAlbums);
