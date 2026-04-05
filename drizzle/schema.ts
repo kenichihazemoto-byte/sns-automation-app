@@ -661,8 +661,6 @@ export const googlePhotoAlbums = mysqlTable("google_photo_albums", {
    * nullの場合はすべてのテンプレートで使用可能
    */
   postCategory: varchar("postCategory", { length: 64 }),
-  /** アルバム内の写真枚数（プレビュー取得時に更新される） */
-  photoCount: int("photoCount"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

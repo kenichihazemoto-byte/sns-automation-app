@@ -1,1 +1,0 @@
-ALTER TABLE `google_photo_albums` ADD `photoCount` int;
