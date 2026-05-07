@@ -2463,6 +2463,119 @@ ${input.postText}
           notionSyncedAt: s.notionSyncedAt?.toISOString() ?? null,
         }));
       }),
+
+    // ===== 店舗情報取得（Google Maps / Places API） =====
+    fetchShopInfo: protectedProcedure
+      .input(z.object({
+        query: z.string(), // 店名または「店名 住所」
+      }))
+      .mutation(async ({ input }) => {
+        const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY ?? "";
+        if (!GOOGLE_MAPS_API_KEY) {
+          // APIキーがない場合はGeminiで代替検索
+          const { callLLM } = await import("./_core/llm");
+          const systemPrompt = `あなたは店舗情報の専門家です。ユーザーが指定した店舗の情報をJSON形式で返してください。
+情報が不明な場合は null を返してください。
+必ず以下のJSON形式のみで返してください（他のテキストは不要）:
+{
+  "name": "店舗名",
+  "address": "住所（都道府県から番地まで）",
+  "phone": "電話番号またはnull",
+  "openingHours": ["月曜日: 9:00〜18:00", "火曜日: 9:00〜18:00", ...] または null,
+  "website": "WebサイトURLまたはnull",
+  "rating": 評価数値またはnull
+}`;
+          const response = await callLLM({
+            model: "gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `次の店舗の情報を教えてください: ${input.query}` },
+            ],
+            temperature: 0.1,
+          });
+          const text = response.choices[0]?.message?.content ?? "{}";
+          try {
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const shopInfo = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+            return {
+              source: "ai",
+              name: shopInfo.name ?? input.query,
+              address: shopInfo.address ?? null,
+              phone: shopInfo.phone ?? null,
+              openingHours: shopInfo.openingHours ?? null,
+              website: shopInfo.website ?? null,
+              rating: shopInfo.rating ?? null,
+            };
+          } catch {
+            return { source: "ai", name: input.query, address: null, phone: null, openingHours: null, website: null, rating: null };
+          }
+        }
+        // Google Places API (Text Search)
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(input.query)}&language=ja&key=${GOOGLE_MAPS_API_KEY}`;
+        const searchRes = await fetch(searchUrl);
+        const searchData = await searchRes.json() as any;
+        const place = searchData.results?.[0];
+        if (!place) {
+          return { source: "google", name: input.query, address: null, phone: null, openingHours: null, website: null, rating: null };
+        }
+        // Get place details for opening hours
+        const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,opening_hours,website,rating&language=ja&key=${GOOGLE_MAPS_API_KEY}`;
+        const detailRes = await fetch(detailUrl);
+        const detailData = await detailRes.json() as any;
+        const detail = detailData.result ?? {};
+        return {
+          source: "google",
+          name: detail.name ?? place.name,
+          address: detail.formatted_address ?? place.formatted_address ?? null,
+          phone: detail.formatted_phone_number ?? null,
+          openingHours: detail.opening_hours?.weekday_text ?? null,
+          website: detail.website ?? null,
+          rating: detail.rating ?? place.rating ?? null,
+        };
+      }),
+
+    // ===== 補足イメージ画像生成 =====
+    generateSupplementImage: protectedProcedure
+      .input(z.object({
+        postText: z.string(), // 投稿文（プロンプト生成に使用）
+        shopName: z.string().optional(),
+        style: z.string().optional(), // "warm", "professional", "casual" など
+      }))
+      .mutation(async ({ input }) => {
+        const { generateImage } = await import("./_core/imageGeneration");
+        const { callLLM } = await import("./_core/llm");
+        // 投稿文から画像生成プロンプトを作成
+        const promptGenResponse = await callLLM({
+          model: "gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: `あなたはSNS投稿用の補足イメージ画像のプロンプト作成専門家です。
+投稿文の内容を視覚的に補完する、魅力的な画像のプロンプトを英語で作成してください。
+- 人物の顔は含めないこと
+- 明るく温かみのある雰囲気にすること
+- 商業用途に適した品質にすること
+- プロンプトのみを返すこと（説明不要）
+- 50〜100語程度の英語プロンプトにすること`,
+            },
+            {
+              role: "user",
+              content: `次の投稿文に合う補足イメージ画像のプロンプトを作成してください。
+店舗名: ${input.shopName ?? "不明"}
+スタイル: ${input.style ?? "warm and inviting"}
+投稿文:
+${input.postText}`,
+            },
+          ],
+          temperature: 0.7,
+        });
+        const imagePrompt = promptGenResponse.choices[0]?.message?.content ?? `A beautiful, warm, inviting photo related to ${input.shopName ?? "a local shop"}, professional photography, bright lighting, no people faces`;
+        const result = await generateImage({ prompt: imagePrompt });
+        return {
+          imageUrl: result.url ?? null,
+          prompt: imagePrompt,
+        };
+      }),
   }),
   supervisor: router({
     // 支援員向け：全利用者の今日の進捗を取得

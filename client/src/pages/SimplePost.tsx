@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Wand2, RotateCcw, Scissors, Smile, Hash, Megaphone, AlertTriangle, Star } from "lucide-react";
+import { Wand2, RotateCcw, Scissors, Smile, Hash, Megaphone, AlertTriangle, Star, MapPin, Sparkles, ExternalLink, Download } from "lucide-react";
 
 export default function SimplePost() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -41,6 +41,13 @@ export default function SimplePost() {
   const scoreMutation = trpc.postQuality.score.useMutation();
   const [notionSynced, setNotionSynced] = useState(false);
   const [notionPageUrl, setNotionPageUrl] = useState<string | null>(null);
+  // 店舗情報関連
+  const [shopQuery, setShopQuery] = useState(""); // 店名入力
+  const [shopInfo, setShopInfo] = useState<any>(null); // 取得した店舗情報
+  const [shopInfoAppended, setShopInfoAppended] = useState(false); // 投稿文に挿入済みか
+  // 補足イメージ関連
+  const [supplementImageUrl, setSupplementImageUrl] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const syncToNotionMutation = trpc.notion.syncPost.useMutation({
     onSuccess: (data) => {
       setNotionSynced(true);
@@ -174,6 +181,53 @@ export default function SimplePost() {
       });
     },
   });
+
+  // 店舗情報取得
+  const fetchShopInfoMutation = trpc.demo.fetchShopInfo.useMutation({
+    onSuccess: (data) => {
+      setShopInfo(data);
+      setShopInfoAppended(false);
+      toast.success(`「${data.name}」の情報を取得しました`);
+    },
+    onError: (error) => {
+      toast.error(`店舗情報の取得に失敗しました: ${error.message}`);
+    },
+  });
+
+  // 補足イメージ生成
+  const generateSupplementImageMutation = trpc.demo.generateSupplementImage.useMutation({
+    onSuccess: (data) => {
+      setSupplementImageUrl(data.imageUrl);
+      setIsGeneratingImage(false);
+      toast.success("補足イメージを生成しました!");
+    },
+    onError: (error) => {
+      setIsGeneratingImage(false);
+      toast.error(`画像生成に失敗しました: ${error.message}`);
+    },
+  });
+
+  // 店舗情報を投稿文末尾に挿入するヘルパー
+  const appendShopInfoToPost = () => {
+    if (!shopInfo) return;
+    const currentText = editedPostText ?? generatedPost?.[platform]?.post ?? "";
+    const lines: string[] = [];
+    lines.push("");
+    lines.push("――――――――――");
+    lines.push(`📍 ${shopInfo.name}`);
+    if (shopInfo.address) lines.push(`🏠 ${shopInfo.address}`);
+    if (shopInfo.phone) lines.push(`📞 ${shopInfo.phone}`);
+    if (shopInfo.openingHours && Array.isArray(shopInfo.openingHours) && shopInfo.openingHours.length > 0) {
+      lines.push(`⏰ 営業時間:`);
+      shopInfo.openingHours.forEach((h: string) => lines.push(`   ${h}`));
+    }
+    if (shopInfo.website) lines.push(`🌐 ${shopInfo.website}`);
+    if (shopInfo.rating) lines.push(`⭐ Google評価: ${shopInfo.rating}`);
+    const appendText = lines.join("\n");
+    setEditedPostText(currentText + appendText);
+    setShopInfoAppended(true);
+    toast.success("店舗情報を投稿文に挿入しました");
+  };
 
   // 予約投稿作成
   const createScheduleMutation = trpc.posts.createSchedule.useMutation({
@@ -589,6 +643,160 @@ export default function SimplePost() {
                     </div>
                   </div>
                 )}
+
+                {/* 店舗情報自動挿入セクション */}
+                <div className="border rounded-lg p-4 bg-blue-50 border-blue-200 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">📍 店舗情報を投稿文に追加（任意）</h3>
+                  </div>
+                  <p className="text-xs text-blue-700">Googleマップから店舗の住所・営業時間を自動で取得し、投稿文の末尾に挿入します</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="店名を入力（例: ハゼモト建設 北九州）"
+                      value={shopQuery}
+                      onChange={(e) => setShopQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && shopQuery.trim() && !fetchShopInfoMutation.isPending) {
+                          fetchShopInfoMutation.mutate({ query: shopQuery.trim() });
+                        }
+                      }}
+                      className="flex-1 bg-white border-blue-200"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!shopQuery.trim() || fetchShopInfoMutation.isPending}
+                      onClick={() => fetchShopInfoMutation.mutate({ query: shopQuery.trim() })}
+                      className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                    >
+                      {fetchShopInfoMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      検索
+                    </Button>
+                  </div>
+
+                  {shopInfo && (
+                    <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-1 text-sm">
+                      <p className="font-semibold text-blue-900">📍 {shopInfo.name}</p>
+                      {shopInfo.address && <p className="text-gray-700">🏠 {shopInfo.address}</p>}
+                      {shopInfo.phone && <p className="text-gray-700">📞 {shopInfo.phone}</p>}
+                      {shopInfo.openingHours && Array.isArray(shopInfo.openingHours) && shopInfo.openingHours.length > 0 && (
+                        <div>
+                          <p className="text-gray-700">⏰ 営業時間:</p>
+                          {shopInfo.openingHours.slice(0, 3).map((h: string, i: number) => (
+                            <p key={i} className="text-gray-600 text-xs ml-4">{h}</p>
+                          ))}
+                          {shopInfo.openingHours.length > 3 && (
+                            <p className="text-gray-500 text-xs ml-4">他{shopInfo.openingHours.length - 3}日分...</p>
+                          )}
+                        </div>
+                      )}
+                      {shopInfo.website && (
+                        <a href={shopInfo.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs flex items-center gap-1">
+                          <ExternalLink className="h-3 w-3" />{shopInfo.website}
+                        </a>
+                      )}
+                      {shopInfo.rating && <p className="text-gray-700">⭐ Google評価: {shopInfo.rating}</p>}
+                      <p className="text-xs text-gray-400">情報源: {shopInfo.source === "google" ? "Google Maps" : "AI標準情報"}</p>
+                    </div>
+                  )}
+
+                  {shopInfo && (
+                    <Button
+                      size="sm"
+                      className={`w-full ${shopInfoAppended ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"} text-white`}
+                      onClick={appendShopInfoToPost}
+                      disabled={shopInfoAppended}
+                    >
+                      {shopInfoAppended ? (
+                        <>✅ 投稿文に挿入済み</>
+                      ) : (
+                        <>➕ 住所・営業時間を投稿文に挿入</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {/* 補足イメージ自動生成セクション */}
+                <div className="border rounded-lg p-4 bg-purple-50 border-purple-200 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">✨ 補足イメージをAI生成（任意）</h3>
+                  </div>
+                  <p className="text-xs text-purple-700">投稿文の内容に合わせた補足イメージをAIで自動生成します（投稿時に併用できます）</p>
+
+                  {supplementImageUrl ? (
+                    <div className="space-y-2">
+                      <img
+                        src={supplementImageUrl}
+                        alt="補足イメージ"
+                        className="w-full rounded-lg shadow-md max-h-64 object-cover"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 border-purple-300 text-purple-700 hover:bg-purple-100"
+                          onClick={() => {
+                            setIsGeneratingImage(true);
+                            const currentText = editedPostText ?? generatedPost?.[platform]?.post ?? "";
+                            generateSupplementImageMutation.mutate({
+                              postText: currentText,
+                              shopName: shopInfo?.name,
+                              style: "warm and inviting",
+                            });
+                          }}
+                          disabled={isGeneratingImage}
+                        >
+                          {isGeneratingImage ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCcw className="h-3 w-3 mr-1" />}
+                          再生成
+                        </Button>
+                        <a
+                          href={supplementImageUrl}
+                          download="supplement-image.png"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-100">
+                            <Download className="h-3 w-3 mr-1" />
+                            ダウンロード
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      disabled={isGeneratingImage || !generatedPost}
+                      onClick={() => {
+                        setIsGeneratingImage(true);
+                        const currentText = editedPostText ?? generatedPost?.[platform]?.post ?? "";
+                        generateSupplementImageMutation.mutate({
+                          postText: currentText,
+                          shopName: shopInfo?.name,
+                          style: "warm and inviting",
+                        });
+                      }}
+                    >
+                      {isGeneratingImage ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          補足イメージを生成中...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          投稿内容に合わせた補足イメージを生成
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
 
                 {/* Notion同期ボタン */}
                 <div className="border border-dashed border-muted-foreground/30 rounded-lg p-3 flex items-center justify-between gap-3">
