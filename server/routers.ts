@@ -8,6 +8,11 @@ import * as db from "./db";
 import * as aiService from "./ai-service";
 import { storagePut } from "./storage";
 import { analyzeImage } from "./ai-service";
+import {
+  analyzeInspectionPhoto,
+  summarizeReport,
+  type BatchInspectionItem,
+} from "./inspection-service";
 import { createNotionPage, testNotionConnection, fetchNotionChanges } from "./notion";
 import { createScheduleFromNotion, getNotionSyncedSchedules } from "./db";
 import { notifyOwner } from "./_core/notification";
@@ -3820,6 +3825,85 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
           await dbInstance.insert(hpLinkSettings).values({ userId: ctx.user.id, ...input });
         }
         return { success: true };
+      }),
+  }),
+
+  // 建築点検（福岡県住宅供給公社向け：屋上・外壁定期点検）
+  buildingInspection: router({
+    // 単一写真の点検AI分析（アップロード＋分析）
+    analyzePhoto: protectedProcedure
+      .input(
+        z.object({
+          imageBase64: z.string(),
+          fileName: z.string(),
+          danchiName: z.string(),
+          buildingNo: z.string().optional(),
+          floor: z.string().optional(),
+          direction: z.string().optional(),
+          surfaceTypeHint: z.enum(["外壁", "屋上", "自動判定"]).default("自動判定"),
+          note: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const {
+          imageBase64,
+          fileName,
+          danchiName,
+          buildingNo,
+          floor,
+          direction,
+          surfaceTypeHint,
+          note,
+        } = input;
+
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+
+        const safeName = fileName.replace(/[^\w.\-]/g, "_");
+        const fileKey = `${ctx.user.id}-inspections/${Date.now()}-${safeName}`;
+        const { url: imageUrl } = await storagePut(fileKey, buffer, "image/jpeg");
+
+        const locationContext = [
+          danchiName,
+          buildingNo ? `${buildingNo}号棟` : null,
+          floor ? `${floor}` : null,
+          direction ? `${direction}面` : null,
+          note,
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        const result = await analyzeInspectionPhoto({
+          imageUrl,
+          surfaceTypeHint,
+          locationContext: locationContext || undefined,
+        });
+
+        return {
+          photoId: fileKey,
+          imageUrl,
+          fileName,
+          metadata: { danchiName, buildingNo, floor, direction, note, surfaceTypeHint },
+          result,
+        };
+      }),
+
+    // 複数写真の集計レポート（クライアントから渡された分析済み結果を集計）
+    summarize: protectedProcedure
+      .input(
+        z.object({
+          items: z.array(
+            z.object({
+              photoId: z.string(),
+              imageUrl: z.string(),
+              locationContext: z.string().optional(),
+              result: z.any(),
+            })
+          ),
+        })
+      )
+      .mutation(async ({ input }) => {
+        return summarizeReport(input.items as BatchInspectionItem[]);
       }),
   }),
 });

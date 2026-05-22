@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck, PenLine, MapPin, Images, BookMarked, Globe } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck, PenLine, MapPin, Images, BookMarked, Globe, Building2 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -49,6 +49,7 @@ const menuItems = [
   { icon: BookOpenCheck, label: "Notion連携", path: "/notion-settings" },
   { icon: Settings, label: "設定", path: "/settings" },
   { icon: Globe, label: "SimilarWeb分析", path: "/similarweb" },
+  { icon: Building2, label: "建物点検AI", path: "/inspection" },
   { icon: BookMarked, label: "業務フローガイド", path: "/workflow-guide" },
   { icon: HelpCircle, label: "ヘルプ", path: "/help" },
 ];
