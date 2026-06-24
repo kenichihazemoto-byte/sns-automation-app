@@ -39,7 +39,11 @@ import {
   FileDown,
   Trash2,
   Eye,
+  Video,
+  FileText,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const DANCHI_LIST = [
   "小倉北区 下到津団地",
@@ -82,6 +86,7 @@ interface AnalyzedItem {
       possible_cause: string;
       recommended_action: string;
       requires_hammer_test: boolean;
+      bbox: { x: number; y: number; width: number; height: number };
     }>;
     notes_for_manual_check: string;
     confidence: number;
@@ -105,8 +110,38 @@ export default function BuildingInspection() {
     failed: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [videoFrames, setVideoFrames] = useState<
+    Array<{ id: string; dataUrl: string; timeSec: number; selected: boolean }>
+  >([]);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const analyzeMutation = trpc.buildingInspection.analyzePhoto.useMutation();
+
+  const analyzeOne = async (
+    fileName: string,
+    base64: string
+  ): Promise<AnalyzedItem | null> => {
+    try {
+      const result = await analyzeMutation.mutateAsync({
+        imageBase64: base64,
+        fileName,
+        danchiName,
+        buildingNo: buildingNo || undefined,
+        floor: floor || undefined,
+        direction: direction || undefined,
+        surfaceTypeHint,
+        note: note || undefined,
+      });
+      return result as AnalyzedItem;
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`${fileName}の分析に失敗しました: ${e?.message ?? ""}`);
+      return null;
+    }
+  };
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -133,30 +168,18 @@ export default function BuildingInspection() {
         continue;
       }
 
-      try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onloadend = () => resolve(r.result as string);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(r.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
 
-        const result = await analyzeMutation.mutateAsync({
-          imageBase64: base64,
-          fileName: file.name,
-          danchiName,
-          buildingNo: buildingNo || undefined,
-          floor: floor || undefined,
-          direction: direction || undefined,
-          surfaceTypeHint,
-          note: note || undefined,
-        });
-
-        setItems((prev) => [...prev, result as AnalyzedItem]);
+      const result = await analyzeOne(file.name, base64);
+      if (result) {
+        setItems((prev) => [...prev, result]);
         done++;
-      } catch (e: any) {
-        console.error(e);
-        toast.error(`${file.name}の分析に失敗しました: ${e?.message ?? ""}`);
+      } else {
         failed++;
       }
       setProgress({ total: files.length, done, failed });
@@ -165,6 +188,97 @@ export default function BuildingInspection() {
     setProgress(null);
     toast.success(`${done}枚の写真を分析しました（失敗: ${failed}枚）`);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // 動画から代表フレームを N 枚抽出
+  const extractFrames = async (file: File, frameCount = 6) => {
+    setIsExtracting(true);
+    try {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("動画の読み込みに失敗"));
+      });
+
+      const duration = video.duration;
+      if (!isFinite(duration) || duration <= 0) {
+        throw new Error("動画の長さを取得できません");
+      }
+
+      const canvas = document.createElement("canvas");
+      const w = Math.min(video.videoWidth, 1280);
+      const h = Math.round((video.videoHeight * w) / video.videoWidth);
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas未対応");
+
+      const frames: typeof videoFrames = [];
+      for (let i = 0; i < frameCount; i++) {
+        const t = ((i + 0.5) * duration) / frameCount;
+        await new Promise<void>((resolve, reject) => {
+          const onSeeked = () => {
+            video.removeEventListener("seeked", onSeeked);
+            resolve();
+          };
+          video.addEventListener("seeked", onSeeked);
+          video.currentTime = t;
+          setTimeout(() => reject(new Error("seekタイムアウト")), 8000);
+        });
+        ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        frames.push({
+          id: `frame-${Date.now()}-${i}`,
+          dataUrl,
+          timeSec: t,
+          selected: true,
+        });
+      }
+
+      URL.revokeObjectURL(url);
+      setVideoFrames(frames);
+      toast.success(`${frameCount}枚のフレームを抽出しました`);
+    } catch (e: any) {
+      toast.error(`動画処理に失敗: ${e?.message ?? "不明なエラー"}`);
+    } finally {
+      setIsExtracting(false);
+      if (videoInputRef.current) videoInputRef.current.value = "";
+    }
+  };
+
+  const analyzeSelectedFrames = async () => {
+    const selected = videoFrames.filter((f) => f.selected);
+    if (selected.length === 0) {
+      toast.error("分析するフレームを選択してください");
+      return;
+    }
+    setProgress({ total: selected.length, done: 0, failed: 0 });
+    let done = 0;
+    let failed = 0;
+    for (const frame of selected) {
+      const ts = `${Math.floor(frame.timeSec / 60)}m${String(
+        Math.floor(frame.timeSec % 60)
+      ).padStart(2, "0")}s`;
+      const result = await analyzeOne(
+        `動画フレーム_${ts}.jpg`,
+        frame.dataUrl
+      );
+      if (result) {
+        setItems((prev) => [...prev, result]);
+        done++;
+      } else {
+        failed++;
+      }
+      setProgress({ total: selected.length, done, failed });
+    }
+    setProgress(null);
+    setVideoFrames([]);
+    toast.success(`${done}フレームを分析しました（失敗: ${failed}）`);
   };
 
   const summary = useMemo(() => {
@@ -278,6 +392,141 @@ export default function BuildingInspection() {
   const removeItem = (idx: number) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
+
+  // 写真にバウンディングボックスを焼き込んだ画像（dataURL）を生成
+  const renderAnnotatedImage = async (item: AnalyzedItem): Promise<string> => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("画像の読み込みに失敗"));
+      img.src = item.imageUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas未対応");
+    ctx.drawImage(img, 0, 0);
+
+    const colorOf = (sev: Severity) =>
+      ({
+        緊急: "#dc2626",
+        要補修: "#f97316",
+        要観察: "#eab308",
+        軽微: "#60a5fa",
+        問題なし: "#22c55e",
+      })[sev];
+
+    ctx.lineWidth = Math.max(3, img.naturalWidth / 300);
+    ctx.font = `bold ${Math.max(14, img.naturalWidth / 60)}px sans-serif`;
+    item.result.findings.forEach((f, i) => {
+      if (f.defect_type === "異常なし") return;
+      const { x, y, width, height } = f.bbox;
+      if (width <= 0 || height <= 0) return;
+      const px = x * img.naturalWidth;
+      const py = y * img.naturalHeight;
+      const pw = width * img.naturalWidth;
+      const ph = height * img.naturalHeight;
+      ctx.strokeStyle = colorOf(f.severity);
+      ctx.strokeRect(px, py, pw, ph);
+      const label = `${i + 1}. ${f.defect_type}`;
+      const metrics = ctx.measureText(label);
+      const labelH = Math.max(20, img.naturalWidth / 50);
+      ctx.fillStyle = colorOf(f.severity);
+      ctx.fillRect(px, py - labelH, metrics.width + 16, labelH);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(label, px + 8, py - 6);
+    });
+
+    return canvas.toDataURL("image/jpeg", 0.9);
+  };
+
+  const exportPDF = async () => {
+    if (items.length === 0) {
+      toast.error("先に写真を分析してください");
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      // 注釈付き画像を全件レンダリング
+      const annotated: Record<string, string> = {};
+      for (const it of items) {
+        try {
+          annotated[it.photoId] = await renderAnnotatedImage(it);
+        } catch (e) {
+          annotated[it.photoId] = it.imageUrl;
+        }
+      }
+      // 隠しレポートDOMにレンダリング → html2canvas → PDF
+      const reportDiv = reportRef.current;
+      if (!reportDiv) throw new Error("レポート領域が見つかりません");
+
+      // データURLに置き換え（描画用）
+      reportDiv.querySelectorAll<HTMLImageElement>("img[data-photo-id]").forEach(
+        (el) => {
+          const id = el.getAttribute("data-photo-id");
+          if (id && annotated[id]) el.src = annotated[id];
+        }
+      );
+
+      reportDiv.style.display = "block";
+      // 描画反映待ち
+      await new Promise((r) => setTimeout(r, 200));
+
+      const canvas = await html2canvas(reportDiv, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#fff",
+      });
+      reportDiv.style.display = "none";
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pageWmm = pdf.internal.pageSize.getWidth();
+      const pageHmm = pdf.internal.pageSize.getHeight();
+      const imgWmm = pageWmm;
+      const imgHmm = (canvas.height * imgWmm) / canvas.width;
+
+      // 複数ページに分割
+      let yOffset = 0;
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      let remainingH = imgHmm;
+      let page = 0;
+      while (remainingH > 0) {
+        if (page > 0) pdf.addPage();
+        pdf.addImage(
+          imgData,
+          "JPEG",
+          0,
+          -yOffset,
+          imgWmm,
+          imgHmm,
+          undefined,
+          "FAST"
+        );
+        yOffset += pageHmm;
+        remainingH -= pageHmm;
+        page++;
+      }
+      const ts = new Date().toISOString().slice(0, 10);
+      pdf.save(`点検調書_${danchiName}_${ts}.pdf`);
+      toast.success("PDF調書をダウンロードしました");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`PDF生成に失敗: ${e?.message ?? "不明なエラー"}`);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const colorOf = (sev: Severity): string =>
+    ({
+      緊急: "#dc2626",
+      要補修: "#f97316",
+      要観察: "#eab308",
+      軽微: "#60a5fa",
+      問題なし: "#22c55e",
+    })[sev];
 
   return (
     <DashboardLayout>
@@ -401,38 +650,145 @@ export default function BuildingInspection() {
 
         <Card>
           <CardHeader>
-            <CardTitle>② 写真をアップロード</CardTitle>
+            <CardTitle>② 写真・動画をアップロード</CardTitle>
             <CardDescription>
-              複数枚同時にアップロード可能。1枚あたり10MBまで。AIが順次分析します。
+              写真は複数同時アップロード可（10MB/枚）。動画は代表フレームを自動抽出して分析できます。
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={progress !== null}
-              size="lg"
-              className="w-full"
-            >
-              {progress ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  分析中... ({progress.done + progress.failed} / {progress.total})
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-5 w-5" />
-                  写真を選択してAI分析を開始
-                </>
-              )}
-            </Button>
+            <Tabs defaultValue="photo">
+              <TabsList>
+                <TabsTrigger value="photo">
+                  <Camera className="h-4 w-4 mr-1" />
+                  写真
+                </TabsTrigger>
+                <TabsTrigger value="video">
+                  <Video className="h-4 w-4 mr-1" />
+                  動画から抽出
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="photo" className="pt-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={progress !== null}
+                  size="lg"
+                  className="w-full"
+                >
+                  {progress ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      分析中... ({progress.done + progress.failed} / {progress.total})
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-5 w-5" />
+                      写真を選択してAI分析を開始
+                    </>
+                  )}
+                </Button>
+              </TabsContent>
+              <TabsContent value="video" className="pt-4 space-y-4">
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) extractFrames(f, 6);
+                  }}
+                />
+                <Button
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={isExtracting || progress !== null}
+                  size="lg"
+                  className="w-full"
+                  variant="secondary"
+                >
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      フレーム抽出中...
+                    </>
+                  ) : (
+                    <>
+                      <Video className="mr-2 h-5 w-5" />
+                      動画を選択（6フレームを自動抽出）
+                    </>
+                  )}
+                </Button>
+                {videoFrames.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      分析するフレームを選択してください（クリックで選択/解除）
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {videoFrames.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() =>
+                            setVideoFrames((prev) =>
+                              prev.map((p) =>
+                                p.id === f.id
+                                  ? { ...p, selected: !p.selected }
+                                  : p
+                              )
+                            )
+                          }
+                          className={`relative rounded border-2 overflow-hidden transition ${
+                            f.selected
+                              ? "border-primary ring-2 ring-primary/30"
+                              : "border-muted opacity-60"
+                          }`}
+                        >
+                          <img
+                            src={f.dataUrl}
+                            alt={`frame at ${f.timeSec}s`}
+                            className="w-full h-32 object-cover"
+                          />
+                          <span className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+                            {Math.floor(f.timeSec / 60)}:
+                            {String(Math.floor(f.timeSec % 60)).padStart(2, "0")}
+                          </span>
+                          {f.selected && (
+                            <span className="absolute top-1 left-1 bg-primary text-white text-xs px-1.5 py-0.5 rounded">
+                              選択中
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <Button
+                      onClick={analyzeSelectedFrames}
+                      disabled={progress !== null}
+                      className="w-full"
+                    >
+                      {progress ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          分析中... ({progress.done + progress.failed} /{" "}
+                          {progress.total})
+                        </>
+                      ) : (
+                        <>
+                          選択した{videoFrames.filter((f) => f.selected).length}
+                          フレームを分析
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
             {progress && (
               <Progress
                 value={
@@ -454,10 +810,25 @@ export default function BuildingInspection() {
                     全{summary.total}枚のうち、判定結果の内訳
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportCSV}>
-                  <FileDown className="h-4 w-4 mr-1" />
-                  CSV調書をダウンロード
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={exportCSV}>
+                    <FileDown className="h-4 w-4 mr-1" />
+                    CSV
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={exportPDF}
+                    disabled={isExportingPdf}
+                  >
+                    {isExportingPdf ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4 mr-1" />
+                    )}
+                    PDF調書
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="overall">
@@ -547,11 +918,61 @@ export default function BuildingInspection() {
                     className="border rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-4"
                   >
                     <div className="md:col-span-1 space-y-2">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.fileName}
-                        className="rounded shadow w-full object-cover max-h-64"
-                      />
+                      <div className="relative rounded shadow overflow-hidden">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.fileName}
+                          className="w-full object-cover max-h-64"
+                        />
+                        <svg
+                          viewBox="0 0 100 100"
+                          preserveAspectRatio="none"
+                          className="absolute inset-0 w-full h-full pointer-events-none"
+                        >
+                          {item.result.findings.map((f, fIdx) => {
+                            if (
+                              f.defect_type === "異常なし" ||
+                              f.bbox.width <= 0 ||
+                              f.bbox.height <= 0
+                            )
+                              return null;
+                            const c = colorOf(f.severity);
+                            return (
+                              <g key={fIdx}>
+                                <rect
+                                  x={f.bbox.x * 100}
+                                  y={f.bbox.y * 100}
+                                  width={f.bbox.width * 100}
+                                  height={f.bbox.height * 100}
+                                  fill="none"
+                                  stroke={c}
+                                  strokeWidth={0.6}
+                                  vectorEffect="non-scaling-stroke"
+                                />
+                                <rect
+                                  x={f.bbox.x * 100}
+                                  y={Math.max(0, f.bbox.y * 100 - 4)}
+                                  width={Math.min(
+                                    100 - f.bbox.x * 100,
+                                    Math.max(6, String(fIdx + 1).length * 2 + 4)
+                                  )}
+                                  height={4}
+                                  fill={c}
+                                />
+                                <text
+                                  x={f.bbox.x * 100 + 1}
+                                  y={Math.max(3, f.bbox.y * 100 - 1)}
+                                  fill="#fff"
+                                  fontSize="3"
+                                  fontWeight="bold"
+                                >
+                                  {fIdx + 1}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
                       <div className="text-xs text-muted-foreground space-y-0.5">
                         <p>
                           <Camera className="inline h-3 w-3 mr-1" />
@@ -615,6 +1036,12 @@ export default function BuildingInspection() {
                               className="border rounded p-2 text-sm space-y-1"
                             >
                               <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className="inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold"
+                                  style={{ background: colorOf(f.severity) }}
+                                >
+                                  {fIdx + 1}
+                                </span>
                                 <Badge className={SEVERITY_STYLES[f.severity]}>
                                   {f.severity}
                                 </Badge>
@@ -660,6 +1087,211 @@ export default function BuildingInspection() {
             </Card>
           </>
         )}
+
+        {/* PDF生成用の隠しレポート（html2canvasで画像化） */}
+        <div
+          ref={reportRef}
+          style={{
+            display: "none",
+            width: "794px",
+            padding: "24px",
+            background: "#fff",
+            color: "#000",
+            fontFamily:
+              "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', Meiryo, sans-serif",
+          }}
+        >
+          <div style={{ borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 16 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>
+              建物点検調書（AI一次判定）
+            </h1>
+            <p style={{ fontSize: 12, margin: "4px 0 0 0" }}>
+              発行日: {new Date().toLocaleDateString("ja-JP")} / 団地: {danchiName}
+            </p>
+          </div>
+
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginTop: 12 }}>
+            ■ 総合サマリー
+          </h2>
+          <table
+            style={{
+              borderCollapse: "collapse",
+              width: "100%",
+              fontSize: 12,
+              marginTop: 4,
+            }}
+          >
+            <thead>
+              <tr style={{ background: "#f3f4f6" }}>
+                <th style={{ border: "1px solid #999", padding: 4 }}>緊急</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>要補修</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>要観察</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>軽微</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>問題なし</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>合計</th>
+                <th style={{ border: "1px solid #999", padding: 4 }}>打音検査要</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.byOverall["緊急"]}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.byOverall["要補修"]}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.byOverall["要観察"]}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.byOverall["軽微"]}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.byOverall["問題なし"]}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.total}
+                </td>
+                <td style={{ border: "1px solid #999", padding: 4, textAlign: "center" }}>
+                  {summary.hammerCount}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginTop: 16 }}>
+            ■ 写真ごとの指摘事項
+          </h2>
+          {items.map((item, idx) => (
+            <div
+              key={item.photoId}
+              style={{
+                border: "1px solid #ccc",
+                padding: 12,
+                marginTop: 8,
+                pageBreakInside: "avoid",
+              }}
+            >
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ width: 240, flexShrink: 0 }}>
+                  <img
+                    data-photo-id={item.photoId}
+                    src={item.imageUrl}
+                    crossOrigin="anonymous"
+                    style={{
+                      width: "100%",
+                      objectFit: "cover",
+                      border: "1px solid #000",
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1, fontSize: 11 }}>
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    No.{idx + 1} {item.metadata.danchiName}
+                    {item.metadata.buildingNo && ` / ${item.metadata.buildingNo}号棟`}
+                    {item.metadata.floor && ` / ${item.metadata.floor}`}
+                    {item.metadata.direction && ` / ${item.metadata.direction}面`}
+                  </p>
+                  <p style={{ margin: "2px 0", color: "#555" }}>
+                    部位: {item.result.surface_type} / ファイル: {item.fileName}
+                  </p>
+                  <p
+                    style={{
+                      margin: "4px 0",
+                      padding: "2px 8px",
+                      background:
+                        item.result.overall_assessment === "緊急"
+                          ? "#fee2e2"
+                          : item.result.overall_assessment === "要補修"
+                          ? "#ffedd5"
+                          : "#f3f4f6",
+                      display: "inline-block",
+                      borderRadius: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    総合判定: {item.result.overall_assessment}（AI信頼度:{" "}
+                    {(item.result.confidence * 100).toFixed(0)}%）
+                  </p>
+                  <p style={{ margin: "4px 0", fontSize: 11 }}>
+                    要約: {item.result.summary_jp}
+                  </p>
+                  <table
+                    style={{
+                      borderCollapse: "collapse",
+                      width: "100%",
+                      fontSize: 10,
+                      marginTop: 4,
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f3f4f6" }}>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>No</th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>
+                          劣化種別
+                        </th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>重要度</th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>位置</th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>
+                          推定寸法
+                        </th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>
+                          推奨対応
+                        </th>
+                        <th style={{ border: "1px solid #999", padding: 2 }}>打音</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {item.result.findings.map((f, fIdx) => (
+                        <tr key={fIdx}>
+                          <td style={{ border: "1px solid #999", padding: 2, textAlign: "center" }}>
+                            {fIdx + 1}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2 }}>
+                            {f.defect_type}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2 }}>
+                            {f.severity}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2 }}>
+                            {f.location_in_image}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2 }}>
+                            {f.estimated_size}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2 }}>
+                            {f.recommended_action}
+                          </td>
+                          <td style={{ border: "1px solid #999", padding: 2, textAlign: "center" }}>
+                            {f.requires_hammer_test ? "要" : "−"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {item.result.notes_for_manual_check && (
+                    <p style={{ margin: "4px 0", fontSize: 10, color: "#555" }}>
+                      現場確認メモ: {item.result.notes_for_manual_check}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 10,
+              color: "#666",
+              borderTop: "1px solid #ccc",
+              paddingTop: 8,
+            }}
+          >
+            ※ 本調書はAIによる一次判定です。「浮き」項目は打音検査または赤外線サーモグラフィでの確定をお願いします。
+            最終判定は現場の点検技士が行ってください。
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

@@ -40,6 +40,8 @@ export interface InspectionFinding {
   possible_cause: string;
   recommended_action: string;
   requires_hammer_test: boolean; // 打音検査が別途必要か
+  /** 画像内の劣化位置。すべて 0.0〜1.0 の正規化座標（原点=左上） */
+  bbox: { x: number; y: number; width: number; height: number };
 }
 
 export interface InspectionResult {
@@ -88,6 +90,14 @@ severity 判定基準:
 - 要観察: 経過観察、次回点検で再確認
 - 軽微: 美観上の問題のみ
 - 問題なし: 劣化なし
+
+【bbox（バウンディングボックス）の指定方法】
+各 finding には bbox を必ず指定してください。座標は画像の左上を原点(0,0)、右下を(1,1)とする
+正規化座標です（0.0〜1.0）。x,y は劣化箇所を囲む矩形の左上、width/height は矩形の幅と高さ。
+- 線状のひび割れの場合: 線全体を含む最小矩形を返す
+- 点状の浮きやふくれの場合: 中心から少し余裕を持たせた小さめの矩形を返す
+- 「異常なし」の場合: bbox = {x:0, y:0, width:0, height:0} を返す
+- 画像全体に及ぶ劣化（広範な退色等）: {x:0, y:0, width:1, height:1} を返す
 
 写真が点検対象（モルタル外壁・シート防水屋上）でない場合や、判定に十分な解像度がない場合は、surface_typeを「判定不能」、confidenceを低く設定してください。`;
 
@@ -179,6 +189,17 @@ export async function analyzeInspectionPhoto(params: {
                   possible_cause: { type: "string" },
                   recommended_action: { type: "string" },
                   requires_hammer_test: { type: "boolean" },
+                  bbox: {
+                    type: "object",
+                    properties: {
+                      x: { type: "number" },
+                      y: { type: "number" },
+                      width: { type: "number" },
+                      height: { type: "number" },
+                    },
+                    required: ["x", "y", "width", "height"],
+                    additionalProperties: false,
+                  },
                 },
                 required: [
                   "defect_type",
@@ -189,6 +210,7 @@ export async function analyzeInspectionPhoto(params: {
                   "possible_cause",
                   "recommended_action",
                   "requires_hammer_test",
+                  "bbox",
                 ],
                 additionalProperties: false,
               },
