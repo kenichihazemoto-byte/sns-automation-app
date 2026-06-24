@@ -37,6 +37,7 @@ import GoogleAlbumSettings from "./pages/GoogleAlbumSettings";
 import WorkflowGuide from "./pages/WorkflowGuide";
 import SimilarWebAnalytics from "./pages/SimilarWebAnalytics";
 import BuildingInspection from "./pages/BuildingInspection";
+import ShareUrl from "./pages/ShareUrl";
 function Router() {
   return (
     <Switch>
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/workflow-guide" component={WorkflowGuide} />
       <Route path="/similarweb" component={SimilarWebAnalytics} />
       <Route path="/inspection" component={BuildingInspection} />
+      <Route path="/share-url" component={ShareUrl} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
