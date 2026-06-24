@@ -1,0 +1,49 @@
+# ===================================================================
+# ハゼモト業務アプリ ローカル / 小規模本番向け Docker Compose
+#
+# 起動: docker compose up -d --build
+# 初回のみ:
+#   docker compose exec app pnpm exec drizzle-kit migrate
+# ===================================================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hazemoto}
+      MYSQL_USER: ${MYSQL_USER:-hazemoto}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme_app}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-hazemoto}:${MYSQL_PASSWORD:-changeme_app}@mysql:3306/${MYSQL_DATABASE:-hazemoto}
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  mysql_data:

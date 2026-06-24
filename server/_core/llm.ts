@@ -209,15 +209,46 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+interface ProviderConfig {
+  url: string;
+  apiKey: string;
+  model: string;
+  isForge: boolean;
+}
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+const resolveProvider = (): ProviderConfig => {
+  if (ENV.llmProvider === "openai") {
+    if (!ENV.openaiApiKey) throw new Error("OPENAI_API_KEY is not configured");
+    return {
+      url: "https://api.openai.com/v1/chat/completions",
+      apiKey: ENV.openaiApiKey,
+      model: ENV.openaiModel,
+      isForge: false,
+    };
   }
+  if (ENV.llmProvider === "gemini") {
+    if (!ENV.geminiApiKey) throw new Error("GEMINI_API_KEY is not configured");
+    return {
+      url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      apiKey: ENV.geminiApiKey,
+      model: ENV.geminiModel,
+      isForge: false,
+    };
+  }
+  if (!ENV.forgeApiKey) {
+    throw new Error(
+      "LLM not configured. Set BUILT_IN_FORGE_API_KEY, or LLM_PROVIDER=openai|gemini with the corresponding API key."
+    );
+  }
+  return {
+    url:
+      (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+        ? `${ENV.forgeApiUrl.replace(/\/$/, "")}`
+        : "https://forge.manus.im") + "/v1/chat/completions",
+    apiKey: ENV.forgeApiKey,
+    model: "gemini-2.5-flash",
+    isForge: true,
+  };
 };
 
 const normalizeResponseFormat = ({
@@ -266,7 +297,7 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  const provider = resolveProvider();
 
   const {
     messages,
@@ -280,7 +311,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: provider.model,
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,9 +327,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  payload.max_tokens = 32768;
+  // Manus Forge 専用パラメータは Forge のときだけ送る
+  if (provider.isForge) {
+    payload.thinking = { budget_tokens: 128 };
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -312,11 +344,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(provider.url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify(payload),
   });

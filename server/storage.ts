@@ -1,7 +1,25 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
+// 画像ストレージヘルパ
+// 既定: Manus Forge ストレージプロキシ
+// STORAGE_PROVIDER=s3 で AWS S3 / S3互換ストレージへ切替可能
 
 import { ENV } from './_core/env';
+import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+let _s3Client: S3Client | null = null;
+function getS3Client(): S3Client {
+  if (_s3Client) return _s3Client;
+  _s3Client = new S3Client({
+    region: ENV.storageS3Region,
+    endpoint: ENV.storageS3Endpoint || undefined,
+    forcePathStyle: !!ENV.storageS3Endpoint, // MinIO等
+    credentials: {
+      accessKeyId: ENV.storageS3AccessKeyId,
+      secretAccessKey: ENV.storageS3SecretAccessKey,
+    },
+  });
+  return _s3Client;
+}
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -67,11 +85,40 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
+async function s3Put(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType: string
+): Promise<{ key: string; url: string }> {
+  const key = normalizeKey(relKey);
+  const body = typeof data === "string" ? Buffer.from(data) : Buffer.from(data as any);
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: ENV.storageS3Bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+  const url = ENV.storageS3PublicUrlBase
+    ? `${ENV.storageS3PublicUrlBase.replace(/\/$/, "")}/${key}`
+    : await getSignedUrl(
+        client,
+        new GetObjectCommand({ Bucket: ENV.storageS3Bucket, Key: key }),
+        { expiresIn: 60 * 60 * 24 * 7 }
+      );
+  return { key, url };
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (ENV.storageProvider === "s3") {
+    return s3Put(relKey, data, contentType);
+  }
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
@@ -92,9 +139,19 @@ export async function storagePut(
   return { key, url };
 }
 
-export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
-  const { baseUrl, apiKey } = getStorageConfig();
+export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
+  if (ENV.storageProvider === "s3") {
+    const url = ENV.storageS3PublicUrlBase
+      ? `${ENV.storageS3PublicUrlBase.replace(/\/$/, "")}/${key}`
+      : await getSignedUrl(
+          getS3Client(),
+          new GetObjectCommand({ Bucket: ENV.storageS3Bucket, Key: key }),
+          { expiresIn: 60 * 60 * 24 * 7 }
+        );
+    return { key, url };
+  }
+  const { baseUrl, apiKey } = getStorageConfig();
   return {
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
