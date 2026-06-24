@@ -702,3 +702,52 @@ export const hpLinkSettings = mysqlTable("hp_link_settings", {
 
 export type HpLinkSetting = typeof hpLinkSettings.$inferSelect;
 export type InsertHpLinkSetting = typeof hpLinkSettings.$inferInsert;
+
+/**
+ * 建物点検レコード（点検セッション単位）
+ * 福岡県住宅供給公社の屋上・外壁定期点検向け
+ */
+export const inspectionRecords = mysqlTable("inspection_records", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  danchiName: varchar("danchiName", { length: 255 }).notNull(),
+  surveyDate: timestamp("surveyDate").defaultNow().notNull(),
+  surveyTitle: varchar("surveyTitle", { length: 255 }),
+  totalPhotos: int("totalPhotos").default(0).notNull(),
+  urgentCount: int("urgentCount").default(0).notNull(),
+  repairCount: int("repairCount").default(0).notNull(),
+  observeCount: int("observeCount").default(0).notNull(),
+  hammerTestCount: int("hammerTestCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InspectionRecord = typeof inspectionRecords.$inferSelect;
+export type InsertInspectionRecord = typeof inspectionRecords.$inferInsert;
+
+/**
+ * 建物点検写真（個別の写真と分析結果）
+ * aiResultはJSON文字列で完全な分析結果を保持
+ */
+export const inspectionPhotos = mysqlTable("inspection_photos", {
+  id: int("id").autoincrement().primaryKey(),
+  inspectionId: int("inspectionId").notNull(),
+  userId: int("userId").notNull(),
+  danchiName: varchar("danchiName", { length: 255 }).notNull(),
+  buildingNo: varchar("buildingNo", { length: 50 }),
+  floor: varchar("floor", { length: 50 }),
+  direction: varchar("direction", { length: 50 }),
+  surfaceTypeHint: varchar("surfaceTypeHint", { length: 50 }),
+  note: text("note"),
+  fileName: varchar("fileName", { length: 255 }),
+  photoUrl: text("photoUrl").notNull(),
+  photoKey: varchar("photoKey", { length: 500 }),
+  overallAssessment: varchar("overallAssessment", { length: 20 }),
+  surfaceType: varchar("surfaceType", { length: 50 }),
+  confidence: int("confidence"),
+  summaryJp: text("summaryJp"),
+  aiResult: text("aiResult").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InspectionPhoto = typeof inspectionPhotos.$inferSelect;
+export type InsertInspectionPhoto = typeof inspectionPhotos.$inferInsert;

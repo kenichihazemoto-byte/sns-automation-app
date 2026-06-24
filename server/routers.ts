@@ -11,6 +11,7 @@ import { analyzeImage } from "./ai-service";
 import {
   analyzeInspectionPhoto,
   summarizeReport,
+  compareInspectionPhotos,
   type BatchInspectionItem,
 } from "./inspection-service";
 import { createNotionPage, testNotionConnection, fetchNotionChanges } from "./notion";
@@ -3904,6 +3905,275 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
       )
       .mutation(async ({ input }) => {
         return summarizeReport(input.items as BatchInspectionItem[]);
+      }),
+
+    // 点検結果をDBに保存（セッション＋全写真）
+    saveSession: protectedProcedure
+      .input(
+        z.object({
+          danchiName: z.string(),
+          surveyTitle: z.string().optional(),
+          items: z.array(
+            z.object({
+              photoId: z.string(),
+              imageUrl: z.string(),
+              fileName: z.string(),
+              metadata: z.object({
+                danchiName: z.string(),
+                buildingNo: z.string().optional(),
+                floor: z.string().optional(),
+                direction: z.string().optional(),
+                note: z.string().optional(),
+                surfaceTypeHint: z.string().optional(),
+              }),
+              result: z.any(),
+            })
+          ),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "DBに接続できません（DATABASE_URL未設定）",
+          });
+        }
+        const { inspectionRecords, inspectionPhotos } = await import(
+          "../drizzle/schema"
+        );
+
+        let urgent = 0,
+          repair = 0,
+          observe = 0,
+          hammer = 0;
+        for (const it of input.items) {
+          const r = it.result as any;
+          if (r?.overall_assessment === "緊急") urgent++;
+          else if (r?.overall_assessment === "要補修") repair++;
+          else if (r?.overall_assessment === "要観察") observe++;
+          if ((r?.findings ?? []).some((f: any) => f?.requires_hammer_test))
+            hammer++;
+        }
+
+        const inserted = await dbInstance.insert(inspectionRecords).values({
+          userId: ctx.user.id,
+          danchiName: input.danchiName,
+          surveyTitle: input.surveyTitle,
+          totalPhotos: input.items.length,
+          urgentCount: urgent,
+          repairCount: repair,
+          observeCount: observe,
+          hammerTestCount: hammer,
+        });
+        const recordId = (inserted as any)[0]?.insertId as number | undefined;
+        if (!recordId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "保存に失敗しました",
+          });
+        }
+
+        for (const it of input.items) {
+          const r = it.result as any;
+          await dbInstance.insert(inspectionPhotos).values({
+            inspectionId: recordId,
+            userId: ctx.user.id,
+            danchiName: it.metadata.danchiName,
+            buildingNo: it.metadata.buildingNo,
+            floor: it.metadata.floor,
+            direction: it.metadata.direction,
+            surfaceTypeHint: it.metadata.surfaceTypeHint,
+            note: it.metadata.note,
+            fileName: it.fileName,
+            photoUrl: it.imageUrl,
+            photoKey: it.photoId,
+            overallAssessment: r?.overall_assessment,
+            surfaceType: r?.surface_type,
+            confidence:
+              typeof r?.confidence === "number"
+                ? Math.round(r.confidence * 100)
+                : null,
+            summaryJp: r?.summary_jp,
+            aiResult: JSON.stringify(r),
+          });
+        }
+
+        return { recordId, savedPhotos: input.items.length };
+      }),
+
+    // 保存済み点検履歴の一覧
+    listSessions: protectedProcedure
+      .input(z.object({ danchiName: z.string().optional() }).optional())
+      .query(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) return [];
+        const { inspectionRecords } = await import("../drizzle/schema");
+        const { desc, and } = await import("drizzle-orm");
+        const conditions = [eq(inspectionRecords.userId, ctx.user.id)];
+        if (input?.danchiName) {
+          conditions.push(eq(inspectionRecords.danchiName, input.danchiName));
+        }
+        const rows = await dbInstance
+          .select()
+          .from(inspectionRecords)
+          .where(and(...conditions))
+          .orderBy(desc(inspectionRecords.surveyDate))
+          .limit(100);
+        return rows;
+      }),
+
+    // 保存済みセッションの詳細（写真込み）
+    getSession: protectedProcedure
+      .input(z.object({ recordId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) return null;
+        const { inspectionRecords, inspectionPhotos } = await import(
+          "../drizzle/schema"
+        );
+        const { and } = await import("drizzle-orm");
+        const record = await dbInstance
+          .select()
+          .from(inspectionRecords)
+          .where(
+            and(
+              eq(inspectionRecords.id, input.recordId),
+              eq(inspectionRecords.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        if (record.length === 0) return null;
+        const photos = await dbInstance
+          .select()
+          .from(inspectionPhotos)
+          .where(eq(inspectionPhotos.inspectionId, input.recordId));
+        return { record: record[0], photos };
+      }),
+
+    deleteSession: protectedProcedure
+      .input(z.object({ recordId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "DBに接続できません",
+          });
+        }
+        const { inspectionRecords, inspectionPhotos } = await import(
+          "../drizzle/schema"
+        );
+        const { and } = await import("drizzle-orm");
+        await dbInstance
+          .delete(inspectionPhotos)
+          .where(eq(inspectionPhotos.inspectionId, input.recordId));
+        await dbInstance
+          .delete(inspectionRecords)
+          .where(
+            and(
+              eq(inspectionRecords.id, input.recordId),
+              eq(inspectionRecords.userId, ctx.user.id)
+            )
+          );
+        return { success: true };
+      }),
+
+    // 同一団地・棟・方位の過去写真候補を取得（前年比較の相手探し用）
+    findHistoricalMatches: protectedProcedure
+      .input(
+        z.object({
+          danchiName: z.string(),
+          buildingNo: z.string().optional(),
+          floor: z.string().optional(),
+          direction: z.string().optional(),
+          excludeRecordId: z.number().optional(),
+        })
+      )
+      .query(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) return [];
+        const { inspectionPhotos } = await import("../drizzle/schema");
+        const { and, desc, ne } = await import("drizzle-orm");
+        const conditions = [
+          eq(inspectionPhotos.userId, ctx.user.id),
+          eq(inspectionPhotos.danchiName, input.danchiName),
+        ];
+        if (input.buildingNo)
+          conditions.push(eq(inspectionPhotos.buildingNo, input.buildingNo));
+        if (input.direction)
+          conditions.push(eq(inspectionPhotos.direction, input.direction));
+        if (input.excludeRecordId)
+          conditions.push(
+            ne(inspectionPhotos.inspectionId, input.excludeRecordId)
+          );
+        const rows = await dbInstance
+          .select()
+          .from(inspectionPhotos)
+          .where(and(...conditions))
+          .orderBy(desc(inspectionPhotos.createdAt))
+          .limit(50);
+        return rows;
+      }),
+
+    // 2枚の写真をAIで比較（前年比較）
+    comparePhotos: protectedProcedure
+      .input(
+        z.object({
+          previousPhotoId: z.number(),
+          currentImageUrl: z.string(),
+          currentAiSummary: z.string(),
+          currentSurveyDate: z.string(),
+          locationContext: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "DBに接続できません",
+          });
+        }
+        const { inspectionPhotos } = await import("../drizzle/schema");
+        const { and } = await import("drizzle-orm");
+        const rows = await dbInstance
+          .select()
+          .from(inspectionPhotos)
+          .where(
+            and(
+              eq(inspectionPhotos.id, input.previousPhotoId),
+              eq(inspectionPhotos.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        if (rows.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "過去の写真が見つかりません",
+          });
+        }
+        const prev = rows[0];
+        const comparison = await compareInspectionPhotos({
+          previousImageUrl: prev.photoUrl,
+          previousSurveyDate: prev.createdAt.toISOString().slice(0, 10),
+          previousAiSummary: prev.summaryJp ?? "",
+          currentImageUrl: input.currentImageUrl,
+          currentSurveyDate: input.currentSurveyDate,
+          currentAiSummary: input.currentAiSummary,
+          locationContext: input.locationContext,
+        });
+        return {
+          previous: {
+            id: prev.id,
+            photoUrl: prev.photoUrl,
+            fileName: prev.fileName,
+            surveyDate: prev.createdAt,
+            summaryJp: prev.summaryJp,
+            overallAssessment: prev.overallAssessment,
+          },
+          comparison,
+        };
       }),
   }),
 });

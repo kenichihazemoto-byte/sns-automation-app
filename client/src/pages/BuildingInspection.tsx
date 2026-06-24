@@ -41,7 +41,18 @@ import {
   Eye,
   Video,
   FileText,
+  Save,
+  History,
+  GitCompare,
+  ArrowRight,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -117,8 +128,30 @@ export default function BuildingInspection() {
   >([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [surveyTitle, setSurveyTitle] = useState("");
+  const [compareFor, setCompareFor] = useState<AnalyzedItem | null>(null);
+  const [comparisonResult, setComparisonResult] = useState<any>(null);
+  const [isComparing, setIsComparing] = useState(false);
 
   const analyzeMutation = trpc.buildingInspection.analyzePhoto.useMutation();
+  const saveSessionMutation = trpc.buildingInspection.saveSession.useMutation();
+  const deleteSessionMutation =
+    trpc.buildingInspection.deleteSession.useMutation();
+  const compareMutation = trpc.buildingInspection.comparePhotos.useMutation();
+  const utils = trpc.useUtils();
+
+  const sessionsQuery = trpc.buildingInspection.listSessions.useQuery();
+  const historicalMatchesQuery =
+    trpc.buildingInspection.findHistoricalMatches.useQuery(
+      compareFor
+        ? {
+            danchiName: compareFor.metadata.danchiName,
+            buildingNo: compareFor.metadata.buildingNo,
+            direction: compareFor.metadata.direction,
+          }
+        : { danchiName: "" },
+      { enabled: !!compareFor }
+    );
 
   const analyzeOne = async (
     fileName: string,
@@ -393,6 +426,99 @@ export default function BuildingInspection() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const saveSession = async () => {
+    if (items.length === 0) {
+      toast.error("先に写真を分析してください");
+      return;
+    }
+    try {
+      const res = await saveSessionMutation.mutateAsync({
+        danchiName,
+        surveyTitle: surveyTitle || undefined,
+        items: items.map((it) => ({
+          photoId: it.photoId,
+          imageUrl: it.imageUrl,
+          fileName: it.fileName,
+          metadata: {
+            ...it.metadata,
+            surfaceTypeHint: it.metadata.surfaceTypeHint,
+          },
+          result: it.result,
+        })),
+      });
+      toast.success(`点検結果を保存しました（ID: ${res.recordId}）`);
+      utils.buildingInspection.listSessions.invalidate();
+    } catch (e: any) {
+      toast.error(`保存に失敗: ${e?.message ?? "不明なエラー"}`);
+    }
+  };
+
+  const loadSession = async (recordId: number) => {
+    try {
+      const session = await utils.buildingInspection.getSession.fetch({
+        recordId,
+      });
+      if (!session) {
+        toast.error("セッションが見つかりません");
+        return;
+      }
+      const loaded: AnalyzedItem[] = session.photos.map((p: any) => {
+        const result = JSON.parse(p.aiResult);
+        return {
+          photoId: p.photoKey ?? `db-${p.id}`,
+          imageUrl: p.photoUrl,
+          fileName: p.fileName ?? "",
+          metadata: {
+            danchiName: p.danchiName,
+            buildingNo: p.buildingNo ?? undefined,
+            floor: p.floor ?? undefined,
+            direction: p.direction ?? undefined,
+            note: p.note ?? undefined,
+            surfaceTypeHint:
+              (p.surfaceTypeHint as "外壁" | "屋上" | "自動判定") ?? "自動判定",
+          },
+          result,
+        };
+      });
+      setItems(loaded);
+      setDanchiName(session.record.danchiName);
+      setSurveyTitle(session.record.surveyTitle ?? "");
+      toast.success(
+        `${loaded.length}件の写真を読み込みました（${new Date(session.record.surveyDate).toLocaleDateString("ja-JP")}の点検）`
+      );
+    } catch (e: any) {
+      toast.error(`読み込みに失敗: ${e?.message ?? ""}`);
+    }
+  };
+
+  const runComparison = async (previousPhotoId: number) => {
+    if (!compareFor) return;
+    setIsComparing(true);
+    setComparisonResult(null);
+    try {
+      const result = await compareMutation.mutateAsync({
+        previousPhotoId,
+        currentImageUrl: compareFor.imageUrl,
+        currentAiSummary: compareFor.result.summary_jp,
+        currentSurveyDate: new Date().toISOString().slice(0, 10),
+        locationContext: [
+          compareFor.metadata.danchiName,
+          compareFor.metadata.buildingNo &&
+            `${compareFor.metadata.buildingNo}号棟`,
+          compareFor.metadata.floor,
+          compareFor.metadata.direction && `${compareFor.metadata.direction}面`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      });
+      setComparisonResult(result);
+    } catch (e: any) {
+      toast.error(`比較に失敗: ${e?.message ?? ""}`);
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
   // 写真にバウンディングボックスを焼き込んだ画像（dataURL）を生成
   const renderAnnotatedImage = async (item: AnalyzedItem): Promise<string> => {
     const img = new Image();
@@ -644,9 +770,84 @@ export default function BuildingInspection() {
                   className="mt-1"
                 />
               </div>
+              <div className="md:col-span-2">
+                <Label>点検タイトル（任意・保存時に使用）</Label>
+                <Input
+                  placeholder="例: 令和7年度 上期定期点検"
+                  value={surveyTitle}
+                  onChange={(e) => setSurveyTitle(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* 保存済み点検履歴 */}
+        {sessionsQuery.data && sessionsQuery.data.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                保存済み点検履歴（前年比較で使用）
+              </CardTitle>
+              <CardDescription>
+                過去の点検結果を読み込んで再表示・編集・PDF再出力が可能。前年比較ボタンから差分判定も実行できます。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {sessionsQuery.data.map((s: any) => (
+                  <div
+                    key={s.id}
+                    className="border rounded p-2 flex items-center justify-between gap-3 text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {s.danchiName}
+                        {s.surveyTitle && ` / ${s.surveyTitle}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(s.surveyDate).toLocaleDateString("ja-JP")} ・ 写真{s.totalPhotos}枚
+                        {s.urgentCount > 0 && (
+                          <span className="text-red-600 ml-2">
+                            緊急{s.urgentCount}件
+                          </span>
+                        )}
+                        {s.repairCount > 0 && (
+                          <span className="text-orange-600 ml-2">
+                            要補修{s.repairCount}件
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => loadSession(s.id)}
+                    >
+                      読み込み
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        if (!confirm("この点検記録を削除しますか？")) return;
+                        await deleteSessionMutation.mutateAsync({
+                          recordId: s.id,
+                        });
+                        utils.buildingInspection.listSessions.invalidate();
+                        toast.success("削除しました");
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -810,7 +1011,20 @@ export default function BuildingInspection() {
                     全{summary.total}枚のうち、判定結果の内訳
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={saveSession}
+                    disabled={saveSessionMutation.isPending}
+                  >
+                    {saveSessionMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    DB保存
+                  </Button>
                   <Button variant="outline" size="sm" onClick={exportCSV}>
                     <FileDown className="h-4 w-4 mr-1" />
                     CSV
@@ -991,14 +1205,26 @@ export default function BuildingInspection() {
                           {(item.result.confidence * 100).toFixed(0)}%
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeItem(idx)}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        削除
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCompareFor(item);
+                            setComparisonResult(null);
+                          }}
+                        >
+                          <GitCompare className="h-3 w-3 mr-1" />
+                          前年比較
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeItem(idx)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="md:col-span-2 space-y-3">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1087,6 +1313,243 @@ export default function BuildingInspection() {
             </Card>
           </>
         )}
+
+        {/* 前年比較ダイアログ */}
+        <Dialog
+          open={!!compareFor}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCompareFor(null);
+              setComparisonResult(null);
+            }
+          }}
+        >
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <GitCompare className="h-5 w-5" />
+                前年比較（経年変化のAI判定）
+              </DialogTitle>
+              <DialogDescription>
+                同じ団地・棟・方位で保存済みの過去写真と比較します。AIが新規発生・悪化・改善を判定します。
+              </DialogDescription>
+            </DialogHeader>
+            {compareFor && (
+              <div className="space-y-4">
+                <div className="border rounded p-3 bg-muted/30">
+                  <p className="text-sm font-medium">今回の写真</p>
+                  <div className="flex gap-3 mt-2">
+                    <img
+                      src={compareFor.imageUrl}
+                      alt="current"
+                      className="w-32 h-32 object-cover rounded"
+                    />
+                    <div className="text-xs space-y-0.5">
+                      <p>
+                        {compareFor.metadata.danchiName}
+                        {compareFor.metadata.buildingNo &&
+                          ` / ${compareFor.metadata.buildingNo}号棟`}
+                        {compareFor.metadata.direction &&
+                          ` / ${compareFor.metadata.direction}面`}
+                      </p>
+                      <p>判定: {compareFor.result.overall_assessment}</p>
+                      <p className="text-muted-foreground">
+                        {compareFor.result.summary_jp}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {!comparisonResult && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">
+                      比較対象の過去写真を選択
+                    </p>
+                    {historicalMatchesQuery.isLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        過去写真を検索中...
+                      </div>
+                    ) : !historicalMatchesQuery.data ||
+                      historicalMatchesQuery.data.length === 0 ? (
+                      <div className="border border-dashed rounded p-4 text-center text-sm text-muted-foreground">
+                        同条件の過去写真が見つかりません。
+                        <br />
+                        過去の点検結果を「DB保存」しておくと比較できます。
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {historicalMatchesQuery.data.map((p: any) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            disabled={isComparing}
+                            onClick={() => runComparison(p.id)}
+                            className="text-left border rounded overflow-hidden hover:border-primary transition disabled:opacity-50"
+                          >
+                            <img
+                              src={p.photoUrl}
+                              alt={p.fileName}
+                              className="w-full h-32 object-cover"
+                            />
+                            <div className="p-2 text-xs">
+                              <p className="font-medium truncate">
+                                {p.fileName}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {new Date(p.createdAt).toLocaleDateString(
+                                  "ja-JP"
+                                )}
+                                ・{p.overallAssessment ?? "未判定"}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {isComparing && (
+                      <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        AIが2枚の写真を比較中...
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {comparisonResult && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          過去 (
+                          {new Date(
+                            comparisonResult.previous.surveyDate
+                          ).toLocaleDateString("ja-JP")}
+                          )
+                        </p>
+                        <img
+                          src={comparisonResult.previous.photoUrl}
+                          alt="prev"
+                          className="w-full rounded border"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          今回 ({new Date().toLocaleDateString("ja-JP")})
+                        </p>
+                        <img
+                          src={compareFor.imageUrl}
+                          alt="current"
+                          className="w-full rounded border"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border rounded p-3 bg-blue-50 border-blue-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge
+                          className={
+                            comparisonResult.comparison.overall_change === "悪化"
+                              ? "bg-red-600 text-white"
+                              : comparisonResult.comparison.overall_change ===
+                                "新規発生"
+                              ? "bg-orange-500 text-white"
+                              : comparisonResult.comparison.overall_change ===
+                                "改善・補修済み"
+                              ? "bg-green-500 text-white"
+                              : "bg-gray-400 text-white"
+                          }
+                        >
+                          全体: {comparisonResult.comparison.overall_change}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          AI信頼度:{" "}
+                          {(comparisonResult.comparison.confidence * 100).toFixed(
+                            0
+                          )}
+                          %
+                        </span>
+                      </div>
+                      <p className="text-sm">
+                        {comparisonResult.comparison.summary_jp}
+                      </p>
+                    </div>
+
+                    {comparisonResult.comparison.changes.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">変化の詳細</p>
+                        {comparisonResult.comparison.changes.map(
+                          (c: any, ci: number) => (
+                            <div
+                              key={ci}
+                              className="border rounded p-2 text-sm space-y-1"
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge
+                                  className={
+                                    c.change_kind === "悪化"
+                                      ? "bg-red-600 text-white"
+                                      : c.change_kind === "新規発生"
+                                      ? "bg-orange-500 text-white"
+                                      : c.change_kind === "改善・補修済み"
+                                      ? "bg-green-500 text-white"
+                                      : "bg-gray-400 text-white"
+                                  }
+                                >
+                                  {c.change_kind}
+                                </Badge>
+                                <span className="font-medium">
+                                  {c.defect_label}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  現在: {c.severity_now}
+                                </Badge>
+                              </div>
+                              <p className="text-muted-foreground">
+                                {c.description}
+                              </p>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <p className="font-medium">過去:</p>
+                                  <p>{c.previous_state}</p>
+                                </div>
+                                <div>
+                                  <p className="font-medium">現在:</p>
+                                  <p>{c.current_state}</p>
+                                </div>
+                              </div>
+                              <p className="text-xs text-blue-700">
+                                <ArrowRight className="inline h-3 w-3 mr-1" />
+                                {c.recommended_action}
+                              </p>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {comparisonResult.comparison.notes && (
+                      <p className="text-xs text-muted-foreground border-t pt-2">
+                        📝 {comparisonResult.comparison.notes}
+                      </p>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setComparisonResult(null)}
+                    >
+                      別の過去写真と比較
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* PDF生成用の隠しレポート（html2canvasで画像化） */}
         <div

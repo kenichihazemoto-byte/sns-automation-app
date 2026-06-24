@@ -255,6 +255,146 @@ export interface InspectionReportSummary {
   needsHammerTest: BatchInspectionItem[];
 }
 
+export type ChangeKind =
+  | "新規発生"
+  | "悪化"
+  | "改善・補修済み"
+  | "変化なし"
+  | "判定困難";
+
+export interface ComparisonFinding {
+  defect_label: string; // 比較対象となる劣化の通称
+  change_kind: ChangeKind;
+  description: string; // 何がどう変わったか
+  previous_state: string; // 過去写真での状態
+  current_state: string; // 今回写真での状態
+  severity_now: Severity;
+  recommended_action: string;
+}
+
+export interface InspectionComparison {
+  overall_change: ChangeKind;
+  summary_jp: string;
+  changes: ComparisonFinding[];
+  confidence: number;
+  notes: string;
+}
+
+const COMPARE_SYSTEM_PROMPT = `あなたは建築物の経年劣化を判定する点検技士です。
+2枚の写真（過去・現在）を比較し、同じ部位の劣化がどう変化したかを判定します。
+判定上の注意:
+- 撮影角度や光量が異なる場合は確実な比較は困難なため、confidenceを下げる
+- 同じクラックが伸びた・幅が広がった場合は「悪化」
+- 同じクラックが補修跡で塞がれている場合は「改善・補修済み」
+- 新たに発生した劣化は「新規発生」
+- 前回写真の劣化が現在も同程度なら「変化なし」`;
+
+export async function compareInspectionPhotos(params: {
+  previousImageUrl: string;
+  previousSurveyDate: string;
+  previousAiSummary: string;
+  currentImageUrl: string;
+  currentSurveyDate: string;
+  currentAiSummary: string;
+  locationContext?: string;
+}): Promise<InspectionComparison> {
+  const {
+    previousImageUrl,
+    previousSurveyDate,
+    previousAiSummary,
+    currentImageUrl,
+    currentSurveyDate,
+    currentAiSummary,
+    locationContext,
+  } = params;
+
+  const userText = [
+    "次の2枚の写真は、同一の点検箇所を別の時期に撮影したものです。",
+    locationContext ? `点検箇所: ${locationContext}` : "",
+    `■ 1枚目（過去・撮影日: ${previousSurveyDate}）`,
+    `過去のAI判定要約: ${previousAiSummary}`,
+    `■ 2枚目（現在・撮影日: ${currentSurveyDate}）`,
+    `現在のAI判定要約: ${currentAiSummary}`,
+    "",
+    "両者を比較し、新規発生・悪化・改善・変化なしの観点で変化を列挙してください。",
+    "summary_jp には現場担当者向けの1〜2文の要約を書いてください。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const response = await invokeLLM({
+    messages: [
+      { role: "system", content: COMPARE_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userText },
+          { type: "image_url", image_url: { url: previousImageUrl, detail: "high" } },
+          { type: "image_url", image_url: { url: currentImageUrl, detail: "high" } },
+        ],
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "inspection_comparison",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            overall_change: {
+              type: "string",
+              enum: ["新規発生", "悪化", "改善・補修済み", "変化なし", "判定困難"],
+            },
+            summary_jp: { type: "string" },
+            changes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  defect_label: { type: "string" },
+                  change_kind: {
+                    type: "string",
+                    enum: ["新規発生", "悪化", "改善・補修済み", "変化なし", "判定困難"],
+                  },
+                  description: { type: "string" },
+                  previous_state: { type: "string" },
+                  current_state: { type: "string" },
+                  severity_now: {
+                    type: "string",
+                    enum: ["緊急", "要補修", "要観察", "軽微", "問題なし"],
+                  },
+                  recommended_action: { type: "string" },
+                },
+                required: [
+                  "defect_label",
+                  "change_kind",
+                  "description",
+                  "previous_state",
+                  "current_state",
+                  "severity_now",
+                  "recommended_action",
+                ],
+                additionalProperties: false,
+              },
+            },
+            confidence: { type: "number" },
+            notes: { type: "string" },
+          },
+          required: ["overall_change", "summary_jp", "changes", "confidence", "notes"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content || typeof content !== "string") {
+    throw new Error("比較AIが空の結果を返しました");
+  }
+  return JSON.parse(content) as InspectionComparison;
+}
+
 export function summarizeReport(
   items: BatchInspectionItem[]
 ): InspectionReportSummary {
