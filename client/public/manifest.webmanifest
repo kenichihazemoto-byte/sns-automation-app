@@ -1,0 +1,36 @@
+{
+  "name": "ハゼモト建設 業務アプリ",
+  "short_name": "ハゼモト業務",
+  "description": "SNS自動投稿・建物点検AIなど、ハゼモト建設の現場業務をサポートするアプリ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1f2937",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "建物点検AI",
+      "short_name": "点検",
+      "description": "屋上・外壁の写真からクラック・浮きをAI判定",
+      "url": "/inspection",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "かんたん投稿",
+      "short_name": "投稿",
+      "description": "1枚の写真からSNS投稿文を生成",
+      "url": "/simple-post",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
+}

@@ -121,6 +121,7 @@ export default function BuildingInspection() {
     failed: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const reportRef = useRef<HTMLDivElement>(null);
   const [videoFrames, setVideoFrames] = useState<
@@ -868,7 +869,7 @@ export default function BuildingInspection() {
                   動画から抽出
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="photo" className="pt-4">
+              <TabsContent value="photo" className="pt-4 space-y-2">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -877,24 +878,52 @@ export default function BuildingInspection() {
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
                 />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={progress !== null}
-                  size="lg"
-                  className="w-full"
-                >
-                  {progress ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      分析中... ({progress.done + progress.failed} / {progress.total})
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-5 w-5" />
-                      写真を選択してAI分析を開始
-                    </>
-                  )}
-                </Button>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Button
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={progress !== null}
+                    size="lg"
+                    className="w-full"
+                  >
+                    {progress ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Camera className="mr-2 h-5 w-5" />
+                        その場で撮影
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={progress !== null}
+                    size="lg"
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {progress ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-5 w-5" />
+                        ファイルから選択
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {progress && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    分析中... ({progress.done + progress.failed} / {progress.total})
+                  </p>
+                )}
               </TabsContent>
               <TabsContent value="video" className="pt-4 space-y-4">
                 <input
