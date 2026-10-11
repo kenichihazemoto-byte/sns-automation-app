@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, uniqueIndex } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -702,3 +702,59 @@ export const hpLinkSettings = mysqlTable("hp_link_settings", {
 
 export type HpLinkSetting = typeof hpLinkSettings.$inferSelect;
 export type InsertHpLinkSetting = typeof hpLinkSettings.$inferInsert;
+
+/**
+ * Chatwork メッセージ蓄積テーブル
+ * Chatwork API は直近100件しか取得できないため、定期取得して蓄積する
+ */
+export const chatworkMessages = mysqlTable("chatwork_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  roomId: varchar("roomId", { length: 32 }).notNull(),
+  messageId: varchar("messageId", { length: 32 }).notNull(),
+  accountId: int("accountId").notNull(),
+  accountName: varchar("accountName", { length: 255 }).notNull(),
+  body: text("body").notNull(),
+  /** 送信日時（UNIX秒） */
+  sendTime: int("sendTime").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  roomMessageIdx: uniqueIndex("chatwork_messages_room_message_idx").on(t.roomId, t.messageId),
+}));
+
+export type ChatworkMessage = typeof chatworkMessages.$inferSelect;
+export type InsertChatworkMessage = typeof chatworkMessages.$inferInsert;
+
+/**
+ * Chatwork ルームメンバー（新メンバー検知用に初回認識日時を保持）
+ */
+export const chatworkMembers = mysqlTable("chatwork_members", {
+  id: int("id").autoincrement().primaryKey(),
+  roomId: varchar("roomId", { length: 32 }).notNull(),
+  accountId: int("accountId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  /** まだルームに在籍しているか */
+  active: boolean("active").default(true).notNull(),
+  firstSeenAt: timestamp("firstSeenAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  roomAccountIdx: uniqueIndex("chatwork_members_room_account_idx").on(t.roomId, t.accountId),
+}));
+
+export type ChatworkMemberRecord = typeof chatworkMembers.$inferSelect;
+
+/**
+ * 週次ランキング投稿履歴（二重投稿防止）
+ */
+export const chatworkRankingPosts = mysqlTable("chatwork_ranking_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  roomId: varchar("roomId", { length: 32 }).notNull(),
+  /** 対象週の月曜日 "YYYY-MM-DD" */
+  weekKey: varchar("weekKey", { length: 16 }).notNull(),
+  postedMessageId: varchar("postedMessageId", { length: 32 }),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  roomWeekIdx: uniqueIndex("chatwork_ranking_posts_room_week_idx").on(t.roomId, t.weekKey),
+}));
+
+export type ChatworkRankingPost = typeof chatworkRankingPosts.$inferSelect;

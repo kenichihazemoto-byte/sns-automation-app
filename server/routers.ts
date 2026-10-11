@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import * as aiService from "./ai-service";
 import { storagePut } from "./storage";
@@ -15,6 +15,7 @@ import { invokeLLM } from "./_core/llm";
 import { getSystemPrompt } from "../shared/companyProfiles";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import * as chatworkService from "./chatwork-service";
 import { exchangeCodeForTokens, listGbpAccounts, listGbpLocations, getGbpAuthUrl, createGbpPost, refreshAccessToken } from "./gbp";
 export const appRouter = router({
   system: systemRouter,
@@ -3820,6 +3821,37 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
           await dbInstance.insert(hpLinkSettings).values({ userId: ctx.user.id, ...input });
         }
         return { success: true };
+      }),
+  }),
+
+  // Chatwork 大工チーム 週次ランキング
+  chatworkRanking: router({
+    status: protectedProcedure.query(async () => ({
+      configured: chatworkService.isChatworkConfigured(),
+      enabled: process.env.CHATWORK_RANKING_ENABLED !== "false",
+      schedule: "毎週月曜 6:50（JST）",
+      history: await chatworkService.getRankingHistory(10),
+    })),
+    sync: protectedProcedure.mutation(async () => {
+      if (!chatworkService.isChatworkConfigured()) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "CHATWORK_API_TOKEN が未設定です" });
+      }
+      return chatworkService.syncChatworkRoom();
+    }),
+    preview: protectedProcedure.query(async () => {
+      if (!chatworkService.isChatworkConfigured()) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "CHATWORK_API_TOKEN が未設定です" });
+      }
+      const { report, text } = await chatworkService.buildReportFromDb();
+      return { report, text };
+    }),
+    postNow: adminProcedure
+      .input(z.object({ force: z.boolean().default(false) }))
+      .mutation(async ({ input }) => {
+        if (!chatworkService.isChatworkConfigured()) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "CHATWORK_API_TOKEN が未設定です" });
+        }
+        return chatworkService.postWeeklyRanking({ force: input.force });
       }),
   }),
 });
