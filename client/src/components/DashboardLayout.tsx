@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck, PenLine, MapPin, Images, BookMarked, Globe } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Sparkles, Calendar, History, BarChart3, Settings, HelpCircle, FileText, Zap, CheckSquare, ClipboardList, TrendingUp, Save, Database, PieChart, Target, GitCompare, BookOpenCheck, PenLine, MapPin, Images, BookMarked, Globe, Trophy } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -47,6 +47,7 @@ const menuItems = [
   { icon: Calendar, label: "GBP予約一覧", path: "/gbp-schedule" },
   { icon: Images, label: "フォトアルバム管理", path: "/google-album-settings" },
   { icon: BookOpenCheck, label: "Notion連携", path: "/notion-settings" },
+  { icon: Trophy, label: "大工チームランキング", path: "/chatwork-ranking" },
   { icon: Settings, label: "設定", path: "/settings" },
   { icon: Globe, label: "SimilarWeb分析", path: "/similarweb" },
   { icon: BookMarked, label: "業務フローガイド", path: "/workflow-guide" },

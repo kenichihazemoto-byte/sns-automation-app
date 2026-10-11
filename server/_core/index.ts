@@ -10,6 +10,7 @@ import { serveStatic, setupVite } from "./vite";
 import { startReminderService } from "../reminder-service";
 import { seedDefaultAlbum } from "../album-seed";
 import { startGbpScheduler } from "../gbp-scheduler";
+import { startChatworkRankingScheduler } from "../chatwork-service";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -71,6 +72,9 @@ async function startServer() {
     
     // GBP予約投稿の自動実行エンジンを起動
     startGbpScheduler();
+
+    // Chatwork 大工チーム週次ランキング（毎週月曜 6:50 JST 自動投稿）
+    startChatworkRankingScheduler();
   });
 }
 
