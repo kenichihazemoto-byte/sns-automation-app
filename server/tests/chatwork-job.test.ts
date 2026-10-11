@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt, runJob } from "../chatwork-job";
+import { decrypt, encrypt, nextPostTime, runJob } from "../chatwork-job";
 
 const jst = (s: string) => Math.floor(new Date(`${s}+09:00`).getTime() / 1000);
 
@@ -93,5 +93,19 @@ describe("chatwork-job", () => {
     expect(r.summary).not.toContain("中村");
     expect(api.posts[0].body).toContain("田中さん");
     expect(api.posts[0].body).not.toContain("中村さん");
+  });
+
+  it("preview は次回の月曜 6:50 に投稿される週を集計する", async () => {
+    const at = (s: string) => nextPostTime(new Date(`${s}+09:00`)).toISOString();
+    expect(at("2026-10-11T16:50:00")).toBe("2026-10-11T21:50:00.000Z"); // 日曜 → 翌朝
+    expect(at("2026-10-12T06:00:00")).toBe("2026-10-11T21:50:00.000Z"); // 月曜の投稿前 → 当日
+    expect(at("2026-10-12T07:00:00")).toBe("2026-10-18T21:50:00.000Z"); // 月曜の投稿後 → 翌週
+
+    const dataPath = join(mkdtempSync(join(tmpdir(), "cw-")), "data.enc");
+    const api = mockApi();
+    const sunday = new Date("2026-10-11T16:50:00+09:00");
+    const r = await runJob({ mode: "preview", token: "tok", dataPath, env: {}, now: sunday, fetchImpl: api.fetchImpl });
+    expect(r.summary).toContain("対象週 2026-10-05");
+    expect(api.posts[0].body).toContain("10/5(月)〜10/11(日)");
   });
 });
