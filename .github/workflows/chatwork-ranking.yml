@@ -48,6 +48,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # 依存パッケージを使わないため、package.json の packageManager(pnpm) による自動キャッシュを無効化
+          package-manager-cache: false
 
       - name: 蓄積データを取得
         run: |
