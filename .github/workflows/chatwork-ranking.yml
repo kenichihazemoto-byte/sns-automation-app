@@ -5,6 +5,7 @@
 #  - 手動実行：sync / preview（自分のマイチャットに投稿予定の本文を送る） / post
 #
 # 必要なシークレット: CHATWORK_API_TOKEN（Settings → Secrets and variables → Actions）
+# 任意のシークレット: CHATWORK_RANKING_EXCLUDE_IDS（ランキング対象外の Chatwork ID / アカウントID、カンマ区切り）
 # 公開リポジトリのため、蓄積データは暗号化して chatwork-data ブランチに保存し、ログには件数のみ出力する。
 name: Chatwork大工チームランキング
 
@@ -64,7 +65,8 @@ jobs:
         env:
           CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN }}
           CHATWORK_DAIKU_ROOM_ID: ${{ vars.CHATWORK_DAIKU_ROOM_ID }}
-          CHATWORK_RANKING_EXCLUDE_IDS: ${{ vars.CHATWORK_RANKING_EXCLUDE_IDS }}
+          # 公開リポジトリでは Variables の値がログに表示されるため、除外IDは Secrets を優先（ログ上は *** になる）
+          CHATWORK_RANKING_EXCLUDE_IDS: ${{ secrets.CHATWORK_RANKING_EXCLUDE_IDS || vars.CHATWORK_RANKING_EXCLUDE_IDS }}
           CHATWORK_RANKING_INCLUDE_SELF: ${{ vars.CHATWORK_RANKING_INCLUDE_SELF }}
           MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event.schedule == '35 21 * * 0' && 'post' || 'sync') }}
           FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && '--force' || '' }}
