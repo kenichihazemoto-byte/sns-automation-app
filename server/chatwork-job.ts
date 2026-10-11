@@ -214,6 +214,16 @@ export async function excludeIds(
 
 export type Mode = "sync" | "post" | "preview";
 
+/** 次回の投稿時刻（現在以降で最も近い 月曜 6:50 JST） */
+export function nextPostTime(now: Date): Date {
+  const JST = 9 * 3600 * 1000;
+  const jst = new Date(now.getTime() + JST);
+  const daysUntilMonday = (1 - jst.getUTCDay() + 7) % 7;
+  let t = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() + daysUntilMonday, 6, 50) - JST;
+  if (t < now.getTime()) t += 7 * 24 * 3600 * 1000;
+  return new Date(t);
+}
+
 export async function runJob(opts: {
   mode: Mode;
   token: string;
@@ -240,14 +250,16 @@ export async function runJob(opts: {
   }
 
   if (opts.mode !== "sync") {
+    // preview は「次回の月曜 6:50 に投稿される週」を、現時点のデータで集計する
+    const reportAt = opts.mode === "preview" ? nextPostTime(now) : now;
     const report = buildWeeklyReport({
-      now,
+      now: reportAt,
       messages: data.messages,
       members: data.members,
       excludeAccountIds: exclude.ids,
     });
     const text = formatReportMessage(report);
-    const weekKey = previousWeekRange(now).key;
+    const weekKey = previousWeekRange(reportAt).key;
 
     if (opts.mode === "preview") {
       const rooms = (await client.rooms()) ?? [];
