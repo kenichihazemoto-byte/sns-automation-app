@@ -115,7 +115,8 @@ export function createClient(token: string, fetchImpl: Fetch = fetch) {
       call<{ message_id: string; account: { account_id: number; name: string }; body: string; send_time: number }[]>(
         `/rooms/${roomId}/messages?force=1`,
       ),
-    members: (roomId: string) => call<{ account_id: number; name: string }[]>(`/rooms/${roomId}/members`),
+    members: (roomId: string) =>
+      call<{ account_id: number; name: string; chatwork_id?: string }[]>(`/rooms/${roomId}/members`),
     post: (roomId: string, body: string) =>
       call<{ message_id: string }>(`/rooms/${roomId}/messages`, {
         method: "POST",
@@ -171,16 +172,40 @@ export async function syncInto(client: Client, data: JobData, roomId: string, no
   return { added, members: data.members.length };
 }
 
-export async function excludeIds(client: Client, env: NodeJS.ProcessEnv): Promise<number[]> {
-  const ids = (env.CHATWORK_RANKING_EXCLUDE_IDS ?? "")
-    .split(",")
-    .map(s => Number(s.trim()))
-    .filter(n => Number.isFinite(n) && n > 0);
+/**
+ * ランキング対象外のアカウントIDを解決する
+ * CHATWORK_RANKING_EXCLUDE_IDS には、数字のアカウントID と
+ * プロフィールに表示される Chatwork ID（例: tanaka-0326）のどちらも指定できる（カンマ区切り）
+ */
+export async function excludeIds(
+  client: Client,
+  env: NodeJS.ProcessEnv,
+  roomId: string,
+): Promise<{ ids: number[]; requested: number; matched: number }> {
+  const entries = (env.CHATWORK_RANKING_EXCLUDE_IDS ?? "")
+    .split(/[,、\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const ids: number[] = [];
+  const handles = new Set<string>();
+  for (const e of entries) {
+    if (/^\d+$/.test(e)) ids.push(Number(e));
+    else handles.add(e.toLowerCase());
+  }
+  let matched = ids.length;
+  if (handles.size > 0) {
+    for (const m of (await client.members(roomId)) ?? []) {
+      if (m.chatwork_id && handles.has(m.chatwork_id.toLowerCase())) {
+        ids.push(m.account_id);
+        matched++;
+      }
+    }
+  }
   if (env.CHATWORK_RANKING_INCLUDE_SELF !== "true") {
     const me = await client.me();
     if (me) ids.push(me.account_id);
   }
-  return ids;
+  return { ids, requested: entries.length, matched };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,13 +233,18 @@ export async function runJob(opts: {
   const roomId = await resolveRoom(client, data, env);
   const s = await syncInto(client, data, roomId, now);
   const lines = [`同期: 新規メッセージ${s.added}件 / 蓄積${data.messages.length}件 / メンバー${s.members}名`];
+  const exclude = await excludeIds(client, env, roomId);
+  if (exclude.requested > 0) {
+    // 氏名は出さず件数のみ（指定したIDがルームのメンバーと一致したかの確認用）
+    lines.push(`除外設定: 指定${exclude.requested}件中 ${exclude.matched}件がメンバーと一致`);
+  }
 
   if (opts.mode !== "sync") {
     const report = buildWeeklyReport({
       now,
       messages: data.messages,
       members: data.members,
-      excludeAccountIds: await excludeIds(client, env),
+      excludeAccountIds: exclude.ids,
     });
     const text = formatReportMessage(report);
     const weekKey = previousWeekRange(now).key;
