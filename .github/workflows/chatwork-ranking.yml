@@ -1,0 +1,76 @@
+# Chatwork 大工チーム 週間ランキング
+#  - 3時間ごと：TeamDAIKU のメッセージを取得して暗号化データに蓄積（Chatwork API は直近100件しか返さないため）
+#  - 毎週月曜 6:50（JST）：先週のランキングを投稿
+#  - 手動実行：sync / preview（自分のマイチャットに投稿予定の本文を送る） / post
+#
+# 必要なシークレット: CHATWORK_API_TOKEN（Settings → Secrets and variables → Actions）
+# 公開リポジトリのため、蓄積データは暗号化して chatwork-data ブランチに保存し、ログには件数のみ出力する。
+name: Chatwork大工チームランキング
+
+on:
+  schedule:
+    - cron: "17 */3 * * *" # 同期（3時間ごと）
+    - cron: "35 21 * * 0" # 投稿（日曜21:35 UTC 起動 → 月曜6:50 JST まで待って投稿）
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "実行内容"
+        type: choice
+        options: [preview, sync, post]
+        default: preview
+      force:
+        description: "投稿済みの週でも再投稿する（post のみ）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chatwork-ranking
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 蓄積データを取得
+        run: |
+          mkdir -p .chatwork-data
+          if git ls-remote --exit-code --heads origin chatwork-data >/dev/null; then
+            git fetch --depth=1 origin chatwork-data
+            git show FETCH_HEAD:teamdaiku.enc > .chatwork-data/teamdaiku.enc || rm -f .chatwork-data/teamdaiku.enc
+          fi
+
+      - name: ジョブ実行
+        id: job
+        env:
+          CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN }}
+          CHATWORK_DAIKU_ROOM_ID: ${{ vars.CHATWORK_DAIKU_ROOM_ID }}
+          CHATWORK_RANKING_EXCLUDE_IDS: ${{ vars.CHATWORK_RANKING_EXCLUDE_IDS }}
+          CHATWORK_RANKING_INCLUDE_SELF: ${{ vars.CHATWORK_RANKING_INCLUDE_SELF }}
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event.schedule == '35 21 * * 0' && 'post' || 'sync') }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && '--force' || '' }}
+        run: node --experimental-strip-types --no-warnings scripts/chatwork-ranking-job.ts "$MODE" $FORCE
+
+      - name: 蓄積データを保存
+        if: steps.job.outputs.changed == 'true'
+        run: |
+          cp .chatwork-data/teamdaiku.enc "$RUNNER_TEMP/teamdaiku.enc"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan chatwork-data-tmp
+          git rm -rfq --cached .
+          git clean -fdxq
+          cp "$RUNNER_TEMP/teamdaiku.enc" teamdaiku.enc
+          printf '# chatwork-data\n\nChatwork 大工チームランキング用の蓄積データ（AES-256-GCM で暗号化済み）。\n`.github/workflows/chatwork-ranking.yml` が自動更新します。手動で編集しないでください。\n' > README.md
+          git add teamdaiku.enc README.md
+          git commit -qm "chore: update chatwork ranking data"
+          git push -qf origin HEAD:chatwork-data
