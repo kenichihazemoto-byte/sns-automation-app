@@ -1,6 +1,7 @@
 # Chatwork 大工チーム 週間ランキング
 #  - 3時間ごと：TeamDAIKU のメッセージを取得して暗号化データに蓄積（Chatwork API は直近100件しか返さないため）
 #  - 毎週月曜 6:50（JST）：先週のランキングを投稿
+#  - ジョブのコードを main に反映したとき：sync を1回実行して動作確認
 #  - 手動実行：sync / preview（自分のマイチャットに投稿予定の本文を送る） / post
 #
 # 必要なシークレット: CHATWORK_API_TOKEN（Settings → Secrets and variables → Actions）
@@ -11,6 +12,13 @@ on:
   schedule:
     - cron: "17 */3 * * *" # 同期（3時間ごと）
     - cron: "35 21 * * 0" # 投稿（日曜21:35 UTC 起動 → 月曜6:50 JST まで待って投稿）
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/chatwork-ranking.yml"
+      - "server/chatwork-job.ts"
+      - "server/chatwork-ranking.ts"
+      - "scripts/chatwork-ranking-job.ts"
   workflow_dispatch:
     inputs:
       mode:
