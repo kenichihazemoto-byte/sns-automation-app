@@ -232,6 +232,13 @@
       "when": 1791696504394,
       "tag": "0032_charming_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1791782583238,
+      "tag": "0033_third_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

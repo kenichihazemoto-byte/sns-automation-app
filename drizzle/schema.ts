@@ -758,3 +758,70 @@ export const chatworkRankingPosts = mysqlTable("chatwork_ranking_posts", {
 }));
 
 export type ChatworkRankingPost = typeof chatworkRankingPosts.$inferSelect;
+
+/**
+ * 購買申請（ネット購入・業者見積の比較 → 櫨本承認）
+ */
+export const purchaseRequests = mysqlTable("purchase_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  requesterId: int("requesterId").notNull(),
+  requesterName: varchar("requesterName", { length: 255 }),
+  /** 品名 */
+  itemName: varchar("itemName", { length: 255 }).notNull(),
+  /** 型番（検索キーワードにも使用） */
+  modelNumber: varchar("modelNumber", { length: 255 }),
+  maker: varchar("maker", { length: 255 }),
+  quantity: int("quantity").default(1).notNull(),
+  unit: varchar("unit", { length: 32 }).default("個").notNull(),
+  /** 工事名・現場名 */
+  siteName: varchar("siteName", { length: 255 }),
+  /** 必要日 "YYYY-MM-DD" */
+  neededBy: varchar("neededBy", { length: 16 }),
+  note: text("note"),
+  status: mysqlEnum("status", ["draft", "pending", "approved", "rejected", "ordered", "cancelled"]).default("draft").notNull(),
+  /** 申請者の推奨（承認時は承認者が確定した見積） */
+  selectedQuoteId: int("selectedQuoteId"),
+  submittedAt: timestamp("submittedAt"),
+  approverId: int("approverId"),
+  approverName: varchar("approverName", { length: 255 }),
+  decidedAt: timestamp("decidedAt"),
+  decisionComment: text("decisionComment"),
+  orderedAt: timestamp("orderedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PurchaseRequest = typeof purchaseRequests.$inferSelect;
+export type InsertPurchaseRequest = typeof purchaseRequests.$inferInsert;
+
+/**
+ * 購買申請ごとの比較見積（Amazon・Yahoo!・楽天・モノタロウ・業者見積・その他）
+ */
+export const purchaseQuotes = mysqlTable("purchase_quotes", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("requestId").notNull(),
+  source: mysqlEnum("source", ["amazon", "yahoo", "rakuten", "monotaro", "vendor", "other"]).notNull(),
+  /** ショップ名・業者名 */
+  sellerName: varchar("sellerName", { length: 255 }),
+  productName: varchar("productName", { length: 500 }),
+  url: text("url"),
+  /** 単価（円） */
+  unitPrice: int("unitPrice").notNull(),
+  /** true=税込 / false=税抜（業者見積は通常税抜） */
+  taxIncluded: boolean("taxIncluded").default(true).notNull(),
+  shippingFee: int("shippingFee").default(0).notNull(),
+  /** ポイント還元額（円・実質価格から差し引く） */
+  pointsYen: int("pointsYen").default(0).notNull(),
+  /** 納期（日数） */
+  leadTimeDays: int("leadTimeDays"),
+  /** 業者見積の見積番号など */
+  quoteNumber: varchar("quoteNumber", { length: 64 }),
+  attachmentUrl: text("attachmentUrl"),
+  attachmentName: varchar("attachmentName", { length: 255 }),
+  note: text("note"),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PurchaseQuote = typeof purchaseQuotes.$inferSelect;
+export type InsertPurchaseQuote = typeof purchaseQuotes.$inferInsert;

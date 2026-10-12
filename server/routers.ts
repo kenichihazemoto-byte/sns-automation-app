@@ -16,7 +16,36 @@ import { getSystemPrompt } from "../shared/companyProfiles";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import * as chatworkService from "./chatwork-service";
+import * as purchaseService from "./purchase-service";
+import { PURCHASE_SOURCES, PURCHASE_STATUSES, SOURCE_LABELS } from "../shared/purchase";
 import { exchangeCodeForTokens, listGbpAccounts, listGbpLocations, getGbpAuthUrl, createGbpPost, refreshAccessToken } from "./gbp";
+const purchaseRequestInput = z.object({
+  itemName: z.string().min(1).max(255),
+  modelNumber: z.string().max(255).nullish(),
+  maker: z.string().max(255).nullish(),
+  quantity: z.number().int().min(1).max(100000),
+  unit: z.string().min(1).max(32),
+  siteName: z.string().max(255).nullish(),
+  neededBy: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+  note: z.string().max(5000).nullish(),
+});
+
+const purchaseQuoteInput = z.object({
+  source: z.enum(PURCHASE_SOURCES),
+  sellerName: z.string().max(255).nullish(),
+  productName: z.string().max(500).nullish(),
+  url: z.string().max(2000).nullish(),
+  unitPrice: z.number().int().min(0),
+  taxIncluded: z.boolean(),
+  shippingFee: z.number().int().min(0).default(0),
+  pointsYen: z.number().int().min(0).default(0),
+  leadTimeDays: z.number().int().min(0).max(365).nullish(),
+  quoteNumber: z.string().max(64).nullish(),
+  attachmentUrl: z.string().max(2000).nullish(),
+  attachmentName: z.string().max(255).nullish(),
+  note: z.string().max(5000).nullish(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -3853,6 +3882,92 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
         }
         return chatworkService.postWeeklyRanking({ force: input.force });
       }),
+  }),
+  // 購買比較（ネット購入検討・業者見積比較 → 櫨本承認）
+  purchase: router({
+    me: protectedProcedure.query(({ ctx }) => ({
+      isApprover: purchaseService.isPurchaseApprover(ctx.user),
+      userId: ctx.user.id,
+      priceLookup: purchaseService.priceLookupStatus(),
+    })),
+    list: protectedProcedure
+      .input(z.object({ status: z.enum(PURCHASE_STATUSES).optional() }).optional())
+      .query(({ input }) => purchaseService.listRequests(input?.status)),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => purchaseService.getRequestDetail(input.id)),
+    create: protectedProcedure
+      .input(purchaseRequestInput)
+      .mutation(({ ctx, input }) => purchaseService.createRequest(ctx.user, input)),
+    update: protectedProcedure
+      .input(purchaseRequestInput.partial().extend({ id: z.number() }))
+      .mutation(({ ctx, input: { id, ...rest } }) => purchaseService.updateRequest(ctx.user, id, rest)),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => purchaseService.deleteRequest(ctx.user, input.id)),
+    submit: protectedProcedure
+      .input(z.object({ id: z.number(), selectedQuoteId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { request, quote } = await purchaseService.submitRequest(ctx.user, input.id, input.selectedQuoteId);
+        try {
+          await notifyOwner({
+            title: `【購買承認依頼】${request.itemName}`,
+            content: [
+              `申請者：${request.requesterName ?? ""}`,
+              `品名：${request.itemName}${request.modelNumber ? `（${request.modelNumber}）` : ""} × ${request.quantity}${request.unit}`,
+              request.siteName ? `現場：${request.siteName}` : "",
+              `推奨購入先：${SOURCE_LABELS[quote.source]}${quote.sellerName ? ` ${quote.sellerName}` : ""} 単価 ${quote.unitPrice.toLocaleString()}円（${quote.taxIncluded ? "税込" : "税抜"}）`,
+              "アプリの「購買比較・承認」から承認してください。",
+            ].filter(Boolean).join("\n"),
+          });
+        } catch (e) {
+          console.warn("[purchase] 承認依頼の通知に失敗:", e);
+        }
+        return { success: true };
+      }),
+    decide: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        decision: z.enum(["approved", "rejected"]),
+        comment: z.string().max(2000).optional(),
+        selectedQuoteId: z.number().optional(),
+      }))
+      .mutation(({ ctx, input }) =>
+        purchaseService.decideRequest(ctx.user, input.id, input.decision, input.comment, input.selectedQuoteId)),
+    markOrdered: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => purchaseService.markOrdered(ctx.user, input.id)),
+    cancel: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => purchaseService.cancelRequest(ctx.user, input.id)),
+    addQuote: protectedProcedure
+      .input(purchaseQuoteInput.extend({ requestId: z.number() }))
+      .mutation(({ ctx, input: { requestId, ...rest } }) => purchaseService.addQuote(ctx.user, requestId, rest)),
+    updateQuote: protectedProcedure
+      .input(purchaseQuoteInput.partial().extend({ id: z.number() }))
+      .mutation(({ ctx, input: { id, ...rest } }) => purchaseService.updateQuote(ctx.user, id, rest)),
+    deleteQuote: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => purchaseService.deleteQuote(ctx.user, input.id)),
+    // 業者見積書（PDF・画像）のアップロード
+    uploadAttachment: protectedProcedure
+      .input(z.object({
+        fileName: z.string().max(255),
+        mimeType: z.string().max(100),
+        base64: z.string().max(14_000_000), // 約10MB
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!/^(application\/pdf|image\/)/.test(input.mimeType)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "PDFまたは画像を選択してください" });
+        }
+        const data = Buffer.from(input.base64.replace(/^data:[^;]+;base64,/, ""), "base64");
+        const safeName = input.fileName.replace(/[^\w.\-]/g, "_");
+        const { url } = await storagePut(`purchase/${ctx.user.id}/${Date.now()}-${safeName}`, data, input.mimeType);
+        return { url, name: input.fileName };
+      }),
+    lookupPrices: protectedProcedure
+      .input(z.object({ keyword: z.string().min(1).max(200) }))
+      .mutation(({ input }) => purchaseService.lookupPrices(input.keyword)),
   }),
 });
 export type AppRouter = typeof appRouter;
