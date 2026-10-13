@@ -5,6 +5,9 @@ import {
   countFiles,
   extractAddedMemberIds,
   formatReportMessage,
+  GENBA_ASK_MARKER,
+  genbaTaggedMessageIds,
+  hasGenbaName,
   isReply,
   isSystemMessage,
   previousWeekRange,
@@ -75,6 +78,39 @@ describe("aggregateWeek", () => {
     expect(stats.has(9)).toBe(false);
     // 2日×10 + 3投稿×1 + 写真1×3 + 朝2日×3
     expect(stats.get(1)!.score).toBe(20 + 3 + 3 + 6);
+  });
+});
+
+describe("現場名つき写真", () => {
+  it("現場名らしき記述を判定する（お疲れ様・様子などは除く）", () => {
+    expect(hasGenbaName("田中様邸 1階床")).toBe(true);
+    expect(hasGenbaName("守恒 山本様 外壁")).toBe(true);
+    expect(hasGenbaName("本町邸")).toBe(true);
+    expect(hasGenbaName("お疲れ様です")).toBe(false);
+    expect(hasGenbaName("現場の様子です")).toBe(false);
+    expect(hasGenbaName("[download:1]現場.jpg[/download]")).toBe(false);
+  });
+
+  it("本文・前後30分の一言・質問への回答で現場名つきと判定する", () => {
+    const w = previousWeekRange(RUN_AT);
+    const withName = msg(1, "田中", "2026-10-05T09:00:00", "[download:1]a.jpg[/download]山本様邸");
+    const before = msg(1, "田中", "2026-10-05T10:00:00", "[download:2]b.jpg[/download]");
+    const note = msg(1, "田中", "2026-10-05T10:20:00", "↑佐藤様邸です");
+    const far = msg(1, "田中", "2026-10-05T15:00:00", "[download:3]c.jpg[/download]");
+    const other = msg(2, "中村", "2026-10-05T10:10:00", "[download:4]d.jpg[/download]");
+    const ask = msg(9, "社長", "2026-10-05T18:00:00", `[rp aid=1 to=100-${far.messageId}]田中さん\n${GENBA_ASK_MARKER}`);
+    const answer = msg(1, "田中", "2026-10-05T18:30:00", `[rp aid=9 to=100-${ask.messageId}]社長さん\n2`);
+    const messages = [withName, before, note, far, other, ask];
+
+    expect([...genbaTaggedMessageIds(messages)].sort()).toEqual([withName.messageId, before.messageId].sort());
+    const tagged = genbaTaggedMessageIds([...messages, answer]);
+    expect(tagged.has(far.messageId)).toBe(true);
+    expect(tagged.has(other.messageId)).toBe(false);
+
+    const s = aggregateWeek([...messages, answer], w, [9]).get(1)!;
+    expect(s).toMatchObject({ photos: 3, taggedPhotos: 3 });
+    // 1日×10 + 5投稿×1 + 写真3×3 + 現場名つき3×2 + 返信1×2
+    expect(s.score).toBe(10 + 5 + 9 + 6 + 2);
   });
 });
 

@@ -33,6 +33,8 @@ export type MemberStats = {
   posts: number;
   activeDays: number;
   photos: number;
+  /** 現場名つきの写真（本文・前後30分の一言・現場名の質問への回答で判定） */
+  taggedPhotos: number;
   replies: number;
   morningDays: number;
   /** 長文（しっかり報告）の件数 */
@@ -155,6 +157,59 @@ export function plainLength(body: string): number {
     .length;
 }
 
+/**
+ * 現場名の質問（Supabase の daiku-genba-kiku が投稿）に含まれる目印。
+ * 質問は写真メッセージへの返信 [rp ... to=ルーム-写真のID] として投稿される。
+ */
+export const GENBA_ASK_MARKER = "📍現場名を教えてください";
+
+/** 「お疲れ様」「様子」など、現場名ではない「様・さま」 */
+const NOT_GENBA = /(お疲れ|おつかれ|ご苦労|皆|みな|お客|お世話|ご馳走|ごちそう|神|殿|同|仕|模|異|王|奥|ご主人)(様|さま)|(様|さま)(子|々|式|ざま|す)/g;
+
+/** 本文に現場名（〇〇様邸・〇〇様・〇〇邸）らしき記述があるか */
+export function hasGenbaName(body: string): boolean {
+  const text = body.replace(/\[[^\]]*\]/g, " ").replace(NOT_GENBA, " ");
+  return /[^\s　]\s?(様邸|さま邸|様亭|さまてい|邸|様|さま)/.test(text);
+}
+
+/** 返信先のメッセージID（[rp aid=… to=ルーム-メッセージID]） */
+function replyTargetIds(body: string): string[] {
+  return [...body.matchAll(/\[rp aid=\d+ to=\d+-(\d+)\]/g)].map(m => m[1]);
+}
+
+/**
+ * 現場名つきと判定できる写真メッセージのID
+ *  - 写真の本文に現場名がある
+ *  - 同じ人が前後30分以内に現場名入りの投稿をしている
+ *  - 現場名の質問に、誰かが返信で答えている
+ */
+export function genbaTaggedMessageIds(messages: CwMessage[]): Set<string> {
+  const WINDOW = 30 * 60;
+  const tagged = new Set<string>();
+  const named = messages.filter(m => !isSystemMessage(m.body) && hasGenbaName(m.body));
+  for (const p of messages) {
+    if (countFiles(p.body) === 0 || isSystemMessage(p.body)) continue;
+    if (named.some(n => n.accountId === p.accountId && Math.abs(n.sendTime - p.sendTime) <= WINDOW)) {
+      tagged.add(p.messageId);
+    }
+  }
+  // 質問ID → 写真ID
+  const asks = new Map<string, string>();
+  for (const m of messages) {
+    if (!m.body.includes(GENBA_ASK_MARKER)) continue;
+    const photoId = replyTargetIds(m.body)[0];
+    if (photoId) asks.set(m.messageId, photoId);
+  }
+  for (const m of messages) {
+    if (m.body.includes(GENBA_ASK_MARKER) || plainLength(m.body) === 0) continue;
+    for (const id of replyTargetIds(m.body)) {
+      const photoId = asks.get(id);
+      if (photoId) tagged.add(photoId);
+    }
+  }
+  return tagged;
+}
+
 /** メンバー追加のシステム通知から、追加されたアカウントIDを抽出 */
 export function extractAddedMemberIds(body: string): number[] {
   if (!/\[dtext:chatroom_added\]/.test(body) && !/\[dtext:chatroom_member_is\]/.test(body)) {
@@ -173,6 +228,7 @@ export function extractAddedMemberIds(body: string): number[] {
  *  - 投稿した日数   ×10点（最大70）
  *  - 投稿数         ×1点 （最大30）
  *  - 写真・ファイル ×3点 （最大60）
+ *  - 現場名つき写真 ＋2点（最大40）※写真の点に上乗せ
  *  - 返信・宛先     ×2点 （最大30）
  *  - 朝イチ報告日数 ×3点 （8時前の投稿がある日）
  *  - しっかり報告   ×2点 （50文字以上の投稿、最大20）
@@ -183,6 +239,8 @@ export const SCORE_RULES = {
   postCap: 30,
   photo: 3,
   photoCap: 20,
+  taggedPhoto: 2,
+  taggedPhotoCap: 20,
   reply: 2,
   replyCap: 15,
   morningDay: 3,
@@ -198,6 +256,7 @@ export function computeScore(s: Omit<MemberStats, "score">): number {
     s.activeDays * r.activeDay +
     Math.min(s.posts, r.postCap) * r.post +
     Math.min(s.photos, r.photoCap) * r.photo +
+    Math.min(s.taggedPhotos, r.taggedPhotoCap) * r.taggedPhoto +
     Math.min(s.replies, r.replyCap) * r.reply +
     s.morningDays * r.morningDay +
     Math.min(s.reports, r.reportCap) * r.report
@@ -214,6 +273,7 @@ export function aggregateWeek(
   const days = new Map<number, Set<string>>();
   const mornings = new Map<number, Set<string>>();
   const stats = new Map<number, MemberStats>();
+  const tagged = genbaTaggedMessageIds(messages);
 
   for (const m of messages) {
     if (m.sendTime < range.start || m.sendTime >= range.end) continue;
@@ -228,6 +288,7 @@ export function aggregateWeek(
         posts: 0,
         activeDays: 0,
         photos: 0,
+        taggedPhotos: 0,
         replies: 0,
         morningDays: 0,
         reports: 0,
@@ -240,6 +301,7 @@ export function aggregateWeek(
     s.name = m.accountName || s.name;
     s.posts += 1;
     s.photos += countFiles(m.body);
+    if (tagged.has(m.messageId)) s.taggedPhotos += countFiles(m.body);
     if (isReply(m.body)) s.replies += 1;
     if (plainLength(m.body) >= SCORE_RULES.reportMinChars) s.reports += 1;
 
@@ -315,9 +377,10 @@ const COMEBACK_MESSAGES = [
 const CHEER_MESSAGES = [
   "今週は「朝の一言＋現場写真1枚」から始めてみませんか？それだけで一気にランクアップです📈",
   "忙しい現場お疲れさまです！写真1枚＝3点。スキマ時間の1枚が効きます📷",
+  "写真に現場名（例：山田様邸）を一言そえると1枚5点にアップ！現場名つき写真で一気に上位へ📍",
   "1日1回の投稿で投稿日数ボーナス10点！コツコツが一番強いです🔨",
   "みんな〇〇さんの現場の様子、楽しみにしてます！気軽に1枚どうぞ📷",
-  "「今日の作業：〇〇」の一言だけでOK！来週の急上昇賞、狙えます🚀",
+  "「今日の作業：床張り」の一言だけでOK！来週の急上昇賞、狙えます🚀",
 ] as const;
 
 const OPENING_LINES = [
@@ -389,6 +452,10 @@ export function buildWeeklyReport(input: BuildReportInput): WeeklyReport {
   const photo = best("photos", 3);
   if (photo) {
     awards.push({ emoji: "📸", title: "写真職人賞", accountId: photo.accountId, name: photo.name, detail: `写真${photo.photos}枚` });
+  }
+  const genba = best("taggedPhotos", 3);
+  if (genba) {
+    awards.push({ emoji: "📍", title: "現場名マスター賞", accountId: genba.accountId, name: genba.name, detail: `現場名つき写真${genba.taggedPhotos}枚` });
   }
   const morning = best("morningDays", 2);
   if (morning) {
@@ -570,7 +637,7 @@ export function formatReportMessage(report: WeeklyReport): string {
       const medal = MEDALS[r.rank - 1] ?? `${r.rank}位`;
       rk.push(`${medal} ${r.name}さん【${rankTitle(r.rank, r)}】 ${r.score}点 ${rankMove(r.rank, r.prevRank)}`);
       rk.push(
-        `　定着度 ${streakMeter(r.activeDays)} ${r.activeDays}/7日｜投稿${r.posts}・写真${r.photos}・返信${r.replies}`,
+        `　定着度 ${streakMeter(r.activeDays)} ${r.activeDays}/7日｜投稿${r.posts}・写真${r.photos}${r.taggedPhotos ? `(📍${r.taggedPhotos})` : ""}・返信${r.replies}`,
       );
     }
   }
@@ -611,7 +678,7 @@ export function formatReportMessage(report: WeeklyReport): string {
   }
 
   lines.push(
-    "📝 配点：投稿した日×10／写真×3／返信×2／朝8時前の投稿日×3／50字以上の報告×2／投稿×1",
+    "📝 配点：投稿した日×10／写真×3（📍現場名つきは×5）／返信×2／朝8時前の投稿日×3／50字以上の報告×2／投稿×1",
   );
   lines.push(pick(CLOSING_LINES));
   return lines.join("\n");
