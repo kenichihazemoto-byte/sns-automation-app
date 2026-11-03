@@ -1,0 +1,1045 @@
+# -*- coding: utf-8 -*-
+"""大信薬局様邸新築工事  擁壁施工図 作図スクリプト（A3横・PDF）"""
+import math, sys
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib import font_manager as fm
+from matplotlib.patches import Polygon, Circle, Rectangle
+
+FONT = "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf"
+fm.fontManager.addfont(FONT)
+plt.rcParams["font.family"] = fm.FontProperties(fname=FONT).get_name()
+plt.rcParams["hatch.linewidth"] = 0.3
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else "youheki.pdf"
+PT = 1 / 0.3528          # mm -> pt
+RB = "#c00000"           # 鉄筋色
+DIMC = "#1f3f9f"         # 寸法色
+DATE = "2026/10/28"
+
+# ============================================================== 基本諸元
+H_TOP, GL, WJ, F_TOP, F_BOT = 200, 0, -1060, -1400, -1900   # レベル(mm, ±0基準)
+T_WALL, B_FOOT, T_FOOT = 250, 3000, 500
+C_WALL, C_FOOT = 80, 100
+D13, D10 = 13, 10
+P = 300
+LAP = 520           # 重ね継手 40d (D13)
+W_D13, W_D10 = 0.995, 0.560   # kg/m
+
+# 平面（m, 北面壁外面を x 軸、NW隅角を原点、y上=北）
+rad = math.radians
+L_W, L_N, L_E = 9.900, 28.460, 7.120
+A_W, A_E = 257.5, 249.1          # 西面・東面壁の方向角（配置図読取）
+NW = np.array([0.0, 0.0]); NE = np.array([L_N, 0.0])
+SW = NW + L_W * np.array([math.cos(rad(A_W)), math.sin(rad(A_W))])
+SE = NE + L_E * np.array([math.cos(rad(A_E)), math.sin(rad(A_E))])
+OUTER = [SW, NW, NE, SE]
+
+# 目地位置（外面に沿った、各隅角部からの距離 m）
+EJ_N = [5.300, 20.400]                                  # 伸縮目地（北面）
+CJ_N = [2.650, 9.075, 12.850, 16.625, 24.430]           # 誘発目地（北面）
+CJ_W = [3.300, 6.600]                                    # 誘発目地（西面, NW隅から）
+CJ_E = [3.560]                                           # 誘発目地（東面, NE隅から）
+
+# 外部地盤（配置図読取・参考）mm
+FRONT = -1500          # 前面地盤 嵩上げ後の天端（根入れ400確保）
+FK_W = 1.500           # 西面のふかし・嵩上げ範囲（NW隅から, 既存地盤が-1500以下の区間＋余裕）
+FK_T = 300             # 前面ふかしコンクリート幅
+
+def ext_ground0(wall, s):
+    """既存の外部地盤（配置図読取）"""
+    if wall == "W":   # NW(-1660) → 南端(-210)
+        return -1660 + 1450 * s / L_W
+    if wall == "N":
+        return -1660 - 20 * s / L_N
+    if wall == "E":   # NE(-1110) → 南端(-130)
+        return -1110 + 980 * s / L_E
+
+def ext_ground(wall, s):
+    """嵩上げ後の外部地盤"""
+    g = ext_ground0(wall, s)
+    if wall == "N" or (wall == "W" and s <= FK_W):
+        return max(g, FRONT)
+    return g
+
+def weep_level(g):
+    if g <= -1210:
+        return WJ, "A"
+    if g <= -650:
+        return int(math.ceil((g + 150) / 50.0) * 50), "B"
+    return None, "C"
+
+def holes_in_bay(a, b, ca, cb):
+    Lp = (b - a) - ca - cb
+    n = int(math.ceil(Lp / 1.5 - 1e-9)) + 1
+    if n == 1:
+        return [a + ca + Lp / 2]
+    return [a + ca + Lp * i / (n - 1) for i in range(n)]
+
+def weep_holes():
+    res = {"W": [], "N": [], "E": []}
+    # 西面: NW隅(0) → 端部(9.9)
+    pts = [0.0] + CJ_W + [L_W]
+    for i in range(len(pts) - 1):
+        ca = 0.9 if i == 0 else 0.4
+        res["W"] += holes_in_bay(pts[i], pts[i + 1], ca, 0.4)
+    pts = [0.0] + sorted(EJ_N + CJ_N) + [L_N]
+    for i in range(len(pts) - 1):
+        ca = 0.9 if i == 0 else 0.4
+        cb = 1.0 if i == len(pts) - 2 else 0.4
+        res["N"] += holes_in_bay(pts[i], pts[i + 1], ca, cb)
+    pts = [0.0] + CJ_E + [L_E]
+    for i in range(len(pts) - 1):
+        ca = 1.0 if i == 0 else 0.4
+        res["E"] += holes_in_bay(pts[i], pts[i + 1], ca, 0.4)
+    out = {}
+    for w, lst in res.items():
+        out[w] = []
+        for s in lst:
+            g = ext_ground(w, s)
+            lv, z = weep_level(g)
+            out[w].append((round(s, 3), g, lv, z))
+    return out
+
+WEEP = weep_holes()
+
+# ============================================================== 幾何ユーティリティ
+def unit(v):
+    return v / np.linalg.norm(v)
+
+def rnorm(d):  # 進行方向右側（=敷地側）法線
+    return np.array([d[1], -d[0]])
+
+def line_int(p1, d1, p2, d2):
+    A = np.array([d1, -d2]).T
+    t = np.linalg.solve(A, p2 - p1)
+    return p1 + t[0] * d1
+
+def offset_poly(pts, off):
+    """外面ポリライン SW→NW→NE→SE を敷地側へ off(m) オフセット。
+    SW端は道路境界(水平)で切断、SE端は壁直角で切断。"""
+    segs = []
+    for i in range(len(pts) - 1):
+        d = unit(pts[i + 1] - pts[i])
+        segs.append((pts[i] + rnorm(d) * off, d))
+    res = []
+    # SW端: y = SW.y の水平線との交点
+    p, d = segs[0]
+    res.append(line_int(p, d, np.array([0, SW[1]]), np.array([1.0, 0])))
+    for i in range(len(segs) - 1):
+        res.append(line_int(segs[i][0], segs[i][1], segs[i + 1][0], segs[i + 1][1]))
+    p, d = segs[-1]
+    res.append(SE + rnorm(d) * off)
+    return res
+
+def poly_area(pts):
+    x = np.array([p[0] for p in pts]); y = np.array([p[1] for p in pts])
+    return 0.5 * abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+
+def plen(pts):
+    return sum(np.linalg.norm(pts[i + 1] - pts[i]) for i in range(len(pts) - 1))
+
+INNER_W = offset_poly(OUTER, T_WALL / 1000)
+INNER_F = offset_poly(OUTER, B_FOOT / 1000)
+
+def haunch(idx, a=0.5):
+    c = INNER_W[idx]
+    p1 = c + unit(INNER_W[idx - 1] - c) * a
+    p2 = c + unit(INNER_W[idx + 1] - c) * a
+    return [c, p1, p2]
+
+HAUNCH = [haunch(1), haunch(2)]
+
+def ang_deg(idx):
+    a = unit(OUTER[idx - 1] - OUTER[idx]); b = unit(OUTER[idx + 1] - OUTER[idx])
+    return math.degrees(math.acos(np.clip(np.dot(a, b), -1, 1)))
+
+ANG_NW, ANG_NE = ang_deg(1), ang_deg(2)
+
+def on_wall(w, s):
+    """壁外面上の点と方向（壁に沿う単位ベクトル、敷地側法線）"""
+    if w == "W":
+        d = unit(SW - NW); p = NW + d * s
+    elif w == "N":
+        d = unit(NE - NW); p = NW + d * s
+    else:
+        d = unit(SE - NE); p = NE + d * s
+    n = unit(rnorm(unit(OUTER[1] - OUTER[0]))) if w == "W" else (
+        np.array([0.0, -1.0]) if w == "N" else unit(rnorm(unit(SE - NE))))
+    return p, d, n
+
+# ============================================================== 数量
+A_FOOT = poly_area(OUTER + INNER_F[::-1])
+A_WALL = poly_area(OUTER + INNER_W[::-1])
+A_HAUN = sum(poly_area(h) for h in HAUNCH)
+V_FOOT = A_FOOT * T_FOOT / 1000
+V_WALL = (A_WALL + A_HAUN) * (H_TOP - F_TOP) / 1000
+L_OUT = plen(OUTER); L_INW = plen(INNER_W); L_INF = plen(INNER_F)
+
+# ============================================================== 作図基盤
+class Sheet:
+    def __init__(self, pdf, title, no, scale):
+        self.pdf, self.title, self.no, self.scale = pdf, title, no, scale
+        self.fig = plt.figure(figsize=(420 / 25.4, 297 / 25.4))
+        self.ax = self.fig.add_axes([0, 0, 1, 1])
+        self.ax.set_xlim(0, 420); self.ax.set_ylim(0, 297)
+        self.ax.set_aspect("equal"); self.ax.axis("off")
+        self.frame()
+
+    # ---- primitives (paper mm)
+    def L(self, pts, lw=0.25, ls="-", c="k", z=2):
+        pts = np.array(pts)
+        self.ax.plot(pts[:, 0], pts[:, 1], lw=lw * PT * 0.5, ls=ls, color=c, zorder=z,
+                     solid_capstyle="butt")
+
+    def T(self, x, y, s, h=2.5, ha="left", va="baseline", rot=0, c="k", z=5, bold=False, bg=False):
+        kw = {}
+        if bg:
+            kw["bbox"] = dict(fc="white", ec="none", pad=0.3)
+        self.ax.text(x, y, s, fontsize=h * PT / 1.0 * 0.95, ha=ha, va=va, rotation=rot,
+                     color=c, zorder=z, rotation_mode="anchor",
+                     fontweight="bold" if bold else "normal", **kw)
+
+    def poly(self, pts, fc="none", ec="k", lw=0.25, hatch=None, z=1, ls="-"):
+        self.ax.add_patch(Polygon(np.array(pts), closed=True, fc=fc, ec=ec, lw=lw * PT * 0.5,
+                                  hatch=hatch, zorder=z, ls=ls))
+
+    def circ(self, x, y, r, fc="none", ec="k", lw=0.2, z=3):
+        self.ax.add_patch(Circle((x, y), r, fc=fc, ec=ec, lw=lw * PT * 0.5, zorder=z))
+
+    def dim(self, p1, p2, off, text=None, h=2.2, ext=True, c=DIMC, flip=False):
+        p1 = np.array(p1, float); p2 = np.array(p2, float)
+        u = unit(p2 - p1); n = np.array([-u[1], u[0]])
+        a1, a2 = p1 + n * off, p2 + n * off
+        if ext:
+            sgn = 1 if off >= 0 else -1
+            self.L([p1 + n * sgn * 0.8, a1 + n * sgn * 1.2], lw=0.12, c=c)
+            self.L([p2 + n * sgn * 0.8, a2 + n * sgn * 1.2], lw=0.12, c=c)
+        self.L([a1, a2], lw=0.15, c=c)
+        t = unit(u + n) * 1.0
+        for a in (a1, a2):
+            self.L([a - t, a + t], lw=0.3, c=c)
+        if text is None:
+            return
+        ang = math.degrees(math.atan2(u[1], u[0]))
+        if ang > 90.01 or ang < -89.99:
+            ang -= 180 if ang > 0 else -180
+        m = (a1 + a2) / 2
+        nn = np.array([-math.sin(rad(ang)), math.cos(rad(ang))])
+        m = m + nn * (0.6 if not flip else -0.6 - h)
+        self.T(m[0], m[1], text, h=h, ha="center", va="bottom", rot=ang, c=c)
+
+    def leader(self, pts, text, h=2.3, ha="left", c="k", dot=True):
+        pts = np.array(pts, float)
+        self.L(pts, lw=0.15, c=c)
+        if dot:
+            self.circ(pts[0][0], pts[0][1], 0.35, fc=c, ec=c)
+        x, y = pts[-1]
+        lines = text.split("\n")
+        for i, s in enumerate(lines):
+            self.T(x + (0.8 if ha == "left" else -0.8), y + 0.6 - i * (h + 0.9), s, h=h, ha=ha, va="bottom", c=c)
+
+    def note_box(self, x, y, w, title, lines, h=2.3, lh=3.6):
+        self.T(x, y, title, h=3.0, bold=True)
+        yy = y - 5
+        for s in lines:
+            self.T(x, yy, s, h=h)
+            yy -= lh
+        return yy
+
+    def table(self, x, y, cols, rows, rh=4.6, h=2.2, head_fill="#e8e8e8"):
+        widths = [c[1] for c in cols]
+        tw = sum(widths)
+        self.ax.add_patch(Rectangle((x, y - rh), tw, rh, fc=head_fill, ec="none", zorder=0))
+        allr = [[c[0] for c in cols]] + rows
+        for r, row in enumerate(allr):
+            yy = y - r * rh
+            xx = x
+            for k, cell in enumerate(row):
+                al = cols[k][2] if len(cols[k]) > 2 else "center"
+                tx = xx + widths[k] / 2 if al == "center" else (xx + 1 if al == "left" else xx + widths[k] - 1)
+                self.T(tx, yy - rh / 2, str(cell), h=h, ha=al, va="center")
+                xx += widths[k]
+        nr = len(allr)
+        for r in range(nr + 1):
+            self.L([[x, y - r * rh], [x + tw, y - r * rh]], lw=0.2 if r not in (0, 1, nr) else 0.35)
+        xx = x
+        for wdt in [0] + widths:
+            xx += wdt
+            self.L([[xx, y], [xx, y - nr * rh]], lw=0.2)
+        self.L([[x, y], [x, y - nr * rh]], lw=0.35)
+        self.L([[x + tw, y], [x + tw, y - nr * rh]], lw=0.35)
+        return y - nr * rh
+
+    # ---- 図枠・表題欄
+    def frame(self):
+        self.L([[8, 8], [412, 8], [412, 289], [8, 289], [8, 8]], lw=0.7)
+        self.L([[10, 10], [410, 10], [410, 287], [10, 287], [10, 10]], lw=0.3)
+        y0, y1, ym = 10, 34, 22
+        self.L([[10, y1], [410, y1]], lw=0.5)
+        xs = [10, 88, 205, 232, 259, 286, 370, 410]
+        for x in xs[1:-1]:
+            self.L([[x, y0], [x, y1]], lw=0.3)
+        for a, b in [(10, 88), (205, 286), (286, 370)]:
+            self.L([[a, ym], [b, ym]], lw=0.2)
+        self.T(11, 31, "工事名", h=2.0); self.T(49, 25, "大信薬局様邸新築工事", h=3.2, ha="center")
+        self.T(11, 19, "備考", h=2.0); self.T(49, 16, "鉄筋・型枠・土工 協力業者配布用", h=2.1, ha="center")
+        self.T(49, 12, "改2 2026/10/28 躯体は構造計算どおり／前面嵩上げ＋ふかしコンで根入れ確保", h=1.6, ha="center", c="#b00000")
+        self.T(146, 25.5, "ハゼモト建設株式会社", h=5.0, ha="center", bold=True)
+        self.T(146, 19.5, "一級建築士事務所", h=2.3, ha="center")
+        self.T(146, 13.5, "北九州市小倉北区片野4-12-10  TEL 093-931-0521  FAX 093-931-0927", h=2.0, ha="center")
+        for x, s in [(205, "管理者"), (232, "設計者"), (259, "担当者")]:
+            self.T(x + 1, 31, s, h=2.0); self.T(x + 1, 19, "日付", h=2.0)
+        self.T(218.5, 25, "櫨本 健一", h=2.2, ha="center")
+        self.T(218.5, 13, DATE, h=2.0, ha="center")
+        self.T(287, 31, "図面名", h=2.0)
+        self.T(328, 24.5, self.title, h=4.0, ha="center", bold=True)
+        self.T(287, 19, "縮尺", h=2.0); self.T(328, 13, self.scale, h=3.0, ha="center")
+        self.T(371, 31, "図面No", h=2.0); self.T(390, 18, self.no, h=6.0, ha="center", bold=True)
+        self.T(390, 12, "施工図", h=2.0, ha="center")
+
+    def save(self):
+        self.pdf.savefig(self.fig)
+        self.fig.savefig(OUT.replace(".pdf", f"_{self.no}.png"), dpi=110)
+        plt.close(self.fig)
+
+class View:
+    """モデル座標 → 用紙座標 変換"""
+    def __init__(self, ox, oy, scale, unit_mm=1.0):
+        self.ox, self.oy, self.k = ox, oy, unit_mm / scale
+    def __call__(self, x, y=None):
+        if y is None:
+            x, y = x
+        return np.array([self.ox + x * self.k, self.oy + y * self.k])
+    def P(self, pts):
+        return [self(p) for p in pts]
+
+def gravel(sh, v, x0, y0, x1, y1, seed=1):
+    rng = np.random.default_rng(seed)
+    sh.poly(v.P([(x0, y0), (x1, y0), (x1, y1), (x0, y1)]), fc="#f2f2f2", lw=0.2)
+    for _ in range(int(abs((x1 - x0) * (y1 - y0)) / 2600)):
+        cx = rng.uniform(x0 + 18, x1 - 18); cy = rng.uniform(y0 + 18, y1 - 18)
+        r = rng.uniform(10, 22)
+        p = v(cx, cy)
+        sh.circ(p[0], p[1], r * v.k, lw=0.15, z=2)
+
+def soil_hatch(sh, v, x0, x1, y, step=150, ln=80):
+    for x in np.arange(x0, x1, step):
+        sh.L([v(x, y), v(x + ln * 0.6, y - ln)], lw=0.15, c="#555")
+
+def bar_dot(sh, p, d=D13, v=None):
+    r = max(0.38, d * v.k / 2)
+    sh.circ(p[0], p[1], r, fc=RB, ec=RB, lw=0.1, z=6)
+
+# ============================================================== S-01 平面割付図
+def sheet_plan(pdf):
+    sh = Sheet(pdf, "擁壁 平面割付図", "S-01", "1/100")
+    v = View(62, 243, 100, unit_mm=1000)   # model m -> paper: 1m = 10mm
+    # 道路・境界
+    road_pts = [SW, SW + np.array([25.4, 0]), SE]
+    sh.L(v.P([SW, NW, NE, SE]), lw=0.18, ls=(0, (8, 2, 1, 2)), c="#666")
+    sh.L(v.P(road_pts), lw=0.18, ls=(0, (8, 2, 1, 2)), c="#666")
+    sh.T(*v(11.5, -9.665 - 0.9), "道路境界線 25.400", h=2.0, ha="center", c="#555")
+    sh.T(*v(19.0, -10.9), "道路", h=3.0, c="#555"); sh.T(*v(31.3, -6.0), "道路", h=3.0, c="#555")
+    sh.T(*v(-3.6, -7.5), "隣地", h=3.0, c="#555", ha="right"); sh.T(*v(9.5, 2.4), "隣地（隣地境界線＝擁壁外面）", h=2.2, c="#555")
+    # 建物（参考）
+    bx = [(10.85, -1.0), (21.85, -1.0), (21.85, -5.6), (10.85, -5.6)]
+    sh.poly(v.P(bx), ec="#888", lw=0.2, ls=(0, (4, 2)))
+    sh.T(*v(16.35, -4.6), "申請建物（参考・位置は配置図読取）", h=2.0, ha="center", c="#777")
+    # 底盤
+    sh.poly(v.P(OUTER + INNER_F[::-1]), fc="#eef3fb", ec="#4060a0", lw=0.25, ls=(0, (3, 1.5)))
+    # 前面ふかしコン（外側 W300）
+    dN = np.array([0.0, FK_T / 1000]); 
+    sh.poly(v.P([NW, NE, NE + dN, NW + dN]), fc="#d0d0d0", ec="#b00000", lw=0.3, hatch="xxx", z=3)
+    pW, dW, nW = on_wall("W", FK_W)
+    sh.poly(v.P([NW, pW, pW - nW * FK_T / 1000, NW - nW * FK_T / 1000 + dN * 0]), fc="#d0d0d0", ec="#b00000", lw=0.3, hatch="xxx", z=3)
+    # 壁
+    sh.poly(v.P(OUTER + INNER_W[::-1]), fc="#bbbbbb", ec="k", lw=0.5, hatch="////", z=3)
+    for h in HAUNCH:
+        sh.poly(v.P(h), fc="#999999", ec="k", lw=0.35, z=3)
+    sh.T(*v(9.3, -2.3), "底盤（ヒール）範囲  B=3,000", h=2.3, c="#2a4a8a")
+    sh.T(*v(3.6, -6.3), "底盤", h=2.3, c="#2a4a8a")
+    sh.T(*v(25.4, -3.4), "底盤", h=2.3, c="#2a4a8a")
+    # 伸縮目地
+    for i, s in enumerate(EJ_N):
+        a = v(s, 0.35); b = v(s, -3.15)
+        sh.L([a, b], lw=0.9, c="#d06000", z=7)
+        sh.T(b[0], b[1] - 3.2, f"EJ-{i+1}", h=2.6, ha="center", c="#d06000", bold=True)
+    # 誘発目地
+    def cj_mark(w, s, lab):
+        p, d, n = on_wall(w, s)
+        a = v(p - n * 0.25); b = v(p + n * 0.50)
+        sh.L([a, b], lw=0.5, c="#007a3d", z=7)
+        q = v(p + n * 0.75)
+        sh.T(q[0], q[1], lab, h=2.0, ha="center", va="center", c="#007a3d", bold=True)
+    k = 1
+    for s in CJ_W:
+        cj_mark("W", s, f"CJ-{k}"); k += 1
+    for s in sorted(CJ_N):
+        cj_mark("N", s, f"CJ-{k}"); k += 1
+    for s in CJ_E:
+        cj_mark("E", s, f"CJ-{k}"); k += 1
+    # 水抜穴
+    for w in "WNE":
+        for s, g, lv, z in WEEP[w]:
+            if lv is None:
+                continue
+            p, d, n = on_wall(w, s)
+            q = v(p + n * 0.125)
+            sh.circ(q[0], q[1], 0.55, fc="white" if z == "B" else "#1060c0", ec="#1060c0", lw=0.3, z=8)
+    # 寸法（外面）
+    def chain(w, marks, off):
+        pts = [0.0] + marks
+        for i in range(len(pts) - 1):
+            p1, _, _ = on_wall(w, pts[i]); p2, _, _ = on_wall(w, pts[i + 1])
+            sh.dim(v(p1), v(p2), off, f"{(pts[i+1]-pts[i])*1000:,.0f}", h=1.9)
+    chain("N", sorted(EJ_N + CJ_N) + [L_N], 6.0)
+    sh.dim(v(NW), v(NE), 11.0, "28,460", h=2.3)
+    # 西面（NW→SW 方向は y 下向き → 外側は左）
+    pts = [0.0] + CJ_W + [L_W]
+    for i in range(len(pts) - 1):
+        p1, _, _ = on_wall("W", pts[i]); p2, _, _ = on_wall("W", pts[i + 1])
+        sh.dim(v(p2), v(p1), 5.0, f"{(pts[i+1]-pts[i])*1000:,.0f}", h=1.9)
+    sh.dim(v(SW), v(NW), 10.0, "9,900", h=2.3)
+    pts = [0.0] + CJ_E + [L_E]
+    for i in range(len(pts) - 1):
+        p1, _, _ = on_wall("E", pts[i]); p2, _, _ = on_wall("E", pts[i + 1])
+        sh.dim(v(p1), v(p2), 5.0, f"{(pts[i+1]-pts[i])*1000:,.0f}", h=1.9)
+    sh.dim(v(NE), v(SE), 10.0, "7,120", h=2.3)
+    # 隅角部ラベル
+    c = v(INNER_W[1])
+    sh.leader([c + np.array([1.0, -1.0]), c + np.array([8, -16]), c + np.array([10, -16])],
+              f"NW隅角部（内角 約{ANG_NW:.1f}°）ハンチ500×500 → S-03", h=2.0)
+    c = v(OUTER[2])
+    sh.leader([v(INNER_W[2]) + np.array([-0.6, -0.6]), c + np.array([14, 6]), c + np.array([16, 6])],
+              f"NE隅角部（内角 約{ANG_NE:.1f}°）\nハンチ500×500 → S-03", h=2.0)
+    sh.leader([v(SW + np.array([0.15, 0.2])), v(SW) + np.array([8, -5]), v(SW) + np.array([10, -5])],
+              "西面 端部（道路境界線で止め）", h=2.0)
+    sh.leader([v(SE + np.array([-0.15, 0.25])), v(SE) + np.array([10, -4]), v(SE) + np.array([12, -4])],
+              "東面 端部\n（壁直角で止め）", h=2.0)
+    # 断面記号
+    for (x, lab) in [(7.4, "A")]:
+        a = v(x, 2.3); b = v(x, -3.8)
+        sh.L([a, a - np.array([0, 2.5])], lw=0.5); sh.L([b, b + np.array([0, 4])], lw=0.5)
+        sh.L([a, a + np.array([3, 0])], lw=0.5); sh.L([b, b + np.array([3, 0])], lw=0.5)
+        sh.T(a[0] + 3.6, a[1] - 1, lab, h=3.0); sh.T(b[0] + 3.6, b[1] - 1, lab, h=3.0)
+    sh.T(*v(7.4, -4.9), "A-A断面 → S-02（全周同一断面）", h=2.0, c="k")
+    # 方位
+    c = np.array([28, 258]); u = np.array([-math.sin(rad(20)), math.cos(rad(20))])
+    sh.circ(*c, 5, lw=0.3)
+    sh.poly([c + u * 7, c + np.array([u[1], -u[0]]) * 2, c - np.array([u[1], -u[0]]) * 2], fc="k", lw=0.2)
+    sh.T(*(c + u * 9.5), "N", h=3.0, ha="center")
+    sh.T(c[0], c[1] - 9, "方位は配置図による（参考）", h=1.6, ha="center")
+    sh.T(20, 278, "擁壁 平面割付図   S=1/100", h=5.0, bold=True)
+    # 凡例
+    lx, ly = 210, 122
+    sh.T(lx, ly, "凡例", h=3.0, bold=True)
+    sh.poly([(lx, ly - 7), (lx + 8, ly - 7), (lx + 8, ly - 4.5), (lx, ly - 4.5)], fc="#bbbbbb", hatch="////", lw=0.4)
+    sh.T(lx + 10, ly - 6.8, "立上り t=250", h=2.2)
+    sh.poly([(lx, ly - 12), (lx + 8, ly - 12), (lx + 8, ly - 9.5), (lx, ly - 9.5)], fc="#eef3fb", ec="#4060a0", ls=(0, (3, 1.5)))
+    sh.T(lx + 10, ly - 11.8, "底盤 B3000 t500", h=2.2)
+    sh.L([(lx + 4, ly - 13.5), (lx + 4, ly - 17)], lw=0.9, c="#d06000")
+    sh.T(lx + 10, ly - 16.3, "EJ 伸縮目地", h=2.2)
+    sh.L([(lx + 4, ly - 18.5), (lx + 4, ly - 22)], lw=0.5, c="#007a3d")
+    sh.T(lx + 10, ly - 21.3, "CJ 誘発目地", h=2.2)
+    sh.circ(lx + 4, ly - 25.3, 0.8, fc="#1060c0", ec="#1060c0")
+    sh.T(lx + 10, ly - 26.1, "水抜穴 標準高さ", h=2.2)
+    sh.circ(lx + 4, ly - 30.3, 0.8, fc="white", ec="#1060c0", lw=0.4)
+    sh.T(lx + 10, ly - 31.1, "水抜穴 高さ調整", h=2.2)
+    sh.poly([(lx, ly - 37), (lx + 8, ly - 37), (lx + 8, ly - 34.5), (lx, ly - 34.5)], fc="#d0d0d0", ec="#b00000", hatch="xxx", lw=0.3)
+    sh.T(lx + 10, ly - 36.6, "前面ふかしコン", h=2.2)
+
+    # 目地・水抜穴一覧
+    rows = []
+    rows.append(["西面", "9,900", "NW隅から 3,300 / 6,600", "—", f"{sum(1 for x in WEEP['W'] if x[2])} 箇所"])
+    rows.append(["北面", "28,460", "NW隅から " + " / ".join(f"{x*1000:,.0f}" for x in CJ_N),
+                 "NW隅から " + " / ".join(f"{x*1000:,.0f}" for x in EJ_N), f"{sum(1 for x in WEEP['N'] if x[2])} 箇所"])
+    rows.append(["東面", "7,120", "NE隅から 3,560", "—", f"{sum(1 for x in WEEP['E'] if x[2])} 箇所"])
+    tot = sum(1 for w in WEEP for x in WEEP[w] if x[2])
+    rows.append(["計", f"{(L_W+L_N+L_E)*1000:,.0f}", f"{len(CJ_W)+len(CJ_N)+len(CJ_E)} 箇所", f"{len(EJ_N)} 箇所", f"{tot} 箇所"])
+    sh.T(20, 122, "目地・水抜穴 割付表（寸法は擁壁外面＝境界線に沿う）", h=3.0, bold=True)
+    yb = sh.table(20, 119, [("面", 14), ("延長", 16), ("誘発目地 CJ 位置", 92), ("伸縮目地 EJ 位置", 42), ("水抜穴", 18)], rows)
+
+    # 水抜穴位置表
+    sh.T(20, yb - 6, "水抜穴 位置表（隅角部からの距離 / 芯高さ ±0基準）", h=3.0, bold=True)
+    yy = yb - 10
+    for w, lab, base in [("W", "西面", "NW隅→南"), ("N", "北面", "NW隅→東"), ("E", "東面", "NE隅→南")]:
+        items = []
+        for s, g, lv, z in WEEP[w]:
+            if lv is None:
+                items.append(f"{s*1000:,.0f}(省略)")
+            elif z == "B":
+                items.append(f"{s*1000:,.0f}[{lv}]")
+            else:
+                items.append(f"{s*1000:,.0f}")
+        text = " / ".join(items)
+        sh.T(20, yy, f"{lab}（{base}）:", h=2.1, bold=True)
+        # 折り返し
+        chunks, cur = [], ""
+        for it in items:
+            if len(cur) + len(it) > 120:
+                chunks.append(cur); cur = ""
+            cur += ("" if not cur else " / ") + it
+        chunks.append(cur)
+        for c_ in chunks:
+            sh.T(48, yy, c_, h=2.0); yy -= 3.4
+        yy -= 0.6
+    sh.T(20, yy - 1, "※無印＝標準高さ GL-1060（止水コン天端に管底）。[ ]内＝調整高さ（外部地盤+150）。(省略)＝外部地盤が高く排水不可のため設けない。",
+         h=1.9)
+    sh.T(20, yy - 4.4, "※外部地盤は配置図からの読取値。墨出し時に外部地盤高さを実測し、右記ルールで最終高さを決定すること。", h=1.9)
+
+    # 特記
+    x0 = 268
+    lines = [
+        "1. 擁壁外面＝隣地／道路境界線として割付（控え寸法がある場合は監督指示）。",
+        f"2. 壁角度は配置図読取値（NW隅 約{ANG_NW:.1f}°・NE隅 約{ANG_NE:.1f}°）。",
+        "   境界杭にて現地確認のうえ墨出しすること。",
+        "3. 伸縮目地 EJ：全断面（立上り＋底盤）縁切り、",
+        "   区間長 15.2m／15.1m／15.2m（≦20m）、隅角部から2m以上離す。",
+        "4. 誘発目地 CJ：立上り両面に目地棒、間隔 4.1m以内。",
+        "5. 水抜穴：VP75（内径75以上）、1.5m以内ピッチ",
+        "   （露出面 約1.9m²/箇所 ≦3m²）、外部へ2%以上の勾配。",
+        "   高さルール：外部地盤 ≦GL-1210 → GL-1060(標準)",
+        "   　　　　　　GL-1210～-650 → 外部地盤+150",
+        "   　　　　　　GL-650 超 → 設けない",
+        "6. 隅角部（2箇所）はハンチ500×500＋補強筋（S-03）。",
+        "7. 断面・配筋は S-02、目地・隅角・端部詳細は S-03、",
+        "   展開図は S-04、鉄筋加工帳・数量は S-05 による。",
+        "8. 根入れ：北面全長・西面NW隅から1.5mは前面地盤を ±0-1500 に",
+        "   嵩上げ＋前面ふかしコン W300（無筋）で根入れ400を確保。",
+    ]
+    sh.note_box(x0, 122, 140, "特記事項", lines, h=2.05, lh=3.35)
+    sh.save()
+
+# ============================================================== S-02 標準断面配筋図
+def sheet_section(pdf):
+    sh = Sheet(pdf, "擁壁 標準断面配筋図", "S-02", "1/20・1/10")
+    v = View(115, 248, 20)      # x=0 外面, y=±0
+    sh.T(20, 278, "擁壁 標準断面配筋図（A-A 全周共通）   S=1/20", h=5.0, bold=True)
+    # 地盤
+    sh.L([v(-1500, -1670), v(-1255, -1670)], lw=0.4)
+    sh.L([v(-1255, -1670), v(-1000, FRONT), v(-FK_T, FRONT)], lw=0.5)
+    sh.L([v(-1255, -1670), v(-FK_T, -1670)], lw=0.25, ls=(0, (3, 1.5)), c="#8b4513")
+    soil_hatch(sh, v, -1450, -1250, -1670)
+    soil_hatch(sh, v, -950, -FK_T - 40, FRONT)
+    sh.poly(v.P([(-FK_T, F_BOT), (0, F_BOT), (0, FRONT), (-FK_T, FRONT)]), fc="#d0d0d0", ec="k", lw=0.4, hatch="xxx", z=2)
+    sh.leader([v(-700, FRONT), v(-1100, -1880), v(-1450, -1880)], "", h=2.0, c="#b00000", dot=False)
+    sh.T(*v(-1450, -1860), "前面地盤 嵩上げ ±0-1500（盛土転圧）", h=2.0, c="#b00000")
+    sh.T(*v(-1450, -1740), "既存地盤 -1660～-1680", h=1.8, c="#8b4513")
+    sh.leader([v(-150, -1750), v(-700, -2080), v(-1450, -2080)], "前面ふかしコン W300（無筋 Fc18）\n底盤下端～±0-1500、擁壁と一体打設可", h=1.9, c="#b00000")
+    sh.dim(v(-480, F_BOT), v(-480, FRONT), 0, None)
+    p = v(-500, -1720); sh.T(p[0], p[1], "根入れ400", h=2.0, ha="right", c="#b00000")
+    sh.T(*v(-1000, FRONT + 60), "1,000以上 平坦", h=1.7, c="#555")
+    sh.L([v(T_WALL, 0), v(3600, 0)], lw=0.4)
+    soil_hatch(sh, v, 650, 3550, 0)
+    sh.T(*v(2600, 60), "▽ 設計GL ±0（敷地側）", h=2.3)
+    # 砕石・捨てコン
+    sh.poly(v.P([(-FK_T, F_BOT - 150), (3100, F_BOT - 150), (3100, F_BOT - 50), (-FK_T, F_BOT - 50)]), fc="#f6f6f6", hatch="..", lw=0.2)
+    sh.poly(v.P([(-FK_T, F_BOT - 50), (3100, F_BOT - 50), (3100, F_BOT), (-FK_T, F_BOT)]), fc="#d9d9d9", lw=0.25)
+    # 躯体
+    body = [(0, F_BOT), (B_FOOT, F_BOT), (B_FOOT, F_TOP), (T_WALL, F_TOP), (T_WALL, H_TOP), (0, H_TOP)]
+    sh.poly(v.P(body), fc="#f3f3f3", ec="k", lw=0.6, z=2)
+    # 面木（天端両角 20）
+    m = 20
+    for (x, sx) in [(0, 1), (T_WALL, -1)]:
+        sh.poly(v.P([(x, H_TOP), (x + sx * m, H_TOP), (x, H_TOP - m)]), fc="white", ec="k", lw=0.3, z=3)
+    # 裏込砕石・止水コン
+    gravel(sh, v, T_WALL, -1100, T_WALL + 300, -300)
+    sh.poly(v.P([(T_WALL, -1150), (T_WALL + 350, -1150), (T_WALL + 350, -1100), (T_WALL, -1100)]), fc="#cfcfcf", ec="k", lw=0.3)
+    # 吸出し防止材
+    sh.L([v(T_WALL + 3, -1000), v(T_WALL + 3, -1100 + 8)], lw=0.8, c="#2e8b57")
+    # 水抜穴
+    yb, yt = WJ - 44, WJ + 44
+    sh.poly(v.P([(-30, yb - 6), (T_WALL + 5, yb + 0), (T_WALL + 5, yt), (-30, yt - 6)]), fc="white", ec="#1060c0", lw=0.4, z=4)
+    # ---------------- 配筋
+    xo = C_WALL + D13 / 2           # 前面縦筋芯 86.5
+    xi = T_WALL - C_WALL - D13 / 2  # 背面縦筋芯 163.5
+    ytop = H_TOP - C_WALL
+    yb_main = F_BOT + C_FOOT + D13 / 2          # 下端主筋芯
+    yt_main = F_TOP - C_FOOT - D13 / 2          # 上端主筋芯
+    yleg = yb_main + D13 + D13 / 2 + 1          # 縦筋脚
+    xe = B_FOOT - C_FOOT - D13 / 2
+    xs = C_WALL + D13 / 2
+    lw = 0.55
+    # 底盤主筋
+    sh.L(v.P([(xs, yt_main - 300), (xs, yt_main), (xe, yt_main), (xe, yt_main - 300)]), lw=lw, c=RB, z=5)
+    sh.L(v.P([(xs + 14, yb_main + 300), (xs + 14, yb_main), (xe - 14, yb_main), (xe - 14, yb_main + 300)]), lw=lw, c=RB, z=5)
+    # 縦筋
+    sh.L(v.P([(xo, ytop), (xo, yleg), (xo + 300, yleg)]), lw=lw, c=RB, z=5)
+    sh.L(v.P([(xi, ytop), (xi, yleg + 2), (xi + 400, yleg + 2)]), lw=lw, c=RB, z=5)
+    # 横筋（立上り）・配力筋（底盤）
+    ys_h = [ytop - 13 - 300 * i for i in range(6)]
+    ys_h[-1] = F_TOP + 70
+    for y in ys_h:
+        bar_dot(sh, v(xo + 13, y), v=v); bar_dot(sh, v(xi - 13, y), v=v)
+    xs_d = np.linspace(xs + 120, xe - 20, 10)
+    for x in xs_d:
+        bar_dot(sh, v(x, yt_main - 13), v=v); bar_dot(sh, v(x, yb_main + 13), v=v)
+    # 巾止め
+    for y in [ys_h[1], ys_h[4]]:
+        sh.L(v.P([(xo - 8, y + 18), (xo + 13, y), (xi - 13, y), (xi + 8, y - 18)]), lw=0.35, c="#a05000", z=6)
+    # 寸法
+    sh.dim(v(0, H_TOP), v(T_WALL, H_TOP), 9, "250")
+    sh.dim(v(T_WALL, H_TOP), v(B_FOOT, H_TOP), 9, "2,750")
+    sh.dim(v(0, F_BOT - 150), v(B_FOOT, F_BOT - 150), -10, "3,000", flip=True)
+    sh.dim(v(B_FOOT, F_BOT - 150), v(3100, F_BOT - 150), -10, "100", flip=True, h=1.8)
+    xd = 3500
+    for (y1, y2, t) in [(F_BOT, F_TOP, "500"), (F_TOP, -1100, "300"), (-1100, -300, "800"), (-300, GL, "300"), (GL, H_TOP, "200")]:
+        sh.dim(v(xd, y1), v(xd, y2), 0, t, h=1.9)
+    sh.dim(v(xd + 220, F_BOT), v(xd + 220, H_TOP), 0, "2,100", h=2.1)
+    # レベル表示
+    def lvl(y, s, x=-650):
+        p = v(x, y)
+        sh.L([p + np.array([0, 0]), p + np.array([14, 0])], lw=0.15, c=DIMC)
+        sh.poly([p + np.array([1.3, 0]), p + np.array([2.6, 1.6]), p + np.array([0, 1.6])], fc=DIMC, ec=DIMC, lw=0.1)
+        sh.T(p[0] + 3.2, p[1] + 0.5, s, h=2.0, c=DIMC)
+    lvl(H_TOP, "天端 ±0+200", -800)
+    lvl(F_TOP, "底盤天 ±0-1400", -800)
+    lvl(F_BOT, "底盤下 ±0-1900", -800)
+    lvl(WJ, "水抜穴芯 ±0-1060", -800)
+    # 引出し
+    sh.leader([v(xi, -400), v(1250, -180), v(1300, -180)], "W1 縦筋（背面・主筋）D13@300\n  底盤内 L形 脚400", h=2.2, c=RB)
+    sh.leader([v(xo, -300), v(-300, 450), v(-1300, 450)], "W2 縦筋（前面）D13@300\n  底盤内 L形 脚300", h=2.2, c=RB, ha="left")
+    sh.leader([v(xo + 13, ys_h[2]), v(-500, -180), v(-1450, -180)], "W3 横筋 D13@300 両面 各6段", h=2.2, c=RB)
+    sh.leader([v(xi - 13 - 30, ys_h[4]), v(-450, -880), v(-1450, -880)], "W4 巾止め筋 D10@1000×1000", h=2.2, c="#a05000")
+    sh.leader([v(1600, yt_main), v(1250, -1300), v(1300, -1300)], "F1 底盤上端主筋 D13@300（コ形）", h=2.2, c=RB)
+    sh.leader([v(2100, yb_main), v(1650, -2480), v(1700, -2480)], "F2 底盤下端主筋 D13@300（コ形）", h=2.2, c=RB)
+    sh.leader([v(xs_d[6], yt_main - 13), v(1950, -1150), v(2000, -1150)], "F3 配力筋 D13@300 上下各10本", h=2.2, c=RB)
+    sh.leader([v(400, -600), v(1250, -540), v(1300, -540)], "裏込砕石 W300（RC-40／単粒度）\n天端±0-300～-1100", h=2.2)
+    sh.leader([v(560, -1125), v(1250, -1000), v(1300, -1000)], "止水コンクリート W350 t=50", h=2.2)
+    sh.leader([v(T_WALL + 3, -1050), v(1250, -800), v(1300, -800)], "吸出し防止材（透水マット）", h=2.0, c="#2e8b57")
+    sh.leader([v(60, WJ), v(-400, -1250), v(-1450, -1250)], "水抜穴 VP75 外向き勾配2%以上\n管底＝止水コン天端", h=2.2, c="#1060c0")
+    sh.leader([v(10, H_TOP - 8), v(-200, 330), v(-650, 330)], "面木 20×20（天端両角）", h=2.2)
+    sh.T(*v(-1450, -2330), "均しコン t=50 ／ 基礎砕石 t=100（ふかしコン下まで、敷地側100出し）", h=2.0)
+    sh.T(*v(-1450, -2480), "底盤下：設計地耐力 80kN/m² 確保（柱状改良・地盤置換は別途）", h=2.0)
+
+    # 部分詳細 1/5 : 天端面木・目地棒・水抜穴
+    # 天端詳細
+    v5 = View(330, 240, 10)
+    sh.T(305, 278, "部分詳細   S=1/10", h=4.0, bold=True)
+    sh.T(305, 270, "① 天端（面木）", h=2.6, bold=True)
+    sh.poly(v5.P([(0, -250), (250, -250), (250, -20), (230, 0), (20, 0), (0, -20)]), fc="#f3f3f3", lw=0.5)
+    sh.dim(v5(0, 0), v5(250, 0), 6, "250")
+    for x, sgn in [(0, 1), (250, -1)]:
+        sh.poly(v5.P([(x, 0), (x + sgn * 20, 0), (x, -20)]), fc="#e8d8b0", ec="#8a6a20", lw=0.3)
+    sh.leader([v5(10, -6), v5(-60, 30), v5(-130, 30)], "面木20", h=2.0)
+    sh.dim(v5(250, -20), v5(250, 0), 4, "20", h=1.7)
+    sh.T(*v5(20, -150), "天端 金ゴテ押え", h=2.0)
+    sh.T(*v5(20, -200), "（両角 C20）", h=2.0)
+    # 誘発目地平面
+    v5b = View(357, 170, 10)
+    sh.T(305, 205, "② 誘発目地 CJ（平面）", h=2.6, bold=True)
+    sh.poly(v5b.P([(-450, 0), (-15, 0), (-10, 25), (10, 25), (15, 0), (450, 0), (450, 250), (15, 250), (10, 225), (-10, 225), (-15, 250), (-450, 250)]),
+            fc="#f3f3f3", lw=0.5)
+    for yy_ in (86.5, 163.5):
+        sh.L([v5b(-450, yy_), v5b(450, yy_)], lw=0.35, c=RB)
+    sh.L([v5b(0, 25), v5b(0, 225)], lw=0.15, ls=(0, (2, 1)), c="k")
+    sh.leader([v5b(0, 5), v5b(-60, -50), v5b(-450, -50)], "目地棒（台形 30/20×D25）両面／外面シーリング", h=1.9)
+    sh.dim(v5b(-15, 250), v5b(15, 250), 4, "30", h=1.7)
+    sh.dim(v5b(-450, 0), v5b(-450, 25), -3, "25", h=1.7)
+    sh.T(*v5b(-450, -120), "断面欠損 50/250＝20%  横筋は連続", h=1.9)
+    sh.T(*v5b(-450, -160), "範囲：天端～底盤天（立上り部のみ）", h=1.9)
+    # 水抜穴
+    v5c = View(340, 100, 10)
+    sh.T(305, 140, "③ 水抜穴（断面）", h=2.6, bold=True)
+    sh.poly(v5c.P([(0, -200), (250, -200), (250, 250), (0, 250)]), fc="#f3f3f3", lw=0.5)
+    gravel(sh, v5c, 250, -40, 450, 250, seed=3)
+    sh.poly(v5c.P([(250, -90), (520, -90), (520, -40), (250, -40)]), fc="#cfcfcf", lw=0.3)
+    sh.poly(v5c.P([(-40, -46), (253, -40), (253, 49), (-40, 43)]), fc="white", ec="#1060c0", lw=0.5, z=4)
+    sh.L([v5c(253, -40), v5c(253, 160)], lw=0.9, c="#2e8b57")
+    sh.leader([v5c(100, 0), v5c(60, 140), v5c(-40, 140)], "VP75（内径75）", h=1.9, ha="right", c="#1060c0")
+    sh.leader([v5c(253, 120), v5c(330, 300), v5c(400, 300)], "吸出し防止材 300×300", h=1.9, c="#2e8b57")
+    sh.leader([v5c(450, -65), v5c(520, -150), v5c(560, -150)], "止水コン t=50", h=1.9)
+    sh.T(*v5c(-60, -170), "外部へ勾配2%以上", h=1.9)
+    sh.T(*v5c(-60, -230), "管端は外面面一", h=1.9)
+
+    # 設計条件・特記
+    lines = [
+        "設計地耐力 80kN/m²  地表面積載荷重 10kN/m²",
+        "コンクリート Fc=21N/mm²（呼び強度は構造体補正 mSn を加算）",
+        "鉄筋 SD295  かぶり厚さ：壁 80 ／ 底盤 100（全面）",
+        "重ね継手 40d（D13＝520）千鳥継手  定着 35d（フック付 25d）",
+        "スペーサー：壁 80用 縦横@1,000以内／底盤 サイコロ100 @1,000以内",
+        "打継ぎ：底盤天で水平打継ぎ。レイタンス除去・目荒らし後に立上り打設。",
+        "縦筋は先組し底盤と同時に固定、打設時に移動させないこと。",
+        "縦筋は前面・背面とも 外側、横筋は内側に配筋（有効せい確保）。",
+    ]
+    sh.note_box(20, 108, 240, "設計条件・配筋特記", lines, h=2.1, lh=3.4)
+    sh.save()
+
+# ============================================================== S-03 目地・隅角・端部詳細
+def sheet_details(pdf):
+    sh = Sheet(pdf, "擁壁 目地・隅角部・端部詳細", "S-03", "1/10・1/20・1/30")
+    sh.T(20, 278, "伸縮目地・誘発目地・隅角部・端部 詳細", h=5.0, bold=True)
+    # ---------- ① 伸縮目地 平面 1/10
+    v = View(80, 228, 10)
+    sh.T(20, 268, "① 伸縮目地 EJ（平面） S=1/10", h=2.8, bold=True)
+    for sgn in (-1, 1):
+        x0, x1 = sgn * 5, sgn * 500
+        sh.poly(v.P([(x0, 0), (x1, 0), (x1, 250), (x0, 250)]), fc="#f3f3f3", lw=0.5)
+        for yy_ in (86.5, 163.5):
+            sh.L([v(sgn * (5 + 80), yy_), v(x1, yy_)], lw=0.5, c=RB)
+        for yy_ in (99.5, 150.5):
+            for xx in np.arange(sgn * 110, x1, sgn * 300):
+                pass
+        for xx in [sgn * 92, sgn * 392]:
+            bar_dot(sh, v(xx, 99.5 - 13), v=v); bar_dot(sh, v(xx, 150.5 + 13), v=v)
+        for yy_ in (0, 250):
+            sh.poly(v.P([(x0, yy_), (x0 + sgn * 20, yy_), (x0, yy_ + (20 if yy_ == 0 else -20))]), fc="#e8d8b0", ec="#8a6a20", lw=0.2)
+    sh.poly(v.P([(-5, 0), (5, 0), (5, 250), (-5, 250)]), fc="#7a5a2a", lw=0.2)
+    sh.poly(v.P([(-5, -10), (5, -10), (5, 0), (-5, 0)]), fc="#333", lw=0.2)
+    sh.leader([v(0, 200), v(150, 300), v(300, 300)], "目地材 エラスタイト t=10\n（全断面：立上り＋底盤）", h=2.0)
+    sh.leader([v(0, -6), v(150, -150), v(300, -150)], "外面 シーリング 10×10", h=2.0)
+    sh.leader([v(-20, 3), v(-250, -150), v(-450, -150)], "面木20（目地両側）", h=2.0)
+    sh.dim(v(-500, 0), v(-500, 250), 4, "250", h=1.8)
+    sh.dim(v(5, 163.5), v(85, 163.5), 0, None)
+    sh.T(*v(-560, 10), "外面", h=2.0, ha="right")
+    sh.T(*v(-560, 220), "内面", h=2.0, ha="right")
+    yy = 205
+    for s in ["・鉄筋は目地で切断（目地面かぶり 壁80／底盤100）",
+              "・底盤も同位置で縁切り。妻型枠を立て片側ずつ打設",
+              "・天端・外面の目地際は面木20で面取り",
+              "・位置：北面 NW隅から 5,300 ／ 20,400（S-01）"]:
+        sh.T(22, yy, s, h=2.0); yy -= 3.4
+
+    # ---------- ② 誘発目地 立面 1/30
+    vv = View(212, 225, 30)
+    sh.T(165, 245, "② 誘発目地 CJ（立面・外面） S=1/30", h=2.8, bold=True)
+    sh.poly(vv.P([(-900, F_BOT), (900, F_BOT), (900, H_TOP), (-900, H_TOP)]), fc="#f6f6f6", lw=0.5)
+    sh.L([vv(-900, F_TOP), vv(900, F_TOP)], lw=0.2, ls=(0, (3, 1.5)))
+    sh.poly(vv.P([(-15, F_TOP), (15, F_TOP), (15, H_TOP), (-15, H_TOP)]), fc="#e8d8b0", ec="#8a6a20", lw=0.3)
+    sh.leader([vv(0, -500), vv(400, -300), vv(700, -300)], "目地棒", h=2.0)
+    sh.dim(vv(900, F_TOP), vv(900, H_TOP), -5, "1,600", h=1.8)
+    sh.dim(vv(900, F_BOT), vv(900, F_TOP), -5, "500", h=1.8)
+    sh.T(*vv(-880, F_TOP + 60), "底盤天", h=1.8)
+    yy = 152
+    for s in ["・目地棒 台形 30/20×D25（木製又は樹脂製）",
+              "  立上り 両面、天端～底盤天まで通す",
+              "・天端は目地位置で V カット 10",
+              "・断面欠損 50/250＝20％、横筋は連続",
+              "・外面側目地にシーリング 10×10",
+              "・底盤部は連続（目地を設けない）"]:
+        sh.T(165, yy, s, h=2.0); yy -= 3.4
+
+    # ---------- ⑤ 端部 平面 1/20
+    ve = View(385, 238, 20)
+    sh.T(290, 268, "⑤ 壁端部（平面） S=1/20", h=2.8, bold=True)
+    sh.poly(ve.P([(-1500, 0), (0, 0), (0, 250), (-1500, 250)]), fc="#f3f3f3", lw=0.5)
+    sh.L([ve(-1500, 99.5), ve(-120, 99.5)], lw=0.5, c=RB)
+    sh.L([ve(-1500, 150.5), ve(-120, 150.5)], lw=0.5, c=RB)
+    sh.L([ve(-640, 99.5 + 6), ve(-100, 99.5 + 6), ve(-100, 150.5 - 6), ve(-640, 150.5 - 6)], lw=0.5, c="#7030a0")
+    for x_ in (-86.5, -386.5, -686.5, -986.5, -1286.5):
+        bar_dot(sh, ve(x_, 86.5), v=ve); bar_dot(sh, ve(x_, 163.5), v=ve)
+    sh.leader([ve(-500, 125), ve(-700, 450), ve(-1500, 450)], "E1 端部コ字筋 D13 各横筋段 脚520", h=2.0, c="#7030a0")
+    sh.leader([ve(-86.5, 86.5), ve(-200, -350), ve(-1500, -350)], "E2 端部縦筋 追加 2-D13（前後各1）", h=2.0, c=RB)
+    for yy_ in (0, 250):
+        sh.poly(ve.P([(0, yy_), (-20, yy_), (0, yy_ + (20 if yy_ == 0 else -20))]), fc="#e8d8b0", ec="#8a6a20", lw=0.2)
+    yy = 214
+    for s in ["・西面端部：道路境界線に沿って止め",
+              "・東面端部：壁に直角に止め",
+              "・端部の鉛直出隅は面木20",
+              "・底盤端部は配力筋を90°フック（余長300）"]:
+        sh.T(292, yy, s, h=2.0); yy -= 3.4
+
+    # ---------- ③④ 隅角部 平面 1/30
+    def corner_detail(ox, oy, idx, title):
+        sh.T(ox - 30 if idx == 1 else ox - 75, oy + 12, title, h=2.8, bold=True)
+        c_out = OUTER[idx] * 1000; ci = INNER_W[idx] * 1000
+        a = unit(OUTER[idx - 1] - OUTER[idx]); b = unit(OUTER[idx + 1] - OUTER[idx])
+        def inw(d):
+            n = np.array([-d[1], d[0]])
+            return n if np.dot(n, ci - c_out) > 0 else -n
+        nA, nB = inw(a), inw(b)
+        vc = View(ox, oy, 30)
+        T_ = lambda p: vc(p - c_out)
+        Lg = 1900
+        h1, h2 = ci + a * 500, ci + b * 500
+        wall = [c_out + a * Lg, c_out, c_out + b * Lg, c_out + b * Lg + nB * 250, h2, h1, c_out + a * Lg + nA * 250]
+        sh.poly([T_(p) for p in wall], fc="#e9e9e9", ec="k", lw=0.5)
+        sh.L([T_(h1), T_(ci), T_(h2)], lw=0.15, ls=(0, (2, 1)))
+        # 底盤内側線（参考）
+        fi = INNER_F[idx] * 1000
+        # 外側横筋（曲げ連続）
+        Ao, Bo = c_out + nA * 99.5, c_out + nB * 99.5
+        co = line_int(Ao, a, Bo, b)
+        sh.L([T_(Ao + a * Lg), T_(co), T_(Bo + b * Lg)], lw=0.6, c=RB, z=6)
+        # 内側横筋 → 相手壁外側筋まで延長し 520 定着
+        Ai, Bi = c_out + nA * 150.5, c_out + nB * 150.5
+        pA = line_int(Ai, a, Bo, b); pB = line_int(Bi, b, Ao, a)
+        sh.L([T_(Ai + a * Lg), T_(pA), T_(pA + b * 520)], lw=0.6, c=RB, z=6)
+        sh.L([T_(Bi + b * Lg), T_(pB), T_(pB + a * 520)], lw=0.6, c="#e07070", z=6)
+        # 縦筋
+        for t in np.arange(300, Lg, 300):
+            for base, d, n in [(c_out, a, nA), (c_out, b, nB)]:
+                bar_dot(sh, T_(base + d * t + n * 86.5), v=vc); bar_dot(sh, T_(base + d * t + n * 163.5), v=vc)
+        # ハンチ斜め補強筋
+        hd = unit(h2 - h1); hn = np.array([-hd[1], hd[0]])
+        if np.dot(hn, c_out - h1) < 0:
+            hn = -hn
+        m1 = h1 + hn * 60
+        l1 = line_int(m1, hd, Ai, a); l2 = line_int(m1, hd, Bi, b)
+        sh.L([T_(l1 + a * 520), T_(l1), T_(l2), T_(l2 + b * 520)], lw=0.6, c="#7030a0", z=7)
+        cen = (ci + h1 + h2) / 3
+        hv = [cen + (ci - cen) * 0.0, (h1 + cen) / 2 + hn * 0, (h2 + cen) / 2]
+        for p in [cen, cen + (h1 - cen) * 0.45, cen + (h2 - cen) * 0.45]:
+            q = T_(p); sh.circ(q[0], q[1], 0.6, fc="#7030a0", ec="#7030a0", z=8)
+        # 寸法
+        sh.dim(T_(ci), T_(h1), 0, None)
+        q = T_((ci + h1) / 2); sh.T(q[0], q[1], "500", h=1.8, ha="center", va="center", c=DIMC, bg=True)
+        q = T_((ci + h2) / 2); sh.T(q[0], q[1], "500", h=1.8, ha="center", va="center", c=DIMC, bg=True)
+        sh.dim(T_(c_out + a * Lg), T_(c_out + a * Lg + nA * 250), 0, None)
+        q = T_(c_out + a * Lg + nA * 125 + a * 120); sh.T(q[0], q[1], "250", h=1.8, ha="center", va="center", c=DIMC, bg=True)
+        return T_, l1, l2, cen, c_out, a, b
+
+    T_, l1, l2, cen, co, a, b = corner_detail(50, 170, 1, f"③ NW隅角部（平面） S=1/30   内角 約{ANG_NW:.1f}°")
+    m = T_((l1 + l2) / 2)
+    sh.leader([m, m + np.array([45, -10]), m + np.array([60, -10])], "C1a ハンチ斜め補強筋 D13\n各横筋段（6段）脚520", h=2.0, c="#7030a0")
+    q = T_(cen)
+    sh.leader([q, q + np.array([45, 4]), q + np.array([60, 4])], "C2 ハンチ縦補強筋 3-D13", h=2.0, c="#7030a0")
+    q = T_(co); sh.T(q[0] + 20, q[1] + 3, "隣地側（外面）", h=2.0)
+    T2, l1b, l2b, cen2, co2, a2, b2 = corner_detail(395, 170, 2, f"④ NE隅角部（平面） S=1/30   内角 約{ANG_NE:.1f}°")
+    m = T2((l1b + l2b) / 2)
+    sh.leader([m, m + np.array([-25, -30]), m + np.array([-62, -30])], "C1b ハンチ斜め補強筋 D13\n各横筋段（6段）脚520", h=2.0, c="#7030a0", ha="left")
+    q = T2(cen2)
+    sh.leader([q, q + np.array([-25, -42]), q + np.array([-62, -42])], "C2 ハンチ縦補強筋 3-D13", h=2.0, c="#7030a0")
+    yy = 96
+    for s in ["【隅角部 共通】",
+              "・外面側横筋：隅角部で折曲げ連続（継手を設けない。やむを得ない場合は重ね520）",
+              "・内面側横筋：相手壁の外面側横筋位置まで延ばし、折曲げて 520 定着（C3）",
+              "・ハンチ：二等辺三角形 500×500（宅地防災マニュアル H≦3m）、天端～底盤天まで全高",
+              "・底盤：隅角部は両方向の主筋・配力筋を重ねて配置し一体打設",
+              "・伸縮目地・誘発目地は隅角部から2m以上離す（S-01割付済）",
+              "・NE隅は鋭角（約69°）：出隅に面木20、鋭角部のかぶり80を必ず確保"]:
+        sh.T(22, yy, s, h=2.1); yy -= 3.6
+    sh.save()
+
+# ============================================================== S-04 展開図
+def sheet_elev(pdf):
+    sh = Sheet(pdf, "擁壁 展開図", "S-04", "1/60")
+    sh.T(20, 278, "擁壁 展開図（敷地内側より見る）  S=1/60   ※水抜穴は外面まで貫通", h=5.0, bold=True)
+    # 連続展開位置 s: 西面南端=0 → NW → NE → 東面南端
+    S_NW = L_W; S_NE = L_W + L_N; S_END = L_W + L_N + L_E
+    def to_s(w, d):
+        return {"W": L_W - d, "N": L_W + d, "E": L_W + L_N + d}[w]
+    split = to_s("N", 12.850)
+    rows = [(0.0, split, 236), (split, S_END, 145)]
+    for r, (s0, s1, oy) in enumerate(rows):
+        v = View(22 - s0 * 1000 / 60, oy, 60)
+        X = lambda s: v(s * 1000, 0)[0]
+        # 躯体
+        sh.poly([v(s0 * 1000, F_BOT), v(s1 * 1000, F_BOT), v(s1 * 1000, H_TOP), v(s0 * 1000, H_TOP)], fc="#f4f4f4", lw=0.5)
+        sh.L([v(s0 * 1000, F_TOP), v(s1 * 1000, F_TOP)], lw=0.25)
+        sh.L([v(s0 * 1000, GL), v(s1 * 1000, GL)], lw=0.15, ls=(0, (6, 2)), c="#666")
+        # 外部地盤（参考）
+        ss = np.linspace(s0, s1, 200)
+        gp = []
+        for s in ss:
+            if s <= S_NW:
+                g = ext_ground("W", S_NW - s)
+            elif s <= S_NE:
+                g = ext_ground("N", s - S_NW)
+            else:
+                g = ext_ground("E", s - S_NE)
+            gp.append(v(s * 1000, g))
+        sh.L(gp, lw=0.35, ls=(0, (3, 1.5)), c="#8b4513")
+        # 隅角・端部
+        for s, lab in [(0, "西面 南端"), (S_NW, "NW隅角"), (S_NE, "NE隅角"), (S_END, "東面 南端")]:
+            if s0 - 1e-6 <= s <= s1 + 1e-6:
+                sh.L([v(s * 1000, F_BOT - 150), v(s * 1000, H_TOP + 300)], lw=0.5, ls=(0, (8, 2, 1, 2)))
+                p = v(s * 1000, H_TOP + 350)
+                sh.T(p[0], p[1] + 5, lab, h=2.3, ha="center", bold=True)
+        # 面ラベル
+        for a_, b_, lab in [(0, S_NW, "西面  L=9,900"), (S_NW, S_NE, "北面  L=28,460"), (S_NE, S_END, "東面  L=7,120")]:
+            a2, b2 = max(a_, s0), min(b_, s1)
+            if b2 - a2 > 0.5:
+                p = v((a2 + b2) / 2 * 1000, H_TOP + 350)
+                sh.T(p[0], p[1] + 1, lab, h=2.6, ha="center", c="#333")
+        # 目地
+        marks = []
+        for d in EJ_N:
+            marks.append((to_s("N", d), "EJ"))
+        for d in CJ_N:
+            marks.append((to_s("N", d), "CJ"))
+        for d in CJ_W:
+            marks.append((to_s("W", d), "CJ"))
+        for d in CJ_E:
+            marks.append((to_s("E", d), "CJ"))
+        for s, t in marks:
+            if s0 - 1e-6 <= s <= s1 + 1e-6:
+                if t == "EJ":
+                    sh.L([v(s * 1000, F_BOT), v(s * 1000, H_TOP)], lw=1.0, c="#d06000", z=6)
+                    p = v(s * 1000, F_BOT); sh.T(p[0], p[1] - 4, "EJ", h=2.2, ha="center", c="#d06000", bold=True)
+                else:
+                    sh.L([v(s * 1000, F_TOP), v(s * 1000, H_TOP)], lw=0.6, c="#007a3d", z=6)
+                    p = v(s * 1000, F_BOT); sh.T(p[0], p[1] - 4, "CJ", h=2.0, ha="center", c="#007a3d", bold=True)
+        # ハンチ
+        for s in (S_NW, S_NE):
+            if s0 < s < s1:
+                sh.poly([v(s * 1000 - 500, F_TOP), v(s * 1000 + 500, F_TOP), v(s * 1000 + 500, H_TOP), v(s * 1000 - 500, H_TOP)],
+                        fc="none", ec="#7030a0", lw=0.3, ls=(0, (2, 1)))
+        # 水抜穴
+        for w in "WNE":
+            for d, g, lv, z in WEEP[w]:
+                s = to_s(w, d)
+                if lv is None or not (s0 <= s <= s1):
+                    continue
+                p = v(s * 1000, lv)
+                sh.circ(p[0], p[1], 37.5 / 60 * 1.6, fc="#1060c0" if z == "A" else "white", ec="#1060c0", lw=0.35, z=7)
+        # 寸法（目地・隅角）
+        keys = sorted(set([s0, s1] + [s for s, _ in marks if s0 <= s <= s1] + [s for s in (S_NW, S_NE) if s0 <= s <= s1]))
+        for i in range(len(keys) - 1):
+            sh.dim(v(keys[i] * 1000, F_BOT), v(keys[i + 1] * 1000, F_BOT), -9, f"{(keys[i+1]-keys[i])*1000:,.0f}", h=1.9, flip=True)
+        # 高さ寸法
+        if r == 0:
+            sh.dim(v(s0 * 1000, F_BOT), v(s0 * 1000, F_TOP), 4, "500", h=1.8)
+            sh.dim(v(s0 * 1000, F_TOP), v(s0 * 1000, H_TOP), 4, "1,600", h=1.8)
+            for y, t in [(H_TOP, "天端 +200"), (GL, "±0"), (F_TOP, "-1400"), (F_BOT, "-1900")]:
+                p = v(s0 * 1000, y); sh.T(p[0] - 10.5, p[1] - 0.7, t, h=1.8, ha="right" if False else "left", c=DIMC)
+        if r == 0:
+            p = v(s1 * 1000, H_TOP); sh.T(p[0] - 1, p[1] + 1.5, "マッチライン（下段へ続く）", h=2.0, ha="right")
+        else:
+            p = v(s0 * 1000, H_TOP); sh.T(p[0] + 1, p[1] + 1.5, "マッチライン（上段より）", h=2.0)
+    # 凡例と注記
+    y = 91
+    sh.T(20, y, "凡例・注記", h=3.0, bold=True)
+    items = [
+        ("EJ", "#d06000", "伸縮目地：底盤まで全断面縁切り（エラスタイト t=10＋外面シーリング）"),
+        ("CJ", "#007a3d", "誘発目地：立上り両面 目地棒 30/20×D25（天端～底盤天）"),
+        ("●", "#1060c0", "水抜穴 VP75 標準高さ ±0-1060（管底＝止水コン天端）"),
+        ("○", "#1060c0", "水抜穴 調整高さ＝外部地盤+150（止水コンも同高さに上げる）"),
+        ("- -", "#8b4513", "外部地盤（嵩上げ後）：北 -1500（既存-1660～-1680を嵩上げ）／西 NW隅1.5mまで-1500→南端-210／東 -1110→-130"),
+        ("□", "#7030a0", "隅角部ハンチ 500×500 範囲"),
+    ]
+    for i, (m, c, t) in enumerate(items):
+        sh.T(24, y - 6 - i * 4.3, m, h=2.4, c=c, bold=True)
+        sh.T(36, y - 6 - i * 4.3, t, h=2.2)
+    lines = [
+        "・天端は ±0+200 で水平（各点の現況GL：A-1/B-1 +57, B-3 +60, B-4 +50, B-5 +100, C-1 ±0, D-1 +25）。",
+        "・底盤下端 ±0-1900 で水平。BMは配置図 ±0 とし、着工前にレベル確認。",
+        "・型枠：外面（隣地・道路側）は境界線上。外部側作業スペースは隣地・道路管理者と事前協議。",
+        "・型枠締付け：セパレーター＋Pコン（外面はPコン穴モルタル充填）。",
+        "・水抜穴は型枠に VP75 を仕込み、外部へ 2% 以上の下り勾配で固定。",
+    ]
+    yy = y - 6 - len(items) * 4.3 - 3
+    for t in lines:
+        sh.T(24, yy, t, h=2.1); yy -= 3.6
+    sh.save()
+
+# ============================================================== S-05 加工帳・数量
+def bar_counts():
+    runs = {"W": L_W, "N1": EJ_N[0], "N2": EJ_N[1] - EJ_N[0], "N3": L_N - EJ_N[1], "E": L_E}
+    n_perp = sum(int(math.floor((L - 0.16) / 0.3)) + 1 for L in runs.values())
+    return runs, n_perp
+
+def sheet_bars(pdf):
+    sh = Sheet(pdf, "擁壁 鉄筋加工帳・数量表", "S-05", "—")
+    sh.T(20, 278, "鉄筋加工帳（D13・D10  SD295）", h=5.0, bold=True)
+    runs, n_perp = bar_counts()
+    segs = [L_W + EJ_N[0], EJ_N[1] - EJ_N[0], (L_N - EJ_N[1]) + L_E]   # 伸縮目地間の連続区間
+    def long_bar(nrows):
+        tot, nlap = 0.0, 0
+        for Ls in segs:
+            Ln = Ls - 0.16
+            n = int(math.ceil((Ln - 0.52) / (6.0 - 0.52)))
+            n = max(n, 1)
+            tot += Ln + (n - 1) * 0.52 + 0.52 * 2     # 隅角定着分を含む概算
+            nlap += n - 1
+        return tot * nrows, nlap * nrows
+    w3_len, w3_lap = long_bar(12)
+    f3_len, f3_lap = long_bar(20)
+    hw = 1890
+    rows = []
+    def add(mark, name, dia, shape, dims, unitL, n, note=""):
+        w = W_D13 if dia == "D13" else W_D10
+        rows.append([mark, name, dia, shape, dims, f"{unitL:,.0f}", f"{n:,}", f"{unitL*n/1000:,.1f}", f"{unitL*n/1000*w:,.0f}", note])
+        return unitL * n / 1000 * w
+    total = 0
+    total += add("W1", "壁縦筋（背面・主筋）", "D13", "L形", f"{hw}+400", hw + 400, n_perp, "@300")
+    total += add("W2", "壁縦筋（前面）", "D13", "L形", f"{hw}+300", hw + 300, n_perp, "@300")
+    total += add("W3", "壁横筋（両面×6段）", "D13", "直", "定尺6.0m", w3_len * 1000 / math.ceil(w3_len / 6.0), math.ceil(w3_len / 6.0), f"継手{w3_lap}箇所（40d）")
+    nfix = int(math.ceil(1.6 * (L_W + L_N + L_E) / 1.0)) + 6
+    total += add("W4", "巾止め筋", "D10", "S形", "90+フック", 300, nfix, "@1000×1000")
+    total += add("F1", "底盤上端主筋", "D13", "コ形(下向)", "300+2787+300", 3387, n_perp, "@300")
+    total += add("F2", "底盤下端主筋", "D13", "コ形(上向)", "300+2759+300", 3359, n_perp, "@300")
+    total += add("F3", "底盤配力筋（上下×10本）", "D13", "直", "定尺6.0m", f3_len * 1000 / math.ceil(f3_len / 6.0), math.ceil(f3_len / 6.0), f"継手{f3_lap}箇所（40d）")
+    c1a = 520 + 2 * 500 * math.sin(rad(ANG_NW) / 2) + 520
+    c1b = 520 + 2 * 500 * math.sin(rad(ANG_NE) / 2) + 520
+    total += add("C1a", "NW隅 ハンチ斜め筋", "D13", "折曲げ", f"520+{c1a-1040:.0f}+520", c1a, 6)
+    total += add("C1b", "NE隅 ハンチ斜め筋", "D13", "折曲げ", f"520+{c1b-1040:.0f}+520", c1b, 6)
+    total += add("C2", "ハンチ縦補強筋", "D13", "L形", f"{hw}+300", hw + 300, 6, "各隅3本")
+    total += add("C3", "隅角 内側横筋定着", "D13", "L形", "延長+520", 520, 24, "各隅6段×2面")
+    total += add("E1", "端部コ字筋（壁）", "D13", "コ形", "520+90+520", 1130, 12, "2端部×6段")
+    total += add("E2", "端部縦筋 追加", "D13", "L形", f"{hw}+300", hw + 300, 4, "2端部×2本")
+    cols = [("符号", 13), ("名称", 44), ("径", 11), ("形状", 18), ("加工寸法(mm)", 36), ("1本長", 16), ("本数", 13),
+            ("総長m", 16), ("重量kg", 16), ("備考", 50)]
+    yb = sh.table(20, 270, cols, rows, rh=5.0, h=2.15)
+    sh.T(20, yb - 5, f"鉄筋合計（概算・ロス別）  約 {total:,.0f} kg  ≒ {total/1000:.2f} t   （D13 0.995kg/m、D10 0.560kg/m）", h=2.6, bold=True)
+    sh.T(20, yb - 9.5, f"※本数は壁延長を伸縮目地・隅角で区切った区間毎に @300 で算出（区間：西{runs['W']:.2f} / 北{runs['N1']:.2f}・{runs['N2']:.2f}・{runs['N3']:.2f} / 東{runs['E']:.2f} m）。現場で端数調整のこと。", h=2.0)
+    sh.T(20, yb - 13, "※曲げ加工寸法は外寸。縦筋の上端は天端かぶり80で直止め。重ね継手40d(520)は千鳥配置、隅角部・目地部に継手を設けない。", h=2.0)
+
+    # 形状図
+    x0, y0 = 300, yb - 25
+    y0s = y0
+    x0, y0 = 300, 75
+    sh.T(x0 - 8, y0 + 4, "形状略図", h=2.6, bold=True)
+    def Lshape(x, y, a, b, lab):
+        sh.L([(x, y + a), (x, y), (x + b, y)], lw=0.6, c=RB); sh.T(x + 2, y + a - 3, lab, h=2.0)
+    Lshape(x0, y0 - 25, 20, 8, "W1/W2/C2/E2")
+    sh.L([(x0 + 30, y0 - 18), (x0 + 30, y0 - 22), (x0 + 60, y0 - 22), (x0 + 60, y0 - 18)], lw=0.6, c=RB); sh.T(x0 + 32, y0 - 16, "F2", h=2.0)
+    sh.L([(x0 + 30, y0 - 6), (x0 + 30, y0 - 2), (x0 + 60, y0 - 2), (x0 + 60, y0 - 6)], lw=0.6, c=RB); sh.T(x0 + 32, y0 - 10, "F1", h=2.0)
+    sh.L([(x0 + 70, y0 - 2), (x0 + 90, y0 - 2), (x0 + 90, y0 - 5), (x0 + 70, y0 - 5)], lw=0.6, c="#7030a0"); sh.T(x0 + 70, y0 - 9, "E1", h=2.0)
+
+    # 数量表
+    y0 = y0s
+    sh.T(20, y0 + 4, "コンクリート・型枠ほか 数量（概算）", h=3.0, bold=True)
+    form = (L_OUT * 2.1 + L_INW * 1.6 + L_INF * 0.5 + 0.25 * 1.6 * 2 + 3.0 * 0.5 * 2 + 1.9 * 2 * 2)
+    q = [
+        ["擁壁延長（外面）", f"{L_OUT:,.2f}", "m", "西9.90＋北28.46＋東7.12"],
+        ["コンクリート 底盤 t=500", f"{V_FOOT:,.2f}", "m³", f"底盤面積 {A_FOOT:,.1f}m²"],
+        ["コンクリート 立上り t=250（ハンチ含）", f"{V_WALL:,.2f}", "m³", "H=1,600"],
+        ["コンクリート 計 Fc21", f"{V_FOOT+V_WALL:,.2f}", "m³", "ロス別"],
+        ["均しコンクリート t=50", f"{A_FOOT*1.05*0.05:,.2f}", "m³", "敷地側100出し"],
+        ["基礎砕石 t=100", f"{A_FOOT*1.05*0.1:,.2f}", "m³", "転圧"],
+        ["型枠（外面・内面・妻）", f"{form:,.0f}", "m²", "伸縮目地妻型枠含む"],
+        ["裏込砕石 300×800", f"{L_INW*0.3*0.8:,.1f}", "m³", ""],
+        ["止水コンクリート 350×50", f"{L_INW*0.35*0.05:,.2f}", "m³", ""],
+        ["面木 20×20", f"{L_OUT+L_INW+8:,.0f}", "m", "天端両角＋端部・出隅"],
+        ["目地棒 30/20×D25（誘発目地）", f"{(len(CJ_W)+len(CJ_N)+len(CJ_E))*2*1.6:,.1f}", "m", f"{len(CJ_W)+len(CJ_N)+len(CJ_E)}箇所×両面"],
+        ["エラスタイト t=10（伸縮目地）", f"{len(EJ_N)*1.9:,.1f}", "m²", f"{len(EJ_N)}箇所"],
+        ["シーリング 10×10", f"{len(EJ_N)*(2.1+0.25)+(len(CJ_W)+len(CJ_N)+len(CJ_E))*1.6:,.1f}", "m", "外面・天端"],
+        ["前面ふかしコン W300（無筋 Fc18）", f"{0.3*0.4*(L_N+FK_W+0.3):,.2f}", "m³", f"北面全長＋西面{FK_W:.1f}m"],
+        ["前面嵩上げ盛土（転圧）", f"{0.17*1.2*(L_N+FK_W):,.1f}", "m³", "平均17cm×幅約1.2m 概算"],
+        ["水抜穴 VP75 L=300", f"{sum(1 for w in WEEP for x in WEEP[w] if x[2])}", "箇所", "吸出し防止材共"],
+    ]
+    sh.table(20, y0, [("項目", 70), ("数量", 22), ("単位", 12), ("備考", 50)], q, rh=4.5, h=2.1)
+    chk = [
+        "1. 根入れ：躯体は構造計算どおり（底盤下端 ±0-1900）。北面・西面NW側の",
+        "   前面地盤を ±0-1500 に嵩上げ＋前面ふかしコン W300 で根入れ400を確保。",
+        "   見え高さ 1,700（2m以下）。嵩上げ部は外面から1.0m以上平坦、転圧管理。",
+        "2. 天端 ±0+200 水平の可否（現況GL ±0～+100、天端の見え高さが変わる）。",
+        "3. 擁壁外面＝境界線とした割付（控え寸法の有無）、壁角度の現地確認。",
+        "4. 外部地盤高さを実測し、水抜穴の高さ（標準／調整／省略）を確定。",
+        "5. 申請建物基礎と北面底盤（ヒール）の重なり・取合い高さ。",
+        "6. 外面型枠・足場の作業スペース（隣地承諾・道路使用）。",
+        "7. 東面（道路側）は既存地盤で根入れ790以上のため嵩上げ不要。",
+        "8. 数量・本数は概算。鉄筋業者にて加工帳を最終チェックのこと。",
+    ]
+    sh.T(200, y0 + 4, "着工前 確認事項（監督・設計者）", h=3.0, bold=True, c="#b00000")
+    yy = y0 - 2
+    for t in chk:
+        sh.T(200, yy, t, h=2.15); yy -= 3.7
+    sh.save()
+
+if __name__ == "__main__":
+    with PdfPages(OUT) as pdf:
+        sheet_plan(pdf)
+        sheet_section(pdf)
+        sheet_details(pdf)
+        sheet_elev(pdf)
+        sheet_bars(pdf)
+    print("NW", ANG_NW, "NE", ANG_NE, "Vf", V_FOOT, "Vw", V_WALL, "Lout", L_OUT)
+    for w in WEEP:
+        print(w, WEEP[w])
