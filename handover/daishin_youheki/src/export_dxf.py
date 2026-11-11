@@ -11,9 +11,9 @@ import ezdxf
 from ezdxf.enums import TextEntityAlignment as TA
 
 # 図面ごとの実寸倍率（JW 読込時の縮尺）
-SCALE = {"S-01": 100, "S-02": 20, "S-03": 1, "S-04": 60, "S-05": 1, "S-06": 150}
+SCALE = {"S-01": 100, "S-02": 20, "S-03": 1, "S-04": 60, "S-05": 1, "S-06": 150, "S-07": 50}
 NAMES = {"S-01": "S-01_平面割付図", "S-02": "S-02_標準断面配筋図", "S-03": "S-03_目地隅角端部詳細",
-         "S-04": "S-04_展開図", "S-05": "S-05_鉄筋加工帳数量表", "S-06": "S-06_電柱回避建柱車検討図"}
+         "S-04": "S-04_展開図", "S-05": "S-05_鉄筋加工帳数量表", "S-06": "S-06_電柱回避建柱車検討図", "S-07": "S-07_電線下無改良区間補強図"}
 
 LAYERS = {  # name: ACI
     "01_躯体": 7, "02_鉄筋": 1, "03_寸法": 5, "04_文字": 7, "05_目地": 30,
@@ -22,8 +22,8 @@ LAYERS = {  # name: ACI
 
 def color_layer(c, kind):
     c = (c or "k").lower()
-    if c in ("#c00030", "#d00060", "#0070c0", "#c07000", "#6a3d9a", "#8a5a00", "#fff4e0"):
-        return "10_電柱・電線・仮設", {"#c00030": 1, "#d00060": 6, "#0070c0": 5, "#c07000": 30, "#6a3d9a": 6, "#8a5a00": 30, "#fff4e0": 8}[c]
+    if c in ("#c00030", "#d00060", "#0070c0", "#c07000", "#6a3d9a", "#8a5a00", "#fff4e0", "#0050b0", "#fde3e8", "#e8dcf5"):
+        return "10_電柱・電線・仮設", {"#c00030": 1, "#d00060": 6, "#0070c0": 5, "#c07000": 30, "#6a3d9a": 6, "#8a5a00": 30, "#fff4e0": 8, "#0050b0": 5, "#fde3e8": 1, "#e8dcf5": 6}[c]
     if c in (Y.RB.lower(), "#e07070", "#b00000"):
         return "02_鉄筋" if kind != "T" else "04_文字", 1
     if c in (Y.DIMC.lower(), "#2a4a8a", "#4060a0"):
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     patch()
     from matplotlib.backends.backend_pdf import PdfPages
     with PdfPages(os.path.join(OUTDIR, "_tmp.pdf")) as pdf:
-        Y.sheet_plan(pdf); Y.sheet_section(pdf); Y.sheet_details(pdf); Y.sheet_elev(pdf); Y.sheet_bars(pdf); Y.sheet_pole(pdf)
+        Y.sheet_plan(pdf); Y.sheet_section(pdf); Y.sheet_details(pdf); Y.sheet_elev(pdf); Y.sheet_bars(pdf); Y.sheet_pole(pdf); Y.sheet_gap(pdf)
     for f in os.listdir(OUTDIR):
         if f.startswith("_tmp") or f.endswith(".png"):
             os.remove(os.path.join(OUTDIR, f))

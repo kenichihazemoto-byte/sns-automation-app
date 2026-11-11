@@ -18,7 +18,7 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else "youheki.pdf"
 PT = 1 / 0.3528          # mm -> pt
 RB = "#c00000"           # 鉄筋色
 DIMC = "#1f3f9f"         # 寸法色
-DATE = "2026/11/05"
+DATE = "2026/11/11"
 
 # ============================================================== 基本諸元
 H_TOP, GL, WJ, F_TOP, F_BOT = 200, 0, -1060, -1400, -1900   # レベル(mm, ±0基準)
@@ -61,7 +61,51 @@ KBM_OFF = 250   # 調査位置図 KBM±0 ＝ 本図 ±0-250 相当（照合値�
 # 目地位置（外面に沿った、各隅角部からの距離 m）
 EJ_N = [5.300, 20.400]                                  # 伸縮目地（北面, 新NW隅から）
 CJ_N = [2.650, 9.075, 12.850, 16.625, 22.930]           # 誘発目地（北面, 新NW隅から）
-CJ_W = [3.300, 6.600]                                    # 誘発目地（西面, NW隅から）
+CJ_W = [6.900]          # 誘発目地（西面, NW隅から）改3-1：無改良補強区間（0～6.5m）には設けない
+
+# ---- 改3-1：電線下 無改良区間（柱状改良を打設できない範囲）と底盤補強
+GAP_T0, GAP_T1 = 0.70, 5.00      # 西面 NW隅からの範囲（底盤全幅で改良体なし。電線から左右2.0m＝推定）
+GAP_EXT = 1.50                   # 補強筋を改良区間へ延ばす長さ
+RZ_T0, RZ_T1 = 0.0, GAP_T1 + GAP_EXT   # 補強区間（NW隅から）
+EB_B, EB_D = 0.50, 1.00          # ヒール端 補強梁（上がり梁）幅・せい（底盤共）
+EB_T0 = 0.50                     # 補強梁の北端（NW隅から、北面底盤内に定着）
+W_BAR = {"D10": 0.560, "D13": 0.995, "D16": 1.56, "D19": 2.25, "D22": 3.04}
+FT = {"SD295": 195.0, "SD345": 215.0}      # 長期許容引張 N/mm²
+AS = {"D13": 126.7, "D16": 198.6, "D19": 286.5, "D22": 387.1}
+
+def gap_calc():
+    """無改良区間の補強検討（長期・許容応力度。無改良区間の地盤反力は無視）"""
+    g_s, g_c = 18.0, 24.0
+    q_heel = 1.4 * g_s + 10.0 + 0.5 * g_c                 # ヒール上 土＋積載＋底盤 kN/m²
+    w_tot = 0.25 * 1.6 * g_c + 3.0 * 0.5 * g_c + 2.75 * 1.4 * g_s + 10.0 * 2.75   # 全断面 kN/m
+    w_tot += (EB_B * (EB_D - 0.5)) * (g_c - g_s)          # 上がり梁（土との置換分）
+    l_h = 2.75 - EB_B / 2 + 0.125                           # ヒール版スパン（立上り芯～補強梁芯）
+    w_e = q_heel * (l_h / 2 + EB_B / 2) + EB_B * (EB_D - 0.5) * (g_c - g_s)
+    w_s = w_tot - w_e
+    # 補強梁 北側支点：西面ヒール端線が北面底盤内側線（y=-3.0）と交わる位置
+    t_ic = (3.0 + (NW + N_IN_W * 3.0)[1]) / -D_W[1]
+    L_s = (GAP_T1 - GAP_T0) + 0.5
+    L_e = (GAP_T1 - t_ic) + 0.5
+    res = {}
+    def beam(name, w, L, d, bars_t, bars_c, b_web):
+        M = w * L ** 2 / 8; V = w * L / 2
+        j = 7 / 8 * d
+        At_req = M * 1e6 / (FT["SD345"] * j)
+        Ma = sum(AS[dia] * n * FT[g] for dia, n, g in bars_t) * j / 1e6
+        tau = V * 1e3 / (b_web * j)
+        res[name] = dict(w=w, L=L, M=M, V=V, d=d, j=j, At_req=At_req, Ma=Ma, tau=tau)
+    # 立上り＋底盤（壁際）：引張 底盤下端壁際 3-D19＋既存D13×2、上端側 天端 2-D19＋既存2-D13
+    beam("stem", w_s, L_s, 2100 - 100 - 10, [("D19", 3, "SD345"), ("D13", 2, "SD295")], None, 250)
+    beam("stemTop", w_s, L_s, 2100 - 100 - 10, [("D19", 2, "SD345"), ("D13", 2, "SD295")], None, 250)
+    beam("edge", w_e, L_e, EB_D * 1000 - 100 - 13 - 10, [("D19", 3, "SD345")], None, EB_B * 1000)
+    Mh = q_heel * l_h ** 2 / 8; dh = 500 - 100 - 6.5; jh = 7 / 8 * dh
+    Ah_req = Mh * 1e6 / (195 * jh); Ah = AS["D13"] * (1000 / 150)
+    res["heel"] = dict(q=q_heel, l=l_h, M=Mh, At_req=Ah_req, At=Ah, Ma=Ah * 195 * jh / 1e6)
+    res.update(q_heel=q_heel, w_tot=w_tot, w_s=w_s, w_e=w_e, L_s=L_s, L_e=L_e, t_ic=t_ic,
+               R_south=w_s * L_s / 2 + w_e * L_e / 2, R_corner=w_s * L_s / 2 + w_e * L_e / 2)
+    return res
+
+GAP = gap_calc()
 CJ_E = [3.560]                                           # 誘発目地（東面, NE隅から）
 
 # 外部地盤（配置図読取・参考）mm
@@ -307,7 +351,7 @@ class Sheet:
             self.L([[a, ym], [b, ym]], lw=0.2)
         self.T(11, 31, "工事名", h=2.0); self.T(49, 25, "大信薬局様邸新築工事", h=3.2, ha="center")
         self.T(11, 19, "備考", h=2.0); self.T(49, 16, "鉄筋・型枠・土工 協力業者配布用", h=2.1, ha="center")
-        self.T(49, 12, "改3 2026/11/05 電柱回避：西面を3.0m敷地側へ移動（北面3.0m短縮）／断面は構造計算どおり", h=1.6, ha="center", c="#b00000")
+        self.T(49, 12, "改3-1 2026/11/11 電線下 無改良区間の底盤補強（S-07）／改3 11/05 西面3.0m移動", h=1.6, ha="center", c="#b00000")
         self.T(146, 25.5, "ハゼモト建設株式会社", h=5.0, ha="center", bold=True)
         self.T(146, 19.5, "一級建築士事務所", h=2.3, ha="center")
         self.T(146, 13.5, "北九州市小倉北区片野4-12-10  TEL 093-931-0521  FAX 093-931-0927", h=2.0, ha="center")
@@ -418,6 +462,11 @@ def sheet_plan(pdf):
     sh.poly(v.P([NW, NE, NE + dN, NW + dN]), fc="#d0d0d0", ec="#b00000", lw=0.3, hatch="xxx", z=3)
     pW, dW, nW = on_wall("W", FK_W)
     sh.poly(v.P([NW, pW, pW - nW * FK_T / 1000, NW - nW * FK_T / 1000 + dN * 0]), fc="#d0d0d0", ec="#b00000", lw=0.3, hatch="xxx", z=3)
+    # 電線下 無改良区間・補強梁（S-07）
+    sh.poly(v.P([wpt(GAP_T0), wpt(GAP_T1), wpt(GAP_T1, 3.0), wpt(GAP_T0, 3.0)]), fc="#fde3e8", ec="#c00030", lw=0.3, hatch="\\\\\\", z=2)
+    sh.poly(v.P([wpt(EB_T0, 3.0 - EB_B), wpt(RZ_T1, 3.0 - EB_B), wpt(RZ_T1, 3.0), wpt(EB_T0, 3.0)]), fc="#e8dcf5", ec="#6a3d9a", lw=0.3, z=3)
+    q = v(wpt((GAP_T0 + GAP_T1) / 2, 3.0))
+    sh.leader([q, q + np.array([10, -4]), q + np.array([12, -4])], "電線下 無改良区間＋補強梁 → S-07", h=1.9, c="#c00030")
     # 壁
     sh.poly(v.P(OUTER + INNER_W[::-1]), fc="#bbbbbb", ec="k", lw=0.5, hatch="////", z=3)
     for h in HAUNCH:
@@ -578,6 +627,8 @@ def sheet_plan(pdf):
         f"9. 電柱（推定位置）：西境界から{POLE_DW*1000:,.0f}・北境界から{POLE_DN*1000:,.0f}。新西面外面まで",
         f"   芯で約{POLE_TO_WALL*1000:,.0f}（表面で約{(POLE_TO_WALL-POLE_R)*1000:,.0f}≧1,000）。電柱・支柱の位置は",
         "   着工前に実測。周囲1.0mは掘削・盛土禁止。施工検討は S-06。",
+        f"10.電線下で柱状改良を打てない区間（西面 NW隅から{GAP_T0*1000:,.0f}～{GAP_T1*1000:,.0f}）は",
+        "   底盤補強＋ヒール端補強梁で両側の改良区間へ架け渡す（S-07）。",
     ]
     sh.note_box(x0, 122, 140, "特記事項", lines, h=2.05, lh=3.35)
     sh.save()
@@ -921,6 +972,12 @@ def sheet_elev(pdf):
                 p = v(s * 1000, H_TOP + 350)
                 sh.T(p[0], p[1] + 5, lab, h=2.3, ha="center", bold=True)
         # 面ラベル
+        ga, gb = sorted((to_s("W", GAP_T0), to_s("W", GAP_T1)))
+        if gb > s0 and ga < s1:
+            a2, b2 = max(ga, s0), min(gb, s1)
+            sh.poly([v(a2 * 1000, F_BOT - 400), v(b2 * 1000, F_BOT - 400), v(b2 * 1000, F_BOT), v(a2 * 1000, F_BOT)],
+                    fc="#fde3e8", ec="#c00030", lw=0.3, hatch="\\\\\\", z=2)
+            p = v((a2 + b2) / 2 * 1000, F_BOT - 400); sh.T(p[0], p[1] - 3.2, "無改良区間（電線下）→ S-07", h=1.9, ha="center", c="#c00030")
         ps = to_s("W", POLE_S_W)
         if s0 <= ps <= s1:
             sh.L([v(ps * 1000, H_TOP + 150), v(ps * 1000, H_TOP + 1500)], lw=0.8, c=POLE_C, ls=(0, (3, 1.5)))
@@ -1011,7 +1068,7 @@ def bar_counts():
 
 def sheet_bars(pdf):
     sh = Sheet(pdf, "擁壁 鉄筋加工帳・数量表", "S-05", "—")
-    sh.T(20, 278, "鉄筋加工帳（D13・D10  SD295）", h=5.0, bold=True)
+    sh.T(20, 278, "鉄筋加工帳（D13・D10 SD295／D19 SD345）", h=5.0, bold=True)
     runs, n_perp = bar_counts()
     segs = [L_W + EJ_N[0], EJ_N[1] - EJ_N[0], (L_N - EJ_N[1]) + L_E]   # 伸縮目地間の連続区間
     def long_bar(nrows):
@@ -1028,7 +1085,7 @@ def sheet_bars(pdf):
     hw = 1890
     rows = []
     def add(mark, name, dia, shape, dims, unitL, n, note=""):
-        w = W_D13 if dia == "D13" else W_D10
+        w = W_BAR[dia]
         rows.append([mark, name, dia, shape, dims, f"{unitL:,.0f}", f"{n:,}", f"{unitL*n/1000:,.1f}", f"{unitL*n/1000*w:,.0f}", note])
         return unitL * n / 1000 * w
     total = 0
@@ -1048,10 +1105,21 @@ def sheet_bars(pdf):
     total += add("C3", "隅角 内側横筋定着", "D13", "L形", "延長+520", 520, 24, "各隅6段×2面")
     total += add("E1", "端部コ字筋（壁）", "D13", "コ形", "520+90+520", 1130, 12, "2端部×6段")
     total += add("E2", "端部縦筋 追加", "D13", "L形", f"{hw}+300", hw + 300, 4, "2端部×2本")
+    # 改3-1 電線下 無改良区間 補強（S-07）
+    lr = RZ_T1 * 1000 + 760
+    total += add("R1", "無改良補強 天端補強筋", "D19", "L形", f"{RZ_T1*1000:,.0f}+760", lr, 2, "SD345 両面各1・継手なし")
+    total += add("R2", "無改良補強 底盤下端 壁際", "D19", "L形", f"{RZ_T1*1000:,.0f}+760", lr, 3, "SD345 継手なし")
+    le = (RZ_T1 - EB_T0) * 1000 + 760
+    total += add("R3", "補強梁 主筋（上下各3）", "D19", "L形", f"{(RZ_T1-EB_T0)*1000:,.0f}+760", le, 6, "SD345 継手なし")
+    nst = int(round((RZ_T1 - EB_T0) / 0.2)) + 1
+    total += add("R4", "補強梁 あばら筋", "D13", "閉鎖形", "380×840 フック135°", 2 * (380 + 840) + 2 * 130, nst, "@200")
+    nf = int(math.floor((GAP_T1 + 0.5 - (GAP_T0 - 0.5)) / 0.3)) + 1
+    total += add("F1a", "底盤上端主筋 追加", "D13", "コ形(下向)", "300+2787+300", 3387, nf, "F1と交互 @150")
+    total += add("F2a", "底盤下端主筋 追加", "D13", "コ形(上向)", "300+2759+300", 3359, nf, "F2と交互 @150")
     cols = [("符号", 13), ("名称", 44), ("径", 11), ("形状", 18), ("加工寸法(mm)", 36), ("1本長", 16), ("本数", 13),
             ("総長m", 16), ("重量kg", 16), ("備考", 50)]
     yb = sh.table(20, 270, cols, rows, rh=5.0, h=2.15)
-    sh.T(20, yb - 5, f"鉄筋合計（概算・ロス別）  約 {total:,.0f} kg  ≒ {total/1000:.2f} t   （D13 0.995kg/m、D10 0.560kg/m）", h=2.6, bold=True)
+    sh.T(20, yb - 5, f"鉄筋合計（概算・ロス別）  約 {total:,.0f} kg  ≒ {total/1000:.2f} t   （D13 0.995・D19 2.25・D10 0.560 kg/m）", h=2.6, bold=True)
     sh.T(20, yb - 9.5, f"※本数は壁延長を伸縮目地・隅角で区切った区間毎に @300 で算出（区間：西{runs['W']:.2f} / 北{runs['N1']:.2f}・{runs['N2']:.2f}・{runs['N3']:.2f} / 東{runs['E']:.2f} m）。現場で端数調整のこと。", h=2.0)
     sh.T(20, yb - 13, "※曲げ加工寸法は外寸。縦筋の上端は天端かぶり80で直止め。重ね継手40d(520)は千鳥配置、隅角部・目地部に継手を設けない。", h=2.0)
 
@@ -1088,6 +1156,8 @@ def sheet_bars(pdf):
         ["前面ふかしコン W300（無筋 Fc18）", f"{0.3*0.4*(L_N+FK_W+0.3):,.2f}", "m³", f"北面全長＋西面{FK_W:.1f}m"],
         ["前面嵩上げ盛土（転圧）", f"{0.17*1.2*(L_N+FK_W):,.1f}", "m³", "平均17cm×幅約1.2m 概算"],
         ["水抜穴 VP75 L=300", f"{sum(1 for w in WEEP for x in WEEP[w] if x[2])}", "箇所", "吸出し防止材共"],
+        ["補強梁（上がり梁）コンクリート Fc21", f"{EB_B*(EB_D-0.5)*(RZ_T1-EB_T0):,.2f}", "m³", f"{EB_B*1000:.0f}×{(EB_D-0.5)*1000:.0f} L={RZ_T1-EB_T0:.1f}m（S-07）"],
+        ["補強梁 型枠", f"{2*(EB_D-0.5)*(RZ_T1-EB_T0)+EB_B*(EB_D-0.5):,.1f}", "m²", "両側面＋妻"],
     ]
     sh.table(20, y0, [("項目", 70), ("数量", 22), ("単位", 12), ("備考", 50)], q, rh=4.5, h=2.1)
     chk = [
@@ -1104,6 +1174,9 @@ def sheet_bars(pdf):
         "7. 東面（道路側）は既存地盤で根入れ790以上のため嵩上げ不要。",
         "   上空線（電線）の高さを実測、重機・ポンプ車の作業高さを制限（S-06）。",
         "8. 数量・本数は概算。鉄筋業者にて加工帳を最終チェックのこと。",
+        f"9. 電線下の無改良区間（西面 NW隅から{GAP_T0:.1f}～{GAP_T1:.1f}m）：打設できない改良体の",
+        "   範囲を改良業者と確定し、端部の改良体の再計算・増し打ちを依頼（S-07）。",
+        "   R1～R4・F1a・F2a の補強は構造設計者の確認後に施工。",
     ]
     sh.T(200, y0 + 4, "着工前 確認事項（監督・設計者）", h=3.0, bold=True, c="#b00000")
     yy = y0 - 2
@@ -1250,8 +1323,177 @@ def sheet_pole(pdf):
     head("5. 結論（推奨）")
     line("①電柱側は土留めで掘削し、電柱支持（建柱車）を不要にする。", c="#b00000")
     line("②九電が支持を求めた場合は、北側隣地（A）に敷鉄板を敷いて据付。", c="#b00000")
+    line(f"④柱状改良機は電線下に入れない → 西面 NW隅から{GAP_T0:.1f}～{GAP_T1:.1f}mは無改良とし底盤補強（S-07）。", c="#b00000")
     line("③着工前に九電と現地立会い：電柱・支柱・電線の位置と高さ、")
     line("  支持の要否、防護管、作業日程、費用負担を確認する。")
+    sh.save()
+
+# ============================================================== S-07 電線下 無改良区間 底盤補強図
+GAP_C = "#c00030"; ADD_C = "#0050b0"; EB_C = "#6a3d9a"
+
+def wpt(t, o=0.0):
+    """西面：NW隅から t(m)・外面から敷地側へ o(m) の点"""
+    return NW + D_W * t + N_IN_W * o
+
+def sheet_gap(pdf):
+    G = GAP
+    sh = Sheet(pdf, "電線下 無改良区間 底盤補強図", "S-07", "1/50・1/30")
+    sh.T(20, 278, "電線下 無改良区間（柱状改良なし）底盤補強図・配筋図", h=5.0, bold=True)
+
+    # ---------------- ① 平面 1/50
+    sh.T(20, 268, "① 平面（西面 NW隅付近） S=1/50", h=2.8, bold=True)
+    v = View(20 + 1.8 * 20, 258, 50, unit_mm=1000)       # model x=-1.8 → paper 20
+    tE = 7.6
+    XN = 5.6
+    sh.L(v.P([np.array([-1.6, 0.0]), np.array([XN, 0.0])]), lw=0.18, ls=(0, (8, 2, 1, 2)), c="#666")
+    sh.L(v.P([BNW + D_W * (-0.3), BNW + D_W * 8.2]), lw=0.18, ls=(0, (8, 2, 1, 2)), c="#666")
+    foot = [wpt(tE), NW, np.array([XN, 0.0]), np.array([XN, -3.0]), INNER_F[1], wpt(tE, 3.0)]
+    sh.poly(v.P(foot), fc="#eef3fb", ec="#4060a0", lw=0.3, z=1)
+    gap = [wpt(GAP_T0), wpt(GAP_T1), wpt(GAP_T1, 3.0), wpt(GAP_T0, 3.0)]
+    sh.poly(v.P(gap), fc="#fde3e8", ec=GAP_C, lw=0.4, hatch="\\\\\\\\", z=2)
+    wall = [wpt(tE), NW, np.array([XN, 0.0]), np.array([XN, -0.25]), INNER_W[1], wpt(tE, 0.25)]
+    sh.poly(v.P(wall), fc="#bbbbbb", ec="k", lw=0.5, hatch="////", z=4)
+    sh.poly(v.P(HAUNCH[0]), fc="#999999", ec="k", lw=0.3, z=4)
+    eb = [wpt(EB_T0, 3.0 - EB_B), wpt(RZ_T1, 3.0 - EB_B), wpt(RZ_T1, 3.0), wpt(EB_T0, 3.0)]
+    sh.poly(v.P(eb), fc="#e8dcf5", ec=EB_C, lw=0.5, z=5)
+    # 補強筋（平面表示）
+    for o, c in [(0.12, ADD_C), (0.35, ADD_C), (0.58, ADD_C)]:
+        sh.L(v.P([wpt(-0.0, o), wpt(RZ_T1, o)]), lw=0.5, c=c, ls=(0, (6, 1.5)), z=6)
+    # 増し打ち検討（南端）
+    for o in np.linspace(0.35, 2.65, 5):
+        q = v(wpt(GAP_T1 + 0.35, o)); sh.circ(q[0], q[1], 0.25 * v.k, ec="#2e8b57", lw=0.3, z=6)
+    # 電柱・電線
+    c = v(POLE); sh.circ(c[0], c[1], POLE_R * v.k, fc=POLE_C, ec=POLE_C, z=8)
+    sh.T(c[0] - 2, c[1] + 2, "電柱", h=2.0, ha="right", c=POLE_C)
+    we = POLE + WIRE_DIR * 5.6
+    sh.L(v.P([POLE, we]), lw=0.4, ls=(0, (10, 2, 2, 2)), c="#d00060", z=9)
+    nrm = np.array([-WIRE_DIR[1], WIRE_DIR[0]])
+    for sgn in (1, -1):
+        sh.L(v.P([POLE + nrm * 2.0 * sgn, we + nrm * 2.0 * sgn]), lw=0.2, ls=(0, (3, 2)), c="#d00060", z=9)
+    q = v(POLE + WIRE_DIR * 0.6 + nrm * 2.15)
+    sh.T(q[0], q[1], "上空線（左右2.0m 改良機 進入不可）", h=1.8, rot=math.degrees(math.atan2(WIRE_DIR[1], WIRE_DIR[0])), c="#d00060")
+    # 寸法（外面沿い）
+    marks = [0.0, GAP_T0, GAP_T1, RZ_T1, CJ_W[0]]
+    for a_, b_ in zip(marks[:-1], marks[1:]):
+        sh.dim(v(wpt(b_)), v(wpt(a_)), 6.0, f"{(b_-a_)*1000:,.0f}", h=1.9)
+    sh.dim(v(wpt(GAP_T1)), v(wpt(GAP_T0)), 12.0, f"無改良区間 {(GAP_T1-GAP_T0)*1000:,.0f}", h=2.0, c=GAP_C)
+    sh.dim(v(wpt(RZ_T1)), v(wpt(0.0)), 18.0, f"補強区間 {RZ_T1*1000:,.0f}（継手・誘発目地なし）", h=2.0, c=ADD_C)
+    p = v(wpt(CJ_W[0])); q = v(wpt(CJ_W[0], 0.6))
+    sh.L([p, q], lw=0.5, c="#007a3d"); sh.T(q[0] + 1, q[1] - 1, "CJ", h=2.0, c="#007a3d", bold=True)
+    # ラベル
+    q = v(wpt((GAP_T0 + GAP_T1) / 2, 1.5)); sh.T(q[0], q[1], "無改良\n（電線下）".split("\n")[0], h=2.6, ha="center", c=GAP_C, bold=True)
+    sh.T(q[0], q[1] - 4, "（電線下）", h=2.2, ha="center", c=GAP_C)
+    q = v(wpt(4.0, 2.75)); sh.leader([q, q + np.array([18, -14]), q + np.array([20, -14])],
+                                    f"R3 ヒール端補強梁（上がり梁）\n{EB_B*1000:.0f}×{EB_D*1000:.0f}（底盤共） L={RZ_T1-EB_T0:.1f}m", h=1.9, c=EB_C)
+    q = v(wpt(6.0, 0.35)); sh.leader([q, q + np.array([-16, -10]), q + np.array([-18, -10])],
+                                    "R2 底盤下端 壁際 3-D19（点線）", h=1.9, ha="right", c=ADD_C)
+    q = v(wpt(GAP_T1 + 0.35, 2.65)); sh.leader([q, q + np.array([10, -8]), q + np.array([12, -8])],
+                                             "改良体 増し打ち検討位置\n（改良業者 再計算）", h=1.8, c="#2e8b57")
+    sh.T(*v(3.4, -1.0), "北面底盤（改良体あり）", h=1.9, c="#2a4a8a")
+    sh.T(*v(-1.5, 0.35), "旧西面（境界）", h=1.7, c="#555")
+
+    # ---------------- ② 断面（無改良区間）1/30
+    vs = View(192, 243, 30)
+    sh.T(178, 268, "② 断面 B-B（無改良区間・補強区間共通） S=1/30", h=2.8, bold=True)
+    body = [(0, F_BOT), (B_FOOT, F_BOT), (B_FOOT, F_TOP + (EB_D - 0.5) * 1000), (B_FOOT - EB_B * 1000, F_TOP + (EB_D - 0.5) * 1000),
+            (B_FOOT - EB_B * 1000, F_TOP), (T_WALL, F_TOP), (T_WALL, H_TOP), (0, H_TOP)]
+    sh.poly(vs.P(body), fc="#f3f3f3", ec="k", lw=0.6, z=2)
+    sh.poly(vs.P([(-100, F_BOT - 150), (3100, F_BOT - 150), (3100, F_BOT), (-100, F_BOT)]), fc="#fde3e8", ec=GAP_C, lw=0.3, hatch="\\\\\\\\", z=1)
+    sh.T(*vs(3150, F_BOT - 120), "無改良（地盤反力は無視して検討）", h=1.8, c=GAP_C)
+    sh.L([vs(T_WALL, GL), vs(3300, GL)], lw=0.3)
+    # 既存配筋（細線）
+    xo, xi = C_WALL + 6.5, T_WALL - C_WALL - 6.5
+    yb_m, yt_m = F_BOT + C_FOOT + 6.5, F_TOP - C_FOOT - 6.5
+    for pts in ([(xo, H_TOP - 80), (xo, yb_m + 20), (xo + 300, yb_m + 20)], [(xi, H_TOP - 80), (xi, yb_m + 22), (xi + 400, yb_m + 22)],
+                [(xo, yt_m - 300), (xo, yt_m), (2887, yt_m), (2887, yt_m - 300)], [(xo + 14, yb_m + 300), (xo + 14, yb_m), (2873, yb_m), (2873, yb_m + 300)]):
+        sh.L(vs.P(pts), lw=0.35, c="#e07070", z=3)
+    # 追加配筋
+    def dot(x, y, d=19, c=ADD_C):
+        q = vs(x, y); sh.circ(q[0], q[1], max(0.5, d / 2 / 30), fc=c, ec=c, z=6)
+    for x in (xo + 13 + 10, xi - 13 - 10):
+        dot(x, H_TOP - 80 - 13 - 45)                       # R1 天端補強
+    for x in (150, 350, 550):
+        dot(x, yb_m + 25)                                    # R2 底盤下端 壁際
+    xb0, xb1 = B_FOOT - EB_B * 1000, B_FOOT
+    ztop = F_TOP + (EB_D - 0.5) * 1000
+    for x in (xb0 + 90, (xb0 + xb1) / 2, xb1 - 90):
+        dot(x, yb_m + 25, c=EB_C); dot(x, ztop - 60 - 13 - 10, c=EB_C)
+    sh.poly(vs.P([(xb0 + 60, F_BOT + 100), (xb1 - 60, F_BOT + 100), (xb1 - 60, ztop - 60), (xb0 + 60, ztop - 60)]), ec=EB_C, lw=0.4, z=5)
+    # 寸法・注記
+    sh.dim(vs(0, H_TOP), vs(T_WALL, H_TOP), 6, "250", h=1.7)
+    sh.dim(vs(xb0, ztop), vs(xb1, ztop), 4, f"{EB_B*1000:.0f}", h=1.7)
+    sh.dim(vs(3250, F_BOT), vs(3250, ztop), 0, f"{EB_D*1000:,.0f}", h=1.7)
+    sh.dim(vs(3250, ztop), vs(3250, GL), 0, f"{-ztop:,.0f}", h=1.7)
+    sh.leader([vs(xi - 23, H_TOP - 138), vs(700, 150), vs(760, 150)], "R1 天端補強筋 2-D19（両面各1）", h=1.8, c=ADD_C)
+    sh.leader([vs(350, yb_m + 25), vs(700, -2250), vs(760, -2250)], "R2 底盤下端 壁際 3-D19", h=1.8, c=ADD_C)
+    sh.leader([vs((xb0 + xb1) / 2, ztop - 83), vs(1900, -520), vs(1850, -520)], "R3 補強梁 主筋 上下各3-D19", h=1.8, c=EB_C, ha="right")
+    sh.leader([vs(xb0 + 60, -1300), vs(1900, -1000), vs(1850, -1000)], "R4 あばら筋 D13@200", h=1.8, c=EB_C, ha="right")
+    sh.leader([vs(1500, yt_m), vs(1250, -700), vs(1200, -700)], "F1a/F2a 底盤主筋 追加 D13@300\n（既存と交互＝D13@150 上下）", h=1.7, c=ADD_C, ha="right")
+
+    # ---------------- ③ 展開（敷地側から見る）1/50
+    ve = View(200, 146, 50)
+    sh.T(178, 166, "③ 展開（敷地内側より・西面 NW隅～） S=1/50", h=2.8, bold=True)
+    T0, T1 = -0.6, 7.6
+    X = lambda t, z: ve(t * 1000, z)
+    sh.poly([X(T0, F_BOT), X(T1, F_BOT), X(T1, H_TOP), X(T0, H_TOP)], fc="#f4f4f4", lw=0.5, z=1)
+    sh.L([X(T0, F_TOP), X(T1, F_TOP)], lw=0.25)
+    sh.poly([X(EB_T0, F_TOP), X(RZ_T1, F_TOP), X(RZ_T1, ztop), X(EB_T0, ztop)], ec=EB_C, lw=0.35, ls=(0, (3, 1.5)), z=2)
+    sh.poly([X(GAP_T0, F_BOT - 450), X(GAP_T1, F_BOT - 450), X(GAP_T1, F_BOT), X(GAP_T0, F_BOT)], fc="#fde3e8", ec=GAP_C, lw=0.3, hatch="\\\\\\\\", z=1)
+    for t in np.arange(0.25, GAP_T0, 0.6).tolist() + np.arange(GAP_T1 + 0.35, T1, 1.1).tolist():
+        sh.poly([X(t - 0.25, F_BOT - 450), X(t + 0.25, F_BOT - 450), X(t + 0.25, F_BOT), X(t - 0.25, F_BOT)], fc="#e6e6e6", ec="#888", lw=0.2, z=1)
+    p = X(T1, F_BOT - 450); sh.T(p[0] + 2, p[1] + 1, "改良体 φ500（杭伏図による）", h=1.7, c="#555")
+    sh.L([X(0, F_BOT - 200), X(0, H_TOP + 300)], lw=0.5, ls=(0, (8, 2, 1, 2)))
+    p = X(0, H_TOP + 350); sh.T(p[0], p[1] + 1, "NW隅", h=2.0, ha="center", bold=True)
+    # 補強筋の範囲
+    zr1 = H_TOP - 140; zr2 = F_BOT + 135
+    sh.L([X(0.76, zr1 - 0), X(-0.0, zr1), X(RZ_T1, zr1)], lw=0.8, c=ADD_C, z=5)
+    sh.L([X(-0.0, zr2), X(RZ_T1, zr2)], lw=0.8, c=ADD_C, z=5)
+    p = X(T0, zr1); sh.T(p[0] - 1, p[1] - 0.8, "R1", h=1.8, ha="right", c=ADD_C)
+    p = X(T0, zr2); sh.T(p[0] - 1, p[1] - 0.8, "R2", h=1.8, ha="right", c=ADD_C)
+    p = X(-0.05, zr1 - 250); sh.T(p[0] - 1, p[1], "北面へ折曲げ定着 40d=760", h=1.6, ha="right", c=ADD_C)
+    p = X(CJ_W[0], F_TOP); sh.L([p, X(CJ_W[0], H_TOP)], lw=0.6, c="#007a3d")
+    for t in (GAP_T0, GAP_T1, RZ_T1):
+        sh.L([X(t, F_BOT - 500), X(t, H_TOP + 150)], lw=0.15, c="#888", ls=(0, (2, 1)))
+    ks = [T0, 0.0, GAP_T0, GAP_T1, RZ_T1, CJ_W[0]]
+    for a_, b_ in zip(ks[1:-1], ks[2:]):
+        sh.dim(X(a_, H_TOP + 150), X(b_, H_TOP + 150), 3, f"{(b_-a_)*1000:,.0f}", h=1.7)
+    p = X((GAP_T0 + GAP_T1) / 2, F_BOT - 380); sh.T(p[0], p[1], "無改良区間", h=2.0, ha="center", c=GAP_C, bold=True)
+
+    # ---------------- ④ 検討表
+    rows = [
+        ["荷重 w（kN/m）", f"{G['stem']['w']:.1f}", f"{G['edge']['w']:.1f}", f"q={G['heel']['q']:.1f} kN/m²"],
+        ["スパン L（m）", f"{G['stem']['L']:.2f}", f"{G['edge']['L']:.2f}", f"{G['heel']['l']:.3f}"],
+        ["M=wL²/8（kN·m）", f"{G['stem']['M']:.0f}", f"{G['edge']['M']:.0f}", f"{G['heel']['M']:.1f}/m"],
+        ["有効せい d（mm）", f"{G['stem']['d']:.0f}", f"{G['edge']['d']:.0f}", "393"],
+        ["必要At（mm²）", f"{G['stem']['At_req']:.0f}", f"{G['edge']['At_req']:.0f}", f"{G['heel']['At_req']:.0f}/m"],
+        ["配筋（引張側）", "下端3-D19＋2-D13／天端2-D19＋2-D13", "上下各3-D19", "D13@150 上下"],
+        ["許容 Ma（kN·m）", f"{min(G['stem']['Ma'], G['stemTop']['Ma']):.0f}", f"{G['edge']['Ma']:.0f}", f"{G['heel']['Ma']:.1f}/m"],
+        ["せん断 τ（N/mm²）≦0.70", f"{G['stem']['tau']:.2f}", f"{G['edge']['tau']:.2f}", "—"],
+        ["判定", "OK", "OK", "OK"],
+    ]
+    sh.T(178, 93, "④ 補強検討（長期・許容応力度。無改良区間の地盤反力は無視）", h=2.8, bold=True)
+    yb = sh.table(178, 90, [("項目", 44), ("立上り＋底盤（L形断面）", 62), ("ヒール端補強梁", 30), ("ヒール版（横方向）", 30)], rows, rh=3.9, h=1.75)
+    sh.T(178, yb - 4, f"荷重：立上り・底盤 γc=24、ヒール上の土 1.4m×γ18、積載10kN/m²。全断面 {G['w_tot']:.1f}kN/m を立上り側と補強梁側に配分。", h=1.75)
+    sh.T(178, yb - 7.5, "許容応力度：SD345（D19）215、SD295（D13）195、Fc21 長期せん断 0.70 N/mm²。j=7/8d。端部は単純支持として安全側に評価。", h=1.75)
+    sh.T(178, yb - 11, f"支点反力：南端・隅角側とも約{G['R_south']:.0f}kN → 隣接する改良体へ集中。改良体の再計算・増し打ちを改良業者に依頼。", h=1.75, c="#b00000")
+
+    # ---------------- ⑤ 特記
+    lines = [
+        f"1. 無改良区間：西面 NW隅から {GAP_T0*1000:,.0f}～{GAP_T1*1000:,.0f}（底盤全幅）。",
+        "   電線の平面位置から左右2.0mは改良機が入れない（推定）。",
+        "   打設できない改良体の範囲は改良業者と現地で確定する。",
+        f"2. 補強区間：NW隅～{RZ_T1*1000:,.0f}（無改良区間の両側へ{GAP_EXT*1000:,.0f}以上）。",
+        "   区間内は補強筋・横筋とも継手禁止、誘発目地なし",
+        f"   （西面のCJは {CJ_W[0]*1000:,.0f} の1か所に変更）。",
+        "3. R1・R2 は北端を北面へ折曲げ定着（40d=760）、",
+        "   南端は無改良区間端から1.5m以上延ばし直止め。",
+        "4. R3 補強梁は北面底盤（改良体あり）に一体打設で定着。",
+        "5. 底盤主筋 F1・F2 は補強区間で D13@150（追加 F1a・F2a）。",
+        "6. 無改良区間の底盤下も基礎砕石t100＋均しコンt50。",
+        "7. 本補強は概略検討。構造設計者の確認後に施工する。",
+        "8. 補強梁部の掘削・打設は電線下の作業高さ制限による（S-06）。",
+    ]
+    sh.note_box(20, 88, 150, "⑤ 特記事項", lines, h=1.95, lh=3.25)
     sh.save()
 
 if __name__ == "__main__":
@@ -1262,6 +1504,7 @@ if __name__ == "__main__":
         sheet_elev(pdf)
         sheet_bars(pdf)
         sheet_pole(pdf)
+        sheet_gap(pdf)
     print("NW", ANG_NW, "NE", ANG_NE, "Vf", V_FOOT, "Vw", V_WALL, "Lout", L_OUT)
     for w in WEEP:
         print(w, WEEP[w])
