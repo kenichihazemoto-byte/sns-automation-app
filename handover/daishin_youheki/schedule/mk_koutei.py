@@ -8,6 +8,74 @@ from openpyxl.utils import get_column_letter as CL
 from openpyxl.comments import Comment
 
 SRC, OUT = sys.argv[1], sys.argv[2]
+import os, json, subprocess, tempfile, importlib.util
+HERE = os.path.dirname(os.path.abspath(__file__))
+_spec = importlib.util.spec_from_file_location("qty_def", os.path.join(HERE, "qty_def.py"))
+QD = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(QD)
+RECALC = os.environ.get("RECALC")   # xlsx スキルの scripts/recalc.py
+
+def write_qty(wb):
+    """数量計算シートを作り、キー → セル番地 を返す"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    q = wb.create_sheet("数量計算")
+    fn = "ＭＳ Ｐゴシック"; th = Side(style="thin", color="FF999999"); bd = Border(left=th, right=th, top=th, bottom=th)
+    for col, w in zip("ABCDEF", (4, 40, 12, 8, 62, 70)):
+        q.column_dimensions[col].width = w
+    q["B1"] = "数量計算書（大信薬局様邸 擁壁工事 改3-1）"; q["B1"].font = Font(name=fn, size=14, bold=True)
+    q["B2"] = "青字＝入力値（変更可）、黒字＝計算式。形状の値は擁壁施工図 改3-1 の平面形状から算出。数量はすべて概算。"
+    q["B2"].font = Font(name=fn, size=9, color="FF555555")
+    addr = {}; r = 4
+    hdr = ("項目", "数量", "単位", "計算式", "根拠・備考")
+    for sec, rows in QD.SECTIONS:
+        q.cell(r, 2, sec).font = Font(name=fn, size=11, bold=True); r += 1
+        for i, h in enumerate(hdr):
+            x = q.cell(r, 2 + i, h); x.font = Font(name=fn, size=9, bold=True); x.fill = PatternFill("solid", fgColor="FFE7E6E6"); x.border = bd
+        r += 1
+        for key, name, val, unit, note in rows:
+            addr[key] = f"C{r}"; r += 1
+        r += 1
+    r = 4
+    for sec, rows in QD.SECTIONS:
+        r += 2
+        for key, name, val, unit, note in rows:
+            q.cell(r, 2, name)
+            if isinstance(val, str):
+                f = val
+                for k, a in addr.items():
+                    f = f.replace("{" + k + "}", a)
+                q.cell(r, 3, f); q.cell(r, 5, val.lstrip("=").replace("{", "［").replace("}", "］"))
+                q.cell(r, 3).font = Font(name=fn, size=10)
+            else:
+                q.cell(r, 3, val); q.cell(r, 3).font = Font(name=fn, size=10, color="FF0000FF")
+                q.cell(r, 5, "入力値")
+            q.cell(r, 3).number_format = "#,##0" if unit in ("台", "日", "分") else "#,##0.00"
+            q.cell(r, 4, unit); q.cell(r, 6, note)
+            for c in range(2, 7):
+                x = q.cell(r, c); x.border = bd
+                if c != 3:
+                    x.font = Font(name=fn, size=9)
+                x.alignment = Alignment(vertical="center", wrap_text=(c in (5, 6)))
+            q.row_dimensions[r].height = 24
+            r += 1
+        r += 1
+    q.cell(r + 1, 2, "式の［キー］は同じシートの数量欄を指します（例：［A_F］＝底盤面積）。キー一覧：" + "、".join(f"{k}={n}" for _, rows in QD.SECTIONS for k, n, *_ in rows)).font = Font(name=fn, size=8, color="FF777777")
+    q.cell(r + 1, 2).alignment = Alignment(wrap_text=True); q.merge_cells(start_row=r + 1, start_column=2, end_row=r + 1, end_column=6)
+    q.row_dimensions[r + 1].height = 90
+    q.freeze_panes = "C4"
+    q.page_setup.orientation = "landscape"; q.page_setup.paperSize = q.PAPERSIZE_A4
+    q.page_setup.fitToWidth = 1; q.page_setup.fitToHeight = 0; q.sheet_properties.pageSetUpPr.fitToPage = True
+    return addr
+
+def calc_qty():
+    tmp = tempfile.mkdtemp(); p = os.path.join(tmp, "q.xlsx")
+    w = openpyxl.Workbook(); w.remove(w.active); addr = write_qty(w); w.save(p)
+    out = subprocess.run([sys.executable, RECALC, p, "60"], capture_output=True, text=True).stdout
+    assert '"success"' in out, out
+    v = openpyxl.load_workbook(p, data_only=True)["数量計算"]
+    return {k: v[a].value for k, a in addr.items()}
+
+Q = calc_qty()
+fq = lambda k, n=1: f"{Q[k]:,.{n}f}"
 D = dt.date
 FONT = "ＭＳ Ｐゴシック"
 
@@ -63,31 +131,37 @@ e = add(SEC0, "九電協議・電線防護管取付", "九州電力", nxt(e), 1,
 e2 = add(SEC0, "As舗装 カッター・撤去", "土工", e, 2, note="擁壁・掘削範囲のアスファルト（約190m²）")
 e = add(SEC0, "既存ブロック解体（基礎共）", "解体業者", nxt(T[-2]["s"]) if False else nxt(e), 3,
         note="北・東面の既存CB約45m＋基礎。改良体の外周列（外面から約0.25m）に干渉するため杭工事前に撤去。西面の旧ブロックは帯状部の土留めとして残す（要確認）")
-e = add(SEC0, "解体ガラ・As殻 搬出", "解体業者", T[-1]["s"] + dt.timedelta(1), 3, note="4tダンプ 約8台（概算）")
+e = add(SEC0, f"解体ガラ・As殻 搬出（{Q['T_G']:.0f}台）", "解体業者", T[-1]["s"] + dt.timedelta(1), 3,
+        note=f"ガラ・As殻 約{fq('V_GARA')}m³（ほぐし）＝4tダンプ {Q['T_G']:.0f}台（数量計算 6・7）")
 e = add(SEC0, "改良機 作業床整地・敷鉄板", "地盤改良業者", nxt(e), 2)
 e = add(SEC0, "杭芯出し（改良体220本）", "粟戸／地盤改良業者", nxt(e), 1)
 # 杭（確定）
 PS, PE = D(2026, 11, 30), D(2026, 12, 17)
 add(SEC1, "柱状改良 φ500×220本【確定】", "地盤改良業者", PS, e=PE, kind="fix",
     note="確定日程。空掘1.90m（現GLから施工）、電線下（西面NW隅から0.7～5.0m）は打設しない（S-07）")
+add(SEC1, f"改良発生土 搬出・処分（{Q['T_C']:.0f}台）", "地盤改良業者", PS + dt.timedelta(1), e=PE,
+    note=f"改良発生土 約{fq('V_COLS')}m³（ほぐし、発生率{Q['R_COL']:.0%}仮定）＝4tダンプ {Q['T_C']:.0f}台。改良業者に数量確認")
 add(SEC1, "改良体 強度確認（7日強度）", "地盤改良業者", D(2026, 12, 24), 1, kind="mile", note="一軸圧縮試験結果で底盤打設可否を判断")
 e = add(SEC1, "改良体 養生（掘削待ち）", "—", PE + dt.timedelta(1), 4, kind="cal")
 add(SEC1, "電柱側 土留め（軽量鋼矢板）・九電立会", "土工／九州電力", nxt(PE), 2, note="電柱前後 約6m。法掘削は不可（S-06）")
 # 根切り・残土
 s = nxt(e - dt.timedelta(1)) if not is_work(e) else nxt(e)
-e = add(SEC2, "根切り・杭頭処理（西→北→東）", "土工", D(2026, 12, 22), 7,
-        note="根切り底 ±0-2050、約380m³（地山）。電線下は小旋回機で作業高さ制限。年末年始は掘削部をバリケード・ネット・シートで養生")
-add(SEC2, "残土搬出（全量）", "土工", D(2026, 12, 22), e=e,
-    note="場内仮置き不可（敷地約267m²の大半が掘削範囲）。約460m³（ほぐし）＝4tダンプ 約150台（約22台/日）")
-e = add(SEC2, "床付け・基礎砕石敷き転圧 t100", "土工", nxt(e), 2)
-e = add(SEC3, "捨てコン（均しコン t50）打設", "生コン・土工", nxt(e), 1, note="約5.6m³")
+DEX = int(Q["D_EX"])
+e = add(SEC2, "根切り・杭頭処理（西→北→東）", "土工", D(2026, 12, 22), DEX,
+        note=f"根切り底 ±0-2050、掘削 約{fq('V_EX')}m³（地山）。電線下は小旋回機で作業高さ制限。年末年始は掘削部をバリケード・ネット・シートで養生")
+add(SEC2, f"掘削土運搬 現場→ヤード（{Q['T_Y']:.0f}台）", "土工（ダンプ）", D(2026, 12, 22), e=e,
+    note=f"埋戻しに再利用する土 約{fq('V_YARD')}m³（ほぐし）をヤードへ仮置き。4tダンプ {Q['N_D']:.0f}台×1日{int(Q['HR']//Q['RT_Y'])}往復（数量計算 5・7）")
+add(SEC2, f"残土処分 現場→処分場（{Q['T_D']:.0f}台）", "土工（ダンプ）", D(2026, 12, 22), e=e,
+    note=f"残土 約{fq('V_SURL')}m³（ほぐし）＝地山{fq('V_SUR')}m³×L{Q['K_L']}。処分場へ直送")
+e = add(SEC2, "床付け・基礎砕石敷き転圧 t100", "土工", nxt(e), 2, note=f"基礎砕石 RC-40 約{fq('G_B')}m³（締固め後）")
+e = add(SEC3, f"捨てコン（均しコン t50）打設 {fq('V_LEV')}m³", "生コン・土工", nxt(e), 1, note=f"約{fq('V_LEV')}m³（数量計算 2）")
 e = add(SEC3, "墨出し（底盤）", "粟戸", nxt(e), 1)
 e = add(SEC3, "ベース型枠（外周・妻・EJ・前面ふかし外枠）", "型枠業者", nxt(e), 2)
 e = add(SEC3, "ベース配筋（底盤筋・立上り縦筋 先組み）", "鉄筋業者", nxt(e), 3, note="鉄筋 約3.6t")
 e = add(SEC3, "無改良区間 補強筋・補強梁型枠（S-07）", "鉄筋・型枠業者", nxt(e), 1, note="R2・R3・R4・F1a・F2a、補強梁 500×1000")
 e = add(SEC3, "配筋検査（構造設計者確認）", "粟戸／設計者", nxt(e), 1)
-e = add(SEC3, "ベースコンクリート打設", "生コン・ポンプ", nxt(e), 1,
-        note="底盤＋補強梁＋前面ふかしコン 約58m³。ポンプ車ブームを上空線にかけない配置")
+e = add(SEC3, f"ベースコンクリート打設 {fq('V_BASE')}m³", "生コン・ポンプ", nxt(e), 1,
+        note=f"底盤{fq('V_F')}＋補強梁{fq('V_EB')}＋前面ふかしコン{fq('V_FK')}＝{fq('V_BASE')}m³。ポンプ車ブームを上空線にかけない配置")
 BASE = e
 e = add(SEC3, "養生（底盤）", "—", BASE + dt.timedelta(1), 3, kind="cal")
 e = add(SEC4, "墨出し（立上り）", "粟戸", nxt(nxt(BASE)), 1)
@@ -95,13 +169,18 @@ e = add(SEC4, "ベース型枠 解体", "型枠業者", nxt(e), 1)
 e = add(SEC4, "立上り配筋（横筋・巾止め・天端補強R1・ハンチ・端部）", "鉄筋業者", nxt(e), 2)
 e = add(SEC4, "立上り型枠（片面→水抜VP75・目地棒→返し）", "型枠業者", nxt(e), 4)
 e = add(SEC4, "型枠検査・天端レベル確認", "粟戸", nxt(e), 1)
-e = add(SEC4, "立上りコンクリート打設", "生コン・ポンプ", nxt(e), 1, note="約17m³")
+e = add(SEC4, f"立上りコンクリート打設 {fq('V_W')}m³", "生コン・ポンプ", nxt(e), 1, note=f"約{fq('V_W')}m³（ハンチ含む）")
 WALL = e
 e = add(SEC4, "養生（型枠存置）", "—", WALL + dt.timedelta(1), 7, kind="cal", note="冬期（平均気温5～10℃）のため7日存置")
 e = add(SEC4, "脱枠・型枠搬出・Pコン処理・シーリング", "型枠業者", nxt(e), 2)
-e = add(SEC5, "止水コン・裏込め砕石・吸出し防止材", "土工", nxt(e), 2)
-e = add(SEC5, "埋戻し・転圧（搬入土、30cm毎）", "土工", nxt(e), 5, note="約350m³（ほぐし）＝4tダンプ 約120台。良質土（真砂土等）を搬入")
-e = add(SEC5, "前面（北側）嵩上げ盛土・転圧", "土工", nxt(e), 1, note="北面全長 ±0-1500（S-02）")
+e = add(SEC5, "止水コン・裏込め砕石・吸出し防止材", "土工", nxt(e), 2,
+        note=f"止水コン{fq('V_SUI',2)}m³、裏込め砕石 約{fq('G_U')}m³")
+DBF = int(Q["D_BF"])
+e1 = add(SEC5, f"埋戻し土運搬 ヤード→現場（{Q['T_B']:.0f}台）", "土工（ダンプ）", nxt(e), DBF,
+         note=f"ヤード仮置き土 約{fq('V_YARD')}m³（ほぐし）を全量戻す")
+e = add(SEC5, "埋戻し・転圧（再利用土、30cm毎）", "土工", nxt(e), DBF,
+        note=f"埋戻し 約{fq('V_BF')}m³（締固め後）。30cm毎にプレート・ランマー転圧")
+e = add(SEC5, "前面（北側）嵩上げ盛土・転圧", "土工", nxt(e), 1, note=f"約{fq('V_MO')}m³（締固め後）、北面全長 ±0-1500（S-02）")
 e = add(SEC5, "土留め撤去・場内整地", "土工", nxt(e), 1)
 WALL_DONE = e
 e = add(SEC5, "外部給排水工事", "設備業者", nxt(WALL_DONE), 7, note="元工程 7日")
@@ -170,7 +249,7 @@ box(1, 5, 2, 26, "糸島　大信薬局新築工事", F(18, True))
 box(1, 27, 1, 30, "開始日", F(12), fill=GRAY); box(2, 27, 2, 30, T[0]["s"], F(9), fmt="yyyy/mm/dd")
 box(1, 31, 1, 34, "終了日", F(12), fill=GRAY); box(2, 31, 2, 34, "=MAX(M8:M200)", F(9), fmt="yyyy/mm/dd")
 box(1, 35, 1, 38, "作成日", F(12), fill=GRAY); box(2, 35, 2, 38, D(2026, 11, 13), F(9), fmt="yyyy/mm/dd")
-box(1, 39, 2, 80, "擁壁やり直し（既存ブロック解体・残土搬出・底盤補強）を反映した詳細工程。杭工事 11/30～12/17 のみ確定。",
+box(1, 39, 2, 80, "擁壁やり直し（既存ブロック解体・残土搬出・底盤補強）を反映した詳細工程。杭工事 11/30～12/17 のみ確定。掘削土はヤードに仮置きして埋戻しに再利用。",
     F(10, False, "FFB00000"), LFT)
 box(4, 1, 6, 8, "工種・作業", F(12)); box(4, 9, 6, 12, "開始日", F(12)); box(4, 13, 6, 16, "終了日", F(12))
 box(4, 17, 6, 20, "期間", F(12)); box(4, 21, 6, 26, "担当・業者", F(12))
@@ -245,6 +324,18 @@ for i, (k, t_) in enumerate([("work", "作業（作業日：月～金、土日�
     c = 9 + i * 18
     ws.cell(row, c).fill = PatternFill("solid", fgColor=BAR[k]); ws.cell(row, c + 1).fill = PatternFill("solid", fgColor=BAR[k])
     ws.cell(row, c + 2, t_).font = F(9)
+QA = write_qty(wb)
+sm = [("生コン 合計", "V_RC", "m³"), ("　底盤打設（底盤＋補強梁＋ふかし）", "V_BASE", "m³"), ("　立上り打設", "V_W", "m³"),
+      ("　捨てコン", "V_LEV", "m³"), ("砕石（締固め後）", "G_ALL", "m³"), ("掘削（地山）", "V_EX", "m³"),
+      ("ヤード仮置き→埋戻し（ほぐし）", "V_YARD", "m³"), ("土の処分量（ほぐし）", "V_SOIL", "m³"), ("ガラ・As殻（ほぐし）", "V_GARA", "m³"),
+      ("ダンプ 現場→ヤード", "T_Y", "台"), ("ダンプ 現場→処分場", "T_D", "台")]
+r0s = row + 3
+box(r0s, 1, r0s, 26, "数量サマリー（数量計算シートを参照）", F(10, True), LFT, fill=SECF)
+for i, (lab_, k, u) in enumerate(sm):
+    rr = r0s + 1 + i
+    box(rr, 1, rr, 12, lab_, F(9), LFT)
+    box(rr, 13, rr, 18, f"='数量計算'!{QA[k]}", F(9), fmt="#,##0.0" if u != "台" else "#,##0")
+    box(rr, 19, rr, 20, u, F(9))
 ws.cell(row + 1, 1, "※作業名のセルにメモ（コメント）で数量・条件を記載。開始日・終了日を書き換えるとバーと期間が追従します（作業名の表示位置は固定）。").font = F(9)
 
 # ---------------- 条件・前提シート
@@ -257,8 +348,10 @@ items = [
     ("施工順序", "柱状改良は現GLから施工（空掘1.90m）→ 改良体養生 → 根切り・杭頭処理 → 砕石・捨てコン → 底盤 → 立上り。"),
     ("鉄筋・型枠・生コン", "同じ部位では重ねない（ラップしない）。底盤と立上りは1回ずつ一括打設（工区分けなし）。"),
     ("既存ブロック解体", "北・東面の既存CB 約45m（基礎共）を杭工事前に撤去（改良体の外周列が外面から約0.25mにあり干渉）。西面の旧ブロックは帯状部の土留めとして残す想定（要確認）。"),
-    ("残土", f"根切り約380m³（地山）→ ほぐし約460m³。敷地（約267m²）の大半が掘削範囲となり場内仮置きができないため全量搬出。4tダンプ約150台、1日約22台で7日。"),
-    ("埋戻し土", "良質土（真砂土等）を搬入、約350m³（ほぐし）＝4tダンプ約120台。掘削土の再利用（会社ヤード仮置き）が可能なら費用・日数を見直し。"),
+    ("掘削土の扱い", f"敷地（約267m²）の大半が掘削範囲で場内に仮置きできないため、埋戻しに使う土は現場外のヤードへ運んで仮置きし、埋戻し時に戻す。掘削 約{fq('V_EX')}m³（地山）。"),
+    ("ヤード運搬", f"現場→ヤード 約{fq('V_YARD')}m³（ほぐし）＝4tダンプ{Q['T_Y']:.0f}台、ヤード→現場 同{Q['T_B']:.0f}台。ダンプ{Q['N_D']:.0f}台、往復＋積込{Q['RT_Y']:.0f}分（仮定）。"),
+    ("残土処分", f"残土 約{fq('V_SURL')}m³（ほぐし）＝{Q['T_D']:.0f}台を処分場へ直送。改良発生土 約{fq('V_COLS')}m³（{Q['T_C']:.0f}台、発生率は仮定）を合わせた土の処分量 約{fq('V_SOIL')}m³。別にガラ・As殻 約{fq('V_GARA')}m³（{Q['T_G']:.0f}台）。"),
+    ("数量の根拠", "「数量計算」シートに入力値と計算式を記載。ダンプ台数・往復時間・土量変化率を変えると台数と日数が再計算される（工程表の日付は自動では変わらない）。"),
     ("改良体の養生・強度", "掘削は杭完了の4日後（暦日）から。7日強度の結果（12/24頃）を確認してから底盤を打設。"),
     ("型枠存置", "底盤：打設後3日（暦日）で立上り作業。立上り：冬期のため7日（暦日）存置後に脱枠。"),
     ("電柱・電線", "九電の防護管取付・電柱位置実測を最初に実施。電柱側は土留め後に鉛直掘削。電線下は小旋回機で作業高さ制限、監視人配置。ポンプ車は上空線にブームをかけない位置に据える（S-06）。"),
@@ -277,7 +370,10 @@ hl = sorted(HOLI)
 for i, d in enumerate(hl):
     x = c2.cell(r0 + 1 + i, 2, d); x.number_format = "yyyy/mm/dd"; x.font = F(10)
     c2.cell(r0 + 1 + i, 3, HOLI[d]).font = F(10)
+c2.page_setup.orientation = "landscape"; c2.page_setup.fitToWidth = 1; c2.page_setup.fitToHeight = 0
+c2.sheet_properties.pageSetUpPr.fitToPage = True
 from openpyxl.workbook.defined_name import DefinedName
+wb.active = 0
 ref = f"'条件・前提'!$B${r0+1}:$B${r0+len(hl)}"
 wb.defined_names["休日一覧"] = DefinedName("休日一覧", attr_text=ref)
 wb.save(OUT)
