@@ -1186,7 +1186,10 @@ def sheet_bars(pdf):
 
 # ============================================================== S-06 電柱回避・建柱車施工検討
 EXC_WORK, EXC_SLOPE, EXC_DEPTH = 0.5, 0.5, 2.10   # 作業幅 m／法勾配 1:0.5／掘削深さ m（GL+50 → -2050）
-SHEET_PILE = 0.1 + EXC_WORK                       # 土留め位置：西面外面から外側へ（砕石100＋作業幅）
+SHEET_PILE = 0.1 + EXC_WORK                       # （参考）通常の作業幅で掘る場合の掘削底端
+PW, PSL = 0.3, 0.3                                # 電柱側：作業幅0.3m・法勾配1:0.3（矢板なし、11/14方針）
+P_TOP = 0.1 + PW + PSL * EXC_DEPTH                # 電柱側 掘削天端：西面外面から外側へ
+WARN_C = "#c00030"
 TRUCK_W, TRUCK_L, TRUCK_OR = 2.3, 8.0, 4.0         # 建柱車 代表寸法（全幅・全長・アウトリガ張出幅）
 
 def truck(sh, v, c, ang, lab, col):
@@ -1212,12 +1215,12 @@ def sheet_pole(pdf):
     sh.poly(v.P(OUTER + INNER_F[::-1]), fc="#eef3fb", ec="#4060a0", lw=0.2, z=2)
     sh.poly(v.P(OUTER + INNER_W[::-1]), fc="#bbbbbb", ec="k", lw=0.4, z=3)
     plan_pole(sh, v, dims=False, label=False)
-    # 西面外側 土留め（電柱前後 各3m）
+    # 西面外側 電柱側の注意区間（矢板なし。電柱前後 各3m を分割掘削）
     a, b = max(0.0, POLE_S_W - 3.0), POLE_S_W + 3.0
-    sp = [NW + D_W * a - N_IN_W * SHEET_PILE, NW + D_W * b - N_IN_W * SHEET_PILE]
-    sh.L(v.P(sp), lw=1.0, c="#0070c0", z=8)
-    q = v(sp[1]); sh.leader([q, q + np.array([-14, -6]), q + np.array([-16, -6])],
-                           f"土留め（軽量鋼矢板等）L≒{b-a:.1f}m\n電柱表面まで約{POLE_TO_WALL-SHEET_PILE-POLE_R:.1f}m", h=1.9, ha="right", c="#0070c0")
+    sp = [NW + D_W * a - N_IN_W * P_TOP, NW + D_W * b - N_IN_W * P_TOP]
+    sh.L(v.P(sp), lw=1.0, c=WARN_C, ls=(0, (4, 1.5)), z=8)
+    q = v(sp[1]); sh.leader([q, q + np.array([2, -16]), q + np.array([4, -16])],
+                           f"注意区間 L≒{b-a:.1f}m（矢板なし・分割掘削）\n掘削天端～電柱表面 約{POLE_TO_WALL-P_TOP-POLE_R:.2f}m", h=1.9, ha="left", c=WARN_C)
     # 建柱車 候補
     cA = np.array([POLE[0] - 0.4, 3.2])
     truck(sh, v, cA, 0, "A", "#c07000")
@@ -1242,7 +1245,7 @@ def sheet_pole(pdf):
     # 凡例
     lx, ly = 22, 154
     for i, (col, t) in enumerate([("#c07000", "A：北側隣地に据付"), ("#6a3d9a", "B：敷地内（掘削範囲外）に据付"),
-                                  ("#d00060", "上空線（平面方向は調査位置図読取）"), ("#0070c0", "土留め（推奨）")]):
+                                  ("#d00060", "上空線（平面方向は調査位置図読取）"), (WARN_C, "電柱側 注意区間（矢板なし）")]):
         sh.L([(lx + i * 52, ly), (lx + i * 52 + 6, ly)], lw=0.8, c=col)
         sh.T(lx + i * 52 + 7.5, ly - 0.7, t, h=1.8)
     sh.T(lx, ly - 5, f"建柱車は代表寸法（全幅{TRUCK_W}m×全長{TRUCK_L:.0f}m、アウトリガ張出幅{TRUCK_OR:.0f}m を点線）で表示。機種は九州電力の配車による。", h=1.7)
@@ -1252,21 +1255,22 @@ def sheet_pole(pdf):
     sh.T(20, 142, "② 断面（新西面に直角・電柱位置）  高さは推定・要実測", h=2.8, bold=True)
     X = lambda d, z: vs(d - OFF_W, z)        # d：境界からの距離（m）、z：レベル（m）
     gl_strip = 0.05
-    sh.L([X(-4.0, -1.66), X(0, -1.66), X(0, gl_strip), X(OFF_W - SHEET_PILE, gl_strip)], lw=0.35)
+    sh.L([X(-4.0, -1.66), X(0, -1.66), X(0, gl_strip), X(OFF_W - P_TOP, gl_strip)], lw=0.35)
     sh.L([X(OFF_W + 0.25, 0.0), X(OFF_W + 6.0, 0.0)], lw=0.35)
     sh.T(*X(-3.9, -1.5), "田 -1660", h=1.7, c="#555")
     sh.T(*X(0.1, gl_strip + 0.9), "帯状部（現況）", h=1.6, c="#8a5a00")
     # 擁壁
     wall = [(OFF_W, -1.9), (OFF_W + 3.0, -1.9), (OFF_W + 3.0, -1.4), (OFF_W + 0.25, -1.4), (OFF_W + 0.25, 0.2), (OFF_W, 0.2)]
     sh.poly([X(*p) for p in wall], fc="#dddddd", ec="k", lw=0.4, z=3)
-    # 掘削：電柱側 法掘削（不可）と土留め
+    # 掘削：電柱側（矢板なし）作業幅0.3・法勾配1:0.3。点線は通常（作業幅0.5・1:0.5）の場合
     x0 = OFF_W - SHEET_PILE
     sh.L([X(x0, -2.05), X(x0 - EXC_SLOPE * EXC_DEPTH, gl_strip)], lw=0.3, c="#999", ls=(0, (2, 1)))
     q = X(x0 - EXC_SLOPE * EXC_DEPTH * 0.5, -1.0)
-    sh.leader([q, X(OFF_W + 3.6, -4.9), X(OFF_W + 3.8, -4.9)], "法掘削の場合（点線）：電柱根入れに影響 → 不可", h=1.6, c="#888")
-    sh.L([X(x0, gl_strip + 0.3), X(x0, -3.0)], lw=1.0, c="#0070c0", z=5)
-    sh.T(*X(x0 + 0.15, -2.9), "土留め（推奨）", h=1.7, c="#0070c0")
-    sh.L([X(x0, -2.05), X(OFF_W + 3.1 + 0.5, -2.05)], lw=0.3, c="#999", ls=(0, (2, 1)))
+    sh.leader([q, X(OFF_W + 3.6, -4.9), X(OFF_W + 3.8, -4.9)], "通常の法勾配（点線）は電柱の根元に近すぎる", h=1.6, c="#888")
+    xb = OFF_W - 0.1 - PW
+    sh.L([X(xb, -2.05), X(OFF_W - P_TOP, gl_strip)], lw=1.0, c=WARN_C, z=5)
+    sh.T(*X(xb + 0.1, -2.9), "電柱側：作業幅0.3・法1:0.3（矢板なし）", h=1.6, c=WARN_C)
+    sh.L([X(xb, -2.05), X(OFF_W + 3.1 + 0.5, -2.05)], lw=0.3, c="#999", ls=(0, (2, 1)))
     # 電柱
     hp, emb = 10.0, 2.0
     sh.poly([X(POLE_DW - 0.15, -emb), X(POLE_DW + 0.15, -emb), X(POLE_DW + 0.09, hp), X(POLE_DW - 0.09, hp)],
@@ -1304,10 +1308,9 @@ def sheet_pole(pdf):
     line("  電圧区分（高圧6.6kV／低圧／通信）・地上高さは未確認。")
     head("2. 擁壁と電柱の離れ")
     line(f"・新西面外面まで 芯{POLE_TO_WALL*1000:,.0f}／表面{(POLE_TO_WALL-POLE_R)*1000:,.0f}（必要1,000 → OK）")
-    line(f"・法掘削（1:0.5・作業幅0.5）だと掘削天端が電柱表面から約{max(0, POLE_TO_WALL-SHEET_PILE-EXC_SLOPE*EXC_DEPTH-POLE_R):.2f}m")
-    line("  → 根入れ部の地盤を緩めるため不可。", c="#b00000")
-    line(f"・電柱側は土留め（軽量鋼矢板等 L≒{b-a:.0f}m）で鉛直掘削 → 電柱表面まで約{POLE_TO_WALL-SHEET_PILE-POLE_R:.1f}m。")
-    line("  支柱足元が土留め範囲に入る場合は位置を見直す。")
+    line(f"・通常の掘り方（作業幅0.5・法1:0.5）だと掘削天端が電柱表面から約{max(0, POLE_TO_WALL-SHEET_PILE-EXC_SLOPE*EXC_DEPTH-POLE_R):.2f}m → 不可", c="#b00000")
+    line(f"・方針（11/14）：矢板は使わない。電柱前後 約{b-a:.0f}mは作業幅0.3・法1:0.3で掘る")
+    line(f"  → 掘削天端～電柱表面 約{POLE_TO_WALL-P_TOP-POLE_R:.2f}m。根入れ部に近く、十分な注意が必要。", c="#b00000")
     head("3. 建柱車による電柱支持（九電作業）の可否")
     rows = [["A 北側隣地（田）", f"約{rA:.1f}m", "敷鉄板・進入路・地権者承諾", "○ 条件付"],
             ["B 敷地内（掘削範囲外）", f"約{rB:.0f}m", "掘削範囲が広く遠い・上空線の下", "× 実質不可"],
@@ -1320,11 +1323,15 @@ def sheet_pole(pdf):
     line("・九電に防護管の取付を依頼。上空線の下では監視人を配置する。")
     line("・上空線の下は小旋回機（0.1～0.25m³）で作業高さを制限して使う。")
     line("・生コンはポンプ車のブームが上空線にかからない位置から打設する。")
-    head("5. 結論（推奨）")
-    line("①電柱側は土留めで掘削し、電柱支持（建柱車）を不要にする。", c="#b00000")
-    line("②九電が支持を求めた場合は、北側隣地（A）に敷鉄板を敷いて据付。", c="#b00000")
-    line(f"④柱状改良機は電線下に入れない → 西面 NW隅から{GAP_T0:.1f}～{GAP_T1:.1f}mは無改良とし底盤補強（S-07）。", c="#b00000")
-    line("③着工前に九電と現地立会い：電柱・支柱・電線の位置と高さ、")
+    head("5. 結論・【警告】電柱側の掘削（矢板なし）")
+    line("①電柱前後 約6mは長さ2m程度ずつ分割して掘り、当日中に砕石・捨てコンまで進める。", c="#b00000")
+    line("②掘削中は九電の立会い。電柱の傾きを下げ振り・トランシットで朝・昼・夕に確認。", c="#b00000")
+    line("③雨天・雨の翌日は電柱側を掘らない。法面はシートで養生する。", c="#b00000")
+    line("④電柱周り1.0mに重機・ダンプ・資材を置かない。支柱の足元も同様。", c="#b00000")
+    line("⑤傾き・亀裂・湧水が出たら直ちに掘削を止めて埋め戻し、九電と協議する。", c="#b00000")
+    line("⑥九電が支持を求めた場合は、北側隣地（A）に建柱車を据えて支持する。")
+    line(f"⑦柱状改良機は電線下に入れない → 西面 NW隅から{GAP_T0:.1f}～{GAP_T1:.1f}mは無改良とし底盤補強（S-07）。", c="#b00000")
+    line("⑧着工前に九電と現地立会い：電柱・支柱・電線の位置と高さ、")
     line("  支持の要否、防護管、作業日程、費用負担を確認する。")
     sh.save()
 
