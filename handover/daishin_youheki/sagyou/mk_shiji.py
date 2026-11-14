@@ -22,8 +22,8 @@ plt.rcParams["font.family"] = fm.FontProperties(fname=FONT).get_name()
 PT = 1 / 0.3528
 RED, BLUE, GRN, ORG, GRY, PUR = "#c00000", "#1f5fbf", "#2e8b57", "#d07000", "#777777", "#6a3d9a"
 DATE = "2026/11/14"
-N_DISPOSE = int(sys.argv[2]) if len(sys.argv) > 2 else 44     # 処理場へ出す台数（3tダンプ）
-N_ROCK = 30                                                    # 岩の山の上限（3t台数）
+N_DISPOSE = int(sys.argv[2]) if len(sys.argv) > 2 else 41     # 処理場へ出す台数（3tダンプ・土）実行予算書 改3-2「土の収支」標準
+N_ROCK = 16                                                    # 岩の山の上限（3t台数）ガラを先に使うため 約32m³
 
 class Page:
     def __init__(self, pdf, no, title, sub):
@@ -36,10 +36,13 @@ class Page:
         a.add_patch(Rectangle((6, 186), 285, 18, fc="#1f3f6f", ec="none"))
         self.T(10, 196.5, f"作業指示書 No.{no}", 13, c="white", b=True)
         self.T(52, 196.5, title, 16, c="white", b=True)
-        self.T(10, 189, "大信薬局様邸新築工事（糸島・擁壁工事）　第2版", 8.5, c="white")
+        self.T(10, 189, "大信薬局様邸新築工事（糸島・擁壁工事）　第3版", 8.5, c="white")
         self.T(287, 196.5, f"指示：櫨本　現場責任者：粟戸　{DATE}", 8.5, c="white", ha="right")
         self.T(287, 189.5, "作業者サイン：＿＿＿＿＿＿＿＿　＿＿＿＿＿＿＿＿", 8.5, c="white", ha="right")
         self.T(10, 181, sub, 9.5, c="#1f3f6f", b=True)
+        self.box(10, 8, 277, 10, fc="#fff3b0", ec="#c00000", lw=1.0, r=1.2, z=8)
+        self.T(14, 13, "★大事：使うのは この「第3版（2026/11/14）」と 図面「改3-2」だけ。古い紙（第1版・第2版・改3-1）は すぐに捨てる。分からないときは 粟戸さんに聞く。",
+               9.2, c="#c00000", b=True)
 
     def T(self, x, y, s, sz=9, c="k", b=False, ha="left", va="center", rot=0):
         self.ax.text(x, y, s, fontsize=sz, color=c, fontweight="bold" if b else "normal", ha=ha, va=va, rotation=rot, zorder=10)
@@ -139,7 +142,7 @@ with PdfPages(OUT) as pdf:
         "6. 解体前・途中・後の写真を撮る（同じ位置から）",
     ], lh=5.6)
     pg.okng(170, 92, 115,
-            ["・CB・基礎 → ガラ置場（No.4で小割り・再利用）", "・鉄筋・金物 → 金属くず（売却）", "・土 → 下段の土地（No.3）"],
+            ["・CB・基礎 → ガラ置場（No.4）", "・鉄筋・金物 → 金属くず（売却）", "・土 → 下段の土地（No.3）"],
             ["・ガラと土を混ぜて出す", "・ガラを埋める・土に混ぜる", "・草木・ゴミをガラに混ぜる", "・西面の旧ブロックを壊す"],
             title_ok="○ 分別して置く", title_ng="× しないこと")
     pg.T(170, 52, "※ 解体したブロック・基礎の量（m³・台数）を日報に記入する。", 8.6, c=RED, b=True)
@@ -225,7 +228,7 @@ with PdfPages(OUT) as pdf:
     dests = [
         (152, "#fdecec", RED, f"処理場（3tダンプ）合計{N_DISPOSE}台まで", "最初に出る表層の土：土間コン下の砕石・ガラ混じり土、泥状の土、草や根の多い土"),
         (128, "#eaf6ee", GRN, "下段の土地へ仮置き（良質土の山）", f"{N_DISPOSE}台を超えた分は全部ここ。普通の土（砂質土・真砂土）＝埋戻しに使う"),
-        (104, "#f1ecf8", PUR, f"岩の山（割栗石）3t {N_ROCK}台分まで", f"握りこぶしより大きい石・岩。埋戻しの下層に再利用（VE）。{N_ROCK}台分を超えたら処理場へ"),
+        (104, "#f1ecf8", PUR, f"岩の山（割栗石）3t {N_ROCK}台分まで", f"握りこぶしより大きい石・岩。埋戻しの下層に再利用。{N_ROCK}台分を超えたら処理場へ（台数は別に記録）"),
         (80, "#fff5e0", ORG, "ガラ置場（コンガラ・ブロック）", "土間コン・ブロック・基礎のかけら → 指示書No.4（小割りして場内で再利用、処理場へは出さない）"),
     ]
     for y_, fc, ec, t1, t2 in dests:
@@ -248,9 +251,9 @@ with PdfPages(OUT) as pdf:
     pg.lines(198, 85, [
         "・3tダンプ1台＝約2m³（山盛りにしない・シートを掛ける）",
         "・処理場まで往復45分。2台でピストン → 1日 約14台",
-        f"・処理場行き{N_DISPOSE}台 ≒ 4日。掘削は全部で約7日",
+        f"・処理場行き（土）{N_DISPOSE}台 ≒ 3日。掘削は全部で約7日",
         "・下段の土地へは全部で 約135台分（約270m³）",
-        "・岩の山は3t 30台分（約60m³）まで",
+        f"・岩の山は3t {N_ROCK}台分（約{N_ROCK*2}m³）まで（ガラを先に使う）",
     ], lh=5.3)
     pg.T(12, 66, "④ 下段の土地の仮置き（配置の例）", 10, b=True)
     gx, gy = 20, 26
