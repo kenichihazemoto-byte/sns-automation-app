@@ -26,6 +26,8 @@ def span(pred):
 has = lambda *ks: (lambda sec, n: any(k in n for k in ks))
 insec = lambda *ks: (lambda sec, n: any(k in (sec or "") for k in ks))
 G = [
+    ("申請", None, None, True),
+    ("確認申請（12月末 確認済証 交付予定）", *span(insec("申請")), False),
     ("擁壁・造成工事", None, None, True),
     ("準備工事（実施済）", *span(insec("準備")), False),
     ("既存ブロック撤去・掘削・残土搬出", *span(insec("解体・掘削")), False),
@@ -38,11 +40,12 @@ G = [
     ("上棟", *span(has("上棟")), False),
     ("屋根・外壁工事", *span(has("屋根工事", "外壁工事")), False),
     ("大工工事", *span(has("大工工事")), False),
-    ("設備・電気工事", *span(lambda sec, n: n in ("設備工事", "電気工事")), False),
+    ("設備・電気工事", *span(lambda sec, n: n in ("設備工事（先行配管）", "電気工事")), False),
     ("内装工事（クロス・床・照明・住設）", *span(has("クロス", "床貼り", "照明", "住設")), False),
     ("外構工事", *span(has("外構工事")), False),
+    ("完了検査・お引渡し", span(has("完了検査"))[0], dt.date(2027, 4, 30), False),
 ]
-LAST = max(e for _, _, _, e in rows)
+LAST = max(max(e for _, _, _, e in rows), dt.date(2027, 4, 30))
 
 wb = openpyxl.Workbook(); ws = wb.active; ws.title = "工程表（お客様用）"
 th = Side(style="thin", color="FF999999"); B = Border(left=th, right=th, top=th, bottom=th)
@@ -99,7 +102,7 @@ for name, s, e, head in G:
     ws.row_dimensions[r].height = 18
     r += 1
 r += 1
-ws.cell(r, 2, f"完成予定　{LAST.month}月{LAST.day}日（予定）").font = F(12, True, "FFB00000")
+ws.cell(r, 2, "お引渡し　2027年4月末（予定）").font = F(12, True, "FFB00000")
 ws.cell(r + 1, 2, "※準備工事（11/11～11/13）は実施済、地盤改良工事（11/30～12/17）は確定日程です。それ以外は予定です。").font = F(9)
 ws.cell(r + 2, 2, "※擁壁工事は、敷地北西の電柱・電線を避けるため西側の擁壁位置を敷地内側へ移す計画としています。").font = F(9)
 ws.cell(r + 3, 2, "※年末年始（12/29～1/4）は工事をお休みします。").font = F(9)

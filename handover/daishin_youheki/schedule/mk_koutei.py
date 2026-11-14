@@ -126,6 +126,11 @@ def add(sec, name, who, s, n=None, e=None, kind="work", note=""):
 K1, K2, K3, K4, K5, K6, K7, K8, K9 = ("準備工事【実施済】", "解体・掘削工事", "地盤改良工事（杭打ち）", "砕石・捨てコン工事",
                                       "型枠工事", "鉄筋工事", "生コン（コンクリート）工事", "埋戻し工事", "外部給排水工事")
 w = lambda m, d: D(2026 if m >= 11 else 2027, m, d)
+# 0 申請
+KA = "申請（確認申請）"
+add(KA, "確認申請 提出", "粟戸／設計", w(11, 25), 1, kind="mile", note="2026/11/25 提出")
+add(KA, "審査期間（約1か月）", "指定確認検査機関", w(11, 25), e=w(12, 28), kind="cal", note="12月末までに確認済証の交付を見込む")
+add(KA, "確認済証 交付（予定）", "指定確認検査機関", w(12, 28), 1, kind="mile", note="1月から建築工事に着手できる状態にする")
 # 1 準備（実施済）
 add(K1, "準備工事（境界確認・丁張・九電協議 ほか）", "粟戸", w(11, 11), 3, kind="done", note="11/11～11/13 実施済")
 # 2 解体・掘削（杭打ち前に完了）
@@ -183,7 +188,9 @@ e = add(K7, f"止水コンクリート打設 {fq('V_SUI',2)}m³", "生コン・�
 e = add(K8, "裏込め砕石・吸出し防止材", "土工", e, 2, note=f"裏込め砕石 約{fq('G_U')}m³")
 DBF = int(Q["D_BF"])
 add(K8, f"埋戻し土運搬 ヤード→現場（{Q['T_B']:.0f}台）", "土工（ダンプ）", nxt(e), DBF, note=f"ヤード仮置き土 約{fq('V_YARD')}m³（ほぐし）を戻す")
-e = add(K8, "埋戻し・転圧（再利用土、30cm毎）", "土工", nxt(e), DBF, note=f"埋戻し 約{fq('V_BF')}m³（締固め後）")
+DBN = 3
+NORTH = add(K8, "埋戻し・転圧 北面（建物側を先行）", "土工", nxt(e), DBN, note="建物基礎と北面ヒールが重なるため北面を先に埋め戻し、基礎工事に引き渡す")
+e = add(K8, "埋戻し・転圧 西面・東面", "土工", nxt(NORTH), DBF - DBN, note=f"埋戻し 合計 約{fq('V_BF')}m³（締固め後）、30cm毎に転圧")
 e = add(K8, "前面（北側）嵩上げ盛土・転圧", "土工", nxt(e), 1, note=f"約{fq('V_MO')}m³、北面全長 ±0-1500")
 e = add(K8, "土留め撤去・場内整地", "土工", nxt(e), 1)
 WALL_DONE = e
@@ -201,20 +208,42 @@ while r <= src.max_row:
         n0 = int(str(src.cell(r, 17).value).replace("日", ""))
         orig.append((nm, s0, e0, n0, src.cell(r, 21).value))
     r += 2
-ORIG_FD = D(2027, 2, 1)                 # 元工程で擁壁完了後に始まる日（仮設電気・基礎）
-NEW_FD = nxt(WALL_DONE)
-shift = wdays(ORIG_FD, NEW_FD) - 1       # 作業日のずれ
-def shift_d(d):
-    for _ in range(shift):
+ON = {nm: (s0, e0, n0) for nm, s0, e0, n0, who in orig}
+dur = lambda nm: ON[nm][2]
+def addn(d, n):
+    for _ in range(n):
         d = nxt(d)
     return d
-skip = {"掘削工事", "杭工事", "砕石・捨てコン", "鉄筋", "型枠", "擁壁生コン", "埋戻し", "外部給排水工事"}
-SEC6 = "建築工事（元工程を平行移動・要調整）"
-for nm, s0, e0, n0, who in orig:
-    if nm in skip:
-        continue
-    s1 = shift_d(first_work(s0))
-    add(SEC6, nm, who.split("(")[0] if who else "", s1, n0, note=f"元工程 {s0:%m/%d}～{e0:%m/%d}（{n0}日）")
+def back(d, n):
+    for _ in range(n):
+        d -= dt.timedelta(1)
+        while not is_work(d):
+            d -= dt.timedelta(1)
+    return d
+SEC6 = "建築工事"
+who0 = "粟戸"
+BS = nxt(NORTH)
+add(SEC6, "仮設電気工事", who0, BS, dur("仮設電気工事"))
+BE = add(SEC6, "基礎工事", who0, BS, dur("基礎工事"), note="北面の埋戻し完了後に着手（西・東面の埋戻しと並行）")
+add(SEC6, "設備工事（先行配管）", who0, back(BE, 2), dur("設備工事"), note="元工程と同じく基礎の終盤に先行配管")
+DT = add(SEC6, "土台引き", who0, nxt(BE), dur("土台引き"))
+DK = add(SEC6, "大工工事", who0, DT, dur("大工工事"))
+AS = add(SEC6, "足場工事", who0, nxt(DT), dur("足場工事"), note="足場解体まで")
+JT = add(SEC6, "上棟", who0, addn(DT, 2), dur("上棟"), kind="mile")
+add(SEC6, "屋根工事", who0, nxt(JT), dur("屋根工事"))
+add(SEC6, "電気工事", who0, addn(JT, 2), dur("電気工事"))
+add(SEC6, "外壁工事", who0, addn(JT, 3), dur("外壁工事"))
+CR = add(SEC6, "クロス工事", who0, nxt(DK), dur("クロス工事"))
+YK = add(SEC6, "床貼り工事", who0, CR, dur("床貼り工事"))
+SY = add(SEC6, "照明器具取付工事", who0, nxt(YK), dur("照明器具取付工事"))
+JS = add(SEC6, "住設工事", who0, nxt(SY), dur("住設工事"))
+KYU_E = [t for t in T if t["name"] == "外部給排水工事"][0]["e"]
+GK = add(SEC6, "外構工事", who0, max(nxt(AS), nxt(KYU_E)), dur("外構工事"), note="足場解体・外部給排水の完了後に着手し、内装工事と並行")
+KS = add(SEC6, "完了検査（建築）", "指定確認検査機関", nxt(max(JS, GK)), 1, kind="mile")
+CL_E = add(SEC6, "クリーニング・手直し", who0, nxt(KS), 2)
+HW = add(SEC6, "引渡し", "粟戸", nxt(CL_E), 1, kind="mile")
+DEADLINE = D(2027, 4, 30)
+shift = 0
 LAST = max(t["e"] for t in T)
 
 # ---------------- 作図
@@ -250,7 +279,7 @@ def box(r1, c1, r2, c2, v=None, font=None, align=CEN, fill=None, fmt=None):
 
 box(1, 1, 2, 4, "案件名", F(12), fill=GRAY)
 box(1, 5, 2, 26, "糸島　大信薬局新築工事", F(18, True))
-box(1, 27, 1, 30, "開始日", F(12), fill=GRAY); box(2, 27, 2, 30, T[0]["s"], F(9), fmt="yyyy/mm/dd")
+box(1, 27, 1, 30, "開始日", F(12), fill=GRAY); box(2, 27, 2, 30, min(t["s"] for t in T), F(9), fmt="yyyy/mm/dd")
 box(1, 31, 1, 34, "終了日", F(12), fill=GRAY); box(2, 31, 2, 34, "=MAX(M8:M200)", F(9), fmt="yyyy/mm/dd")
 box(1, 35, 1, 38, "作成日", F(12), fill=GRAY); box(2, 35, 2, 38, D(2026, 11, 14), F(9), fmt="yyyy/mm/dd")
 box(1, 39, 2, 80, "準備工事 11/11～11/13 実施済。掘削・残土搬出 11/16～ を先行し、杭打ち 11/30～12/17（確定）。掘削土はヤードに仮置きして埋戻しに再利用。工種名の左の［－］で詳細を折りたためます。",
@@ -377,7 +406,8 @@ items = [
     ("無改良区間", "西面 NW隅から0.7～5.0mは改良体なし。補強筋・補強梁（S-07）は構造設計者確認後に施工。配筋検査に1日を確保。"),
     ("残土の残り", "杭打ち開始（11/30）までに搬出しきれない残土は、場内に仮置き土とともに置き、後日処分する。"),
     ("年末年始", "12/28にベース型枠まで進めて休み（12/29～1/4）。休暇中は掘削部・型枠をバリケード・ネット・シートで養生。"),
-    ("後工程", f"仮設電気以降の建築工事は、元の工程表の順序と日数を変えずに作業日{shift}日分だけ後ろへずらした仮の日程。基礎工事は北面ヒールと申請建物の取合いがあるため擁壁埋戻し完了後に開始。"),
+    ("建築工事", "元の工程表の各工事の日数はそのまま使い、順序を組み直した。基礎工事は北面の埋戻し完了後に着手（北面ヒールと建物が重なるため）。外構工事は足場解体・外部給排水の完了後に内装と並行。最後に完了検査・クリーニング・引渡し。"),
+    ("確認申請", "11/25 提出、約1か月の審査で12月末に確認済証交付の見込み。建物の基礎着手は2月中旬のため、交付が遅れても約7週間の余裕がある。"),
     ("結果", f"擁壁埋戻し完了 {WALL_DONE:%Y/%m/%d}（元工程 2027/01/29）、全体完了 {LAST:%Y/%m/%d}（元工程 外構 2027/04/14）。"),
 ]
 for i, (k, v) in enumerate(items):
@@ -393,6 +423,71 @@ for i, d in enumerate(hl):
 c2.page_setup.orientation = "landscape"; c2.page_setup.fitToWidth = 1; c2.page_setup.fitToHeight = 0
 c2.sheet_properties.pageSetUpPr.fitToPage = True
 from openpyxl.workbook.defined_name import DefinedName
+# ---------------- 実現性チェック
+ck = wb.create_sheet("実現性チェック")
+fn = FONT
+for col, wdt in zip("ABCDEFGH", (3, 34, 12, 12, 10, 8, 60, 50)):
+    ck.column_dimensions[col].width = wdt
+ck["B1"] = "工程の実現性・余裕度チェック（2026/11/14）"; ck["B1"].font = F(14, True)
+ck["B2"] = "余裕＝計画日の翌日から期限（最終許容日）までの作業日数（月～金、祝日・年末年始を除く）。◎10日以上／○5日以上／△1日以上／余裕0＝遅れがそのまま後ろへ響く（クリティカル）。雨天中止日は工程に含めていない。"; ck["B2"].font = F(9, c="FF555555")
+hdr = ("確認ポイント", "計画日", "期限（最終許容日）", "余裕（作業日）", "評価", "根拠・リスク", "対策")
+for i, h in enumerate(hdr):
+    x = ck.cell(4, 2 + i, h); x.font = F(10, True); x.fill = GRAY; x.border = B; x.alignment = CEN
+def tget(name):
+    return [t for t in T if t["name"].startswith(name)][0]
+EXE = tget("根切り")["e"]; BASEP = tget("ベースコンクリート打設")["s"]
+rowsC = [
+    ("掘削・残土搬出の完了 → 杭打ち開始", EXE, back(D(2026, 11, 30), 1), "根切り7日を11/17～11/26で実施。11/27は床付け・杭芯出し。",
+     "雨で遅れた残土は場内に仮置き土とともに置き、杭打ち後に処分（指示どおり）。11/21（土）を予備日にできるよう業者と調整。"),
+    ("確認済証の交付 → 建物の基礎着手", D(2026, 12, 28), back(tget("基礎工事")["s"], 1), "審査約1か月で12月末交付の見込み。基礎着手は2月中旬。",
+     "審査の質疑は早めに回答。交付が1月にずれても建物工程への影響はない。"),
+    ("改良体の7日強度 → 底盤打設", D(2026, 12, 24), back(BASEP, 1), "最後の改良体の7日強度は12/24。底盤打設は1/15。",
+     "試験結果を年内に受領しておく。"),
+    ("S-07 補強の構造確認 → 無改良区間の配筋", D(2026, 12, 25), back(tget("無改良区間 補強筋")["s"], 1), "構造設計者の確認を年内に得る前提。",
+     "未了だと配筋検査・底盤打設が止まる。11月中に構造設計者へ依頼する。"),
+    ("北面の埋戻し完了 → 基礎着手", NORTH, back(tget("基礎工事")["s"], 1), "北面を先に埋め戻し、翌作業日から基礎。ここが全体の要（クリティカル）。",
+     "立上りを早強セメントにすると型枠存置を約3日短縮でき、余裕が増える。"),
+    ("内装・外構の完了 → 完了検査", max(tget("住設工事")["e"], tget("外構工事")["e"]), back(tget("完了検査")["s"], 1), "外構工事が内装より4日遅く、外構が最後の工程になる。",
+     "外構は足場解体の翌日から着手。駐車場以外を先行するなど分割すれば短縮できる。"),
+    ("引渡し → 4月末", HW, DEADLINE, "引渡し 4/16 計画。4/30まで作業日9日の余裕。",
+     "雨天見込み（下記）を差し引くと余裕はほぼない。週次で進捗を確認し、遅れは土曜作業で取り戻す。"),
+]
+r = 5
+for name_, plan, due, why, how in rowsC:
+    ck.cell(r, 2, name_); ck.cell(r, 3, plan).number_format = "yyyy/mm/dd"; ck.cell(r, 4, due).number_format = "yyyy/mm/dd"
+    ck.cell(r, 5, f"=IF(D{r}<=C{r},0,NETWORKDAYS(C{r}+1,D{r},休日一覧))")
+    ck.cell(r, 6, f'=IF(E{r}>=10,"◎",IF(E{r}>=5,"○",IF(E{r}>=1,"△","余裕0")))')
+    ck.cell(r, 7, why); ck.cell(r, 8, how)
+    for c in range(2, 9):
+        x = ck.cell(r, c); x.border = B; x.font = F(9); x.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center" if c in (3, 4, 5, 6) else "left")
+    ck.row_dimensions[r].height = 42
+    r += 1
+r += 1
+ck.cell(r, 2, "雨天リスクの見込み").font = F(11, True); r += 1
+rain = [("擁壁工事（12/18～2/22、作業日 約40日）", 5, "冬期の福岡は1か月に約10日の降水日。土工・打設・型枠建込みが止まる日を約5日と見込む。"),
+        ("建物の外部工事（上棟～外構、作業日 約25日）", 3, "上棟・屋根・外壁・外構が雨の影響を受ける。約3日と見込む。")]
+for i, h in enumerate(("区間", "見込み（作業日）", "", "", "", "考え方")):
+    if h:
+        x = ck.cell(r, 2 + i, h); x.font = F(10, True); x.fill = GRAY; x.border = B
+r += 1
+r_rain0 = r
+for a_, n_, c_ in rain:
+    ck.cell(r, 2, a_).font = F(9); ck.cell(r, 3, n_).font = F(9, c="FF0000FF"); ck.cell(r, 7, c_).font = F(9)
+    for c in (2, 3, 7):
+        ck.cell(r, c).border = B
+    r += 1
+ck.cell(r, 2, "雨天見込み 合計").font = F(10, True); ck.cell(r, 3, f"=SUM(C{r_rain0}:C{r-1})").font = F(10, True)
+r += 1
+ck.cell(r, 2, "引渡しまでの余裕 − 雨天見込み").font = F(10, True)
+ck.cell(r, 3, f"=E11-C{r-1}").font = F(10, True, "FFB00000")
+ck.cell(r, 7, "0以上なら4月末に間に合う見込み。マイナスなら土曜作業・早強セメント・外構の分割で取り戻す。").font = F(9)
+r += 2
+ck.cell(r, 2, "総合評価").font = F(11, True)
+ck.cell(r + 1, 2, "4月末完了は実現可能。ただし余裕は作業日9日で、雨天見込み約8日を差し引くと約1日しかない。"
+                  "クリティカルは「掘削（杭打ち前）」「北面埋戻し → 基礎」「外構」の3点。").font = F(10)
+ck.cell(r + 2, 2, "余裕を増やす手段：①立上りに早強セメント（約3日）②外構の分割着手（約3～4日）③遅れた週は土曜作業。①②を採用すると余裕は約15日になる。").font = F(10)
+ck.page_setup.orientation = "landscape"; ck.page_setup.fitToWidth = 1; ck.page_setup.fitToHeight = 0
+ck.sheet_properties.pageSetUpPr.fitToPage = True
 wb.active = 0
 ref = f"'条件・前提'!$B${r0+1}:$B${r0+len(hl)}"
 wb.defined_names["休日一覧"] = DefinedName("休日一覧", attr_text=ref)
