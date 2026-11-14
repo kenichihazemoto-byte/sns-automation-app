@@ -92,14 +92,39 @@ label.field { display: grid; gap: 4px; font-weight: 700; font-size: 13.5px; }
 .banner { border: 1px solid var(--line); border-left: 4px solid var(--mid); background: var(--mid-bg); padding: 10px 14px; border-radius: 6px; font-size: 13.5px; }
 
 /* 結果 */
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.kpi { padding: 12px 14px; border-left: 1px solid var(--line); }
-.kpi:first-child { border-left: 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.kpi { padding: 12px 14px; background: var(--surface); }
+.kpi .s { font-size: 12px; color: var(--muted); font-family: var(--f-num); }
+.kpi.good { background: var(--ok-bg); }
+.kpi.good .v { color: var(--ok); }
 .kpi .k { font-size: 12px; color: var(--muted); }
 .kpi .v { font-family: var(--f-num); font-size: 19px; font-variant-numeric: tabular-nums; }
 .kpi.warn { background: var(--hi-bg); }
 .kpi.warn .v { color: var(--hi); }
-@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi:nth-child(3) { border-left: 0; } .kpi:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+/* オプション・別途の区分 */
+.opts { display: grid; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.opt { display: grid; grid-template-columns: minmax(150px, 1fr) auto; gap: 6px 12px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); }
+.opt:first-child { border-top: 0; }
+.opt .oname { font-size: 14px; min-width: 0; overflow-wrap: anywhere; display: flex; gap: 6px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { font-size: 12.5px; padding: 4px 10px; cursor: pointer; border-left: 1px solid var(--line); white-space: nowrap; }
+.seg label:first-of-type { border-left: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg input:checked + span { font-weight: 700; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--surface); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 640px) { .opt { grid-template-columns: 1fr; } }
+.addopt { display: flex; gap: 8px; flex-wrap: wrap; }
+.addopt input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--surface); }
+details.opt-wrap > summary { cursor: pointer; font-weight: 700; font-family: var(--f-display); font-size: 16px; }
+details.opt-wrap { display: grid; gap: 12px; }
+.counts { font-size: 12.5px; color: var(--muted); font-weight: 400; font-family: var(--f-body); }
+.vendor { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+.vendor input { flex: 1 1 160px; }
+td.delta-plus { color: var(--ok); }
+td.delta-minus { color: var(--hi); }
+.subtle { color: var(--muted); }
 
 .title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .title-row input { font-family: var(--f-display); font-size: 18px; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; min-width: 0; flex: 1 1 260px; background: var(--surface); }
@@ -143,6 +168,9 @@ td.st { white-space: nowrap; font-weight: 700; }
 .st-計上なし { color: var(--hi); }
 .st-要確認 { color: var(--mid); }
 .st-対象外 { color: var(--muted); font-weight: 400; }
+.sp-一致, .op-整合 { color: var(--ok); }
+.sp-相違, .op-不整合 { color: var(--hi); }
+.sp-要確認, .op-要確認 { color: var(--mid); }
 
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
@@ -167,7 +195,7 @@ ol.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px
     <div>
       <div class="brand-eyebrow">ハゼモト建設 工務部</div>
       <h1>実行予算チェッカー</h1>
-      <p class="sub">実行予算書を、設計図書・工事請負契約書・仕上げ表（＋協力業者見積）と突き合わせ、計上漏れ・数量差・仕様違い・粗利をClaudeが点検します。</p>
+      <p class="sub">実行予算書を、ARCHITREND ONEの予算書・設計図書・工事請負契約書・仕上げ表・協力業者見積と突き合わせ、計上漏れ・書類間の相違・オプション／別途の区分・実行予算の余地をClaudeが点検します。</p>
     </div>
     <nav class="tabs" aria-label="画面切替">
       <a href="#new" id="tab-new">新規チェック</a>
@@ -185,6 +213,15 @@ ol.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px
     </div>
     <div class="slots" id="slots"></div>
     <div hidden id="inputs"></div>
+    <details class="opt-wrap" id="optWrap" open>
+      <summary>オプション・別途工事の区分 <span class="counts" id="optCount"></span></summary>
+      <p class="note">分かっている項目だけ選んでください。「未確認」のままの項目はClaudeが契約書・図面から判定します。選んだ区分と予算書・契約書が食い違っていれば指摘します。</p>
+      <div class="opts" id="opts"></div>
+      <div class="addopt">
+        <input id="newOpt" placeholder="項目を追加（例：ウッドデッキ、薪ストーブ）" aria-label="追加する項目名">
+        <button class="btn" id="addOpt">追加</button>
+      </div>
+    </details>
     <label class="field" for="memo">補足メモ（任意）
       <textarea id="memo" rows="3" placeholder="例：外構は別途工事。太陽光は施主支給。地盤改良は調査結果待ち。"></textarea>
     </label>
@@ -217,13 +254,14 @@ ol.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px
 // ---------------------------------------------------------------- 定数
 const SLOTS = [
   { kind: "budget", label: "実行予算書", hint: "工務（安元さん）作成。Excelのままが一番正確に読めます", required: true },
+  { kind: "archi", label: "ARCHITREND ONE による予算書", hint: "任意。ARCHITREND ONEの積算・見積出力（Excel・CSV・PDF）。図面から拾った数量・金額として実行予算と照合します", required: false },
   { kind: "drawings", label: "設計図書", hint: "配置・平面・立面・矩計・設備図など（PDF）", required: true },
   { kind: "contract", label: "工事請負契約書", hint: "見積内訳・特約・別途工事の記載があるもの", required: true },
   { kind: "finishes", label: "仕上げ表", hint: "内外部仕上げ表・設備仕様書", required: true },
-  { kind: "quotes", label: "協力業者見積書", hint: "任意。あると単価・数量の差まで照合できます。業者名・工種を入れてください", required: false },
+  { kind: "quotes", label: "協力業者見積書（複数可）", hint: "任意。業者ごとにファイルを追加し、業者名と工種を入れてください。単価・数量・範囲の差まで照合します", required: false },
 ];
 const KIND = Object.fromEntries(SLOTS.map(s => [s.kind, s]));
-const ORDER = ["budget", "contract", "finishes", "quotes", "drawings"];
+const ORDER = ["budget", "archi", "contract", "finishes", "quotes", "drawings"];
 const WORK_CATEGORIES = [
   "仮設工事", "解体・撤去工事", "地盤調査・地盤改良工事", "土工事", "基礎工事",
   "木工事（構造材・プレカット）", "木工事（造作材・大工手間）", "屋根・板金工事", "防水工事", "外壁工事",
@@ -233,14 +271,24 @@ const WORK_CATEGORIES = [
   "設計・申請・検査費（確認申請・長期優良・BELS等）", "諸経費・保険・瑕疵担保・現場管理費",
 ];
 const SEVERITIES = ["高", "中", "低"];
-const TYPES = ["計上漏れ", "数量差異", "仕様不一致", "単価・金額", "契約との不整合", "要確認"];
+const TYPES = ["計上漏れ", "数量差異", "仕様不一致", "書類間の相違", "区分の不整合", "単価・金額", "契約との不整合", "要確認"];
+const OPT_STATUS = ["未確認", "本体に含む", "オプション", "別途", "なし"];
+const OPT_HELP = { "本体に含む": "請負本体に含む", "オプション": "追加契約・オプション", "別途": "施主手配・別契約（予算に入れない）", "なし": "今回は無し" };
+const DEFAULT_OPTIONS = [
+  "外構工事", "擁壁・土留め", "地盤調査", "地盤改良工事", "既存建物の解体", "屋外給排水引込・本管接続", "水道加入金・負担金",
+  "太陽光発電", "蓄電池", "V2H・EV充電設備", "給湯器（エコキュート等）のグレード", "エアコン（居室）", "床下エアコン",
+  "照明器具", "カーテン・ブラインド", "造作家具・カップボード", "食洗機", "シャッター・雨戸", "網戸",
+  "TVアンテナ・LAN配線", "インターホン・防犯カメラ", "確認申請・長期優良・BELS等の申請", "地鎮祭・上棟式", "登記・火災保険・ローン諸費用",
+];
+const SPEC_STATUS = ["一致", "相違", "要確認"];
+const ROOM_KIND = ["削減余地", "不足リスク"];
 const COVER = ["計上あり", "計上なし", "要確認", "対象外"];
 const MAX_FILE_MB = 40;
 const MAX_IMAGES_DEFAULT = 8;
 const SCAN_MIN = 10; // これ未満の文字数のPDFページはスキャン画像とみなす
 
 // ---------------------------------------------------------------- 状態
-const state = { files: [], running: false, ctl: null, current: null, history: [], historyLoaded: false };
+const state = { files: [], running: false, ctl: null, current: null, history: [], historyLoaded: false, options: DEFAULT_OPTIONS.map(name => ({ name, status: "未確認" })) };
 let cap = { sample: null, db: null, user: null, downloads: null, me: null, limits: null };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -256,7 +304,8 @@ function renderSlots() {
   $("slots").innerHTML = SLOTS.map(s => {
     const fs = state.files.filter(f => f.kind === s.kind);
     const ok = fs.some(f => f.status === "ready");
-    const badge = ok ? '<span class="tag done">添付済</span>' : s.required ? '<span class="tag req">必須</span>' : '<span class="tag opt">任意</span>';
+    const n = fs.filter(f => f.status === "ready").length;
+    const badge = ok ? `<span class="tag done">添付済${s.kind === "quotes" ? " " + n + "件" : ""}</span>` : s.required ? '<span class="tag req">必須</span>' : '<span class="tag opt">任意</span>';
     return `<div class="slot" data-kind="${s.kind}">
       <div class="slot-name">${esc(s.label)} ${badge}</div>
       <div><button class="btn" data-pick="${s.kind}" ${state.running ? "disabled" : ""}>ファイルを追加</button></div>
@@ -269,7 +318,9 @@ function fileRow(f) {
   const st = f.status === "reading" ? '<span class="meta">読み取り中…</span>'
     : f.status === "error" ? `<span class="tag err">${esc(f.error)}</span>`
     : `<span class="meta">${esc(f.summary)}</span>`;
-  const note = f.kind === "quotes" ? `<input id="note-${f.id}" data-note="${f.id}" placeholder="業者名・工種（例：九州シンセイ 外構）" value="${esc(f.note)}">` : "";
+  const note = f.kind === "quotes" ? `<span class="vendor">
+      <input id="vendor-${f.id}" data-vendor="${f.id}" placeholder="業者名（例：九州シンセイ）" aria-label="業者名" value="${esc(f.vendor || "")}">
+      <input id="trade-${f.id}" data-trade="${f.id}" placeholder="工種（例：外構）" aria-label="工種" value="${esc(f.trade || "")}"></span>` : "";
   return `<div class="file"><span class="fname">${esc(f.name)}</span>${st}${note}
     <button class="icon-x" title="外す" aria-label="${esc(f.name)}を外す" data-remove="${f.id}" ${state.running ? "disabled" : ""}>×</button></div>`;
 }
@@ -285,8 +336,11 @@ $("inputs").addEventListener("change", e => {
   if (e.target.type === "file") { addFiles(e.target.id.slice(3), e.target.files); e.target.value = ""; }
 });
 $("slots").addEventListener("input", e => {
-  const id = e.target.dataset.note;
-  if (id) { const f = state.files.find(x => x.id === id); if (f) f.note = e.target.value; }
+  const id = e.target.dataset.vendor || e.target.dataset.trade;
+  const f = id && state.files.find(x => x.id === id);
+  if (!f) return;
+  if (e.target.dataset.vendor) f.vendor = e.target.value; else f.trade = e.target.value;
+  f.note = [f.vendor, f.trade].map(v => (v || "").trim()).filter(Boolean).join(" ／ ");
 });
 for (const ev of ["dragover", "dragleave", "drop"]) {
   $("slots").addEventListener(ev, e => {
@@ -344,6 +398,33 @@ async function readFile(f) {
   }
 }
 
+// オプション・別途の区分
+function renderOptions() {
+  $("opts").innerHTML = state.options.map((o, i) => `<div class="opt">
+    <div class="oname">${esc(o.name)}${o.custom ? ` <button class="icon-x" data-delopt="${i}" aria-label="${esc(o.name)}を削除">×</button>` : ""}</div>
+    <div class="seg" role="radiogroup" aria-label="${esc(o.name)}の区分">
+      ${OPT_STATUS.map(st => `<label title="${esc(OPT_HELP[st] || "Claudeが判定")}"><input type="radio" name="opt-${i}" value="${st}" ${o.status === st ? "checked" : ""}><span>${st}</span></label>`).join("")}
+    </div></div>`).join("");
+  const set = state.options.filter(o => o.status !== "未確認").length;
+  $("optCount").textContent = `（${state.options.length}項目中 ${set}項目を指定）`;
+}
+$("opts").addEventListener("change", e => {
+  const m = e.target.name?.match(/^opt-(\d+)$/);
+  if (m) { state.options[+m[1]].status = e.target.value; renderOptions(); }
+});
+$("opts").addEventListener("click", e => {
+  const b = e.target.closest("[data-delopt]");
+  if (b) { state.options.splice(+b.dataset.delopt, 1); renderOptions(); }
+});
+function addOption() {
+  const v = $("newOpt").value.trim();
+  if (!v || state.options.some(o => o.name === v)) { $("newOpt").value = ""; return; }
+  state.options.push({ name: v, status: "未確認", custom: true });
+  $("newOpt").value = ""; renderOptions();
+}
+$("addOpt").addEventListener("click", addOption);
+$("newOpt").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addOption(); } });
+
 function missingSlots() {
   return SLOTS.filter(s => s.required && !state.files.some(f => f.kind === s.kind && f.status === "ready"));
 }
@@ -375,7 +456,7 @@ function cutToBytes(text, maxBytes) {
 
 function instructions() {
   return `あなたはハゼモト建設株式会社（北九州市・木造注文住宅／HEAT20 G2・ZEH標準・耐震等級3・長期優良住宅）の積算・工事管理のベテランです。
-工務担当が作成した「実行予算書」を、設計図書・工事請負契約書・仕上げ表・協力業者見積書と突き合わせ、着工前に予算の漏れや誤りを潰してください。
+工務担当が作成した「実行予算書」を、ARCHITREND ONE（CAD）による予算書・設計図書・工事請負契約書（明細）・仕上げ表・協力業者見積書と突き合わせ、着工前に予算の漏れや誤りを潰し、実行予算の余地（削れる所・足りない所）を見極めてください。
 
 ## チェック観点
 1. 計上漏れ：図面・仕上げ表・契約書（特記・オプション・追加工事）にあるのに予算書にない項目
@@ -385,12 +466,22 @@ function instructions() {
 4. 単価・金額：業者見積と予算の差、桁違い、数量×単価の計算誤り、相場から大きく外れた単価
 5. 契約との不整合：契約金額・工期・支払条件・特約・工事範囲（別途工事）と予算の関係
 6. 粗利：契約金額（税抜）と予算合計（税抜）。粗利率20%未満、または不自然に高い場合は指摘
+7. 書類間の相違：設計図書・仕上げ表・工事請負契約書の明細・ARCHITREND ONE予算書・実行予算書・業者見積の間で、同じ項目の値が食い違っていないか。
+   少なくとも次は必ず specMatrix で照合する：太陽光発電の容量（kW）とパネル枚数・メーカー、蓄電池容量（kWh）、延床面積・施工床面積、断熱等性能等級・UA値、耐震等級、
+   給湯器の種類・容量、キッチン・ユニットバス・洗面・トイレの品番、サッシの種類・ガラス、屋根材、外壁材、床材、換気システム、エアコン台数、外構の範囲
+8. オプション・別途の区分：下の「オプション・別途の区分」で担当者が指定した区分と、契約書・予算書の扱いが合っているか
+   - 「本体に含む」「オプション」→ 実行予算に計上されているべき（無ければ計上漏れ）
+   - 「別途」→ 契約に含まれず、実行予算にも入れない（入っていれば二重計上・範囲外の可能性）。契約書に別途と明記されているかも確認
+   - 「未確認」→ 契約書・図面から区分を推定して記載
+9. ARCHITREND ONE予算書がある場合：CADの拾い数量・金額と実行予算の差を工種ごとに比べ、数量差異・計上漏れを指摘
+10. 協力業者見積が複数ある場合：業者ごとに、見積の範囲・数量・金額を実行予算の該当工種と比べる。同じ工種に複数の見積があれば比較する
+11. 実行予算の余地：見積より高く積んでいる・数量過大・重複計上・予備費の過多など「削減余地」と、見積より安い・数量不足・漏れなど「不足リスク」を budgetRoom に金額付きで挙げる。計上漏れも不足リスクとして含める
 
 ## ルール
 - 根拠は必ず「資料名＋ページ（p.番号）／シート名／図面番号」で示す。読み取れないことを断定しない（その場合 type は「要確認」）
 - 金額は円単位の数値（税抜）。不明は null
 - severity：高＝金額影響が大きい・施工上必須の漏れ／中＝確認が必要な差異／低＝表記ゆれ・軽微
-- findings は重要度の高い順に最大40件。細かすぎる指摘を大量に出すより、実害のあるものを確実に
+- findings は重要度の高い順に最大40件（書類間の相違・区分の不整合も含める）。細かすぎる指摘を大量に出すより、実害のあるものを確実に
 - coverage は次の27工種すべてを判定：${WORK_CATEGORIES.join("、")}
 - 業者見積が無い工種の単価は、北九州エリアの一般的な相場観でコメントする
 - PDFの文字は機械抽出のため表の列が崩れていることがある。前後関係から読み取ること
@@ -418,6 +509,27 @@ function outputSpec() {
     "estimatedImpactYen": 予算への影響額の概算（数値 or null)
   }],
   "coverage": [{ "category": "工種名", "status": "${COVER.join("|")}", "budgetAmountYen": 数値 or null, "comment": "短い説明" }],
+  "specMatrix": [{
+    "item": "照合項目（例：太陽光発電 容量）",
+    "drawings": "設計図書の値（無ければ空文字）", "finishes": "仕上げ表の値", "contract": "契約書明細の値",
+    "archi": "ARCHITREND ONE予算書の値", "budget": "実行予算書の値", "quotes": "業者見積の値",
+    "status": "${SPEC_STATUS.join("|")}", "comment": "相違の内容と根拠ページ"
+  }],
+  "optionChecks": [{
+    "name": "項目名（指定された全項目）", "selected": "担当者の指定区分（未確認ならClaudeの推定を『推定：〜』と書く）",
+    "contract": "契約書での扱い", "budget": "実行予算での扱い（計上額など）",
+    "status": "整合|不整合|要確認", "comment": "短い説明"
+  }],
+  "budgetRoom": {
+    "summary": "実行予算の余地についての総評（200字程度）",
+    "contingencyYen": 予算書内の予備費・調整費の額（数値 or null),
+    "items": [{
+      "kind": "${ROOM_KIND.join("|")}", "category": "工種", "item": "項目",
+      "budgetYen": 予算額（数値 or null), "proposedYen": 妥当と考える額（数値 or null),
+      "deltaYen": 予算額−妥当額（削減余地はプラス、不足リスクはマイナス。数値）,
+      "reason": "根拠（見積額・数量・資料ページ）"
+    }]
+  },
   "questionsForKoumu": ["工務（予算作成者）へ確認すべき事項"],
   "missingInfo": ["判定に必要だが資料から読み取れなかった情報"]
 }`;
@@ -461,7 +573,11 @@ async function pickImages(log) {
 function buildPrompt(memo, imageLabels) {
   const docs = state.files.filter(f => f.status === "ready" && f.text)
     .sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
-  const head = instructions() + (memo ? `\n\n## 担当者からの補足\n${memo}` : "");
+  const optText = "\n\n## オプション・別途の区分（担当者の指定）\n" + state.options.map(o => `- ${o.name}：${o.status}`).join("\n");
+  const quotes = state.files.filter(f => f.kind === "quotes" && f.status === "ready");
+  const vendorText = quotes.length ? "\n\n## 協力業者見積の一覧\n" + quotes.map((q, i) => `- 見積${i + 1}：${q.note || "業者名・工種未入力"}（${q.name}）`).join("\n") : "";
+  const archiText = state.files.some(f => f.kind === "archi" && f.status === "ready") ? "" : "\n\n※ARCHITREND ONE予算書は添付されていません（specMatrix の archi は空文字）。";
+  const head = instructions() + (memo ? `\n\n## 担当者からの補足\n${memo}` : "") + optText + vendorText + archiText;
   const imgPart = imageLabels.length ? `\n\n## 添付画像（この順で添付）\n${imageLabels.map((l, i) => `画像${i + 1}：${l}`).join("\n")}` : "";
   const noQuote = state.files.some(f => f.kind === "quotes" && f.status === "ready") ? "" :
     "\n\n※協力業者見積書は添付されていません。単価は相場観で判断し、見積取得を勧める工種があれば questionsForKoumu に含めてください。";
@@ -500,10 +616,37 @@ function normalize(raw) {
     budgetAmountYen: num(c?.budgetAmountYen), comment: String(c?.comment ?? ""),
   }));
   const strs = a => (Array.isArray(a) ? a.map(String).filter(Boolean) : []);
+  const str = v => String(v ?? "");
+  const specMatrix = (Array.isArray(r.specMatrix) ? r.specMatrix : []).map(x => ({
+    item: str(x?.item), drawings: str(x?.drawings), finishes: str(x?.finishes), contract: str(x?.contract),
+    archi: str(x?.archi), budget: str(x?.budget), quotes: str(x?.quotes),
+    status: SPEC_STATUS.includes(x?.status) ? x.status : "要確認", comment: str(x?.comment),
+  })).sort((a, b) => ["相違", "要確認", "一致"].indexOf(a.status) - ["相違", "要確認", "一致"].indexOf(b.status));
+  const optionChecks = (Array.isArray(r.optionChecks) ? r.optionChecks : []).map(x => ({
+    name: str(x?.name), selected: str(x?.selected), contract: str(x?.contract), budget: str(x?.budget),
+    status: ["整合", "不整合", "要確認"].includes(x?.status) ? x.status : "要確認", comment: str(x?.comment),
+  }));
+  const br = r.budgetRoom && typeof r.budgetRoom === "object" ? r.budgetRoom : {};
+  const roomItems = (Array.isArray(br.items) ? br.items : []).map(x => {
+    const b = num(x?.budgetYen), p = num(x?.proposedYen);
+    let d = num(x?.deltaYen);
+    if (d == null && b != null && p != null) d = b - p;
+    const kind = ROOM_KIND.includes(x?.kind) ? x.kind : d != null && d < 0 ? "不足リスク" : "削減余地";
+    if (d != null) d = kind === "削減余地" ? Math.abs(d) : -Math.abs(d);
+    return { kind, category: str(x?.category), item: str(x?.item), budgetYen: b, proposedYen: p, deltaYen: d, reason: str(x?.reason) };
+  });
+  const sum = k => roomItems.filter(x => x.kind === k).reduce((a, x) => a + (x.deltaYen || 0), 0);
+  const roomPlus = sum("削減余地"), roomMinus = sum("不足リスク");
+  const net = roomPlus + roomMinus;
+  const expGross = gross != null ? gross + net : null;
+  const expRate = expGross != null && contract ? Math.round(expGross / contract * 1000) / 10 : null;
   return {
     projectName: String(r.projectName ?? ""), overview: String(r.overview ?? ""),
     contractAmountYen: contract, budgetTotalYen: budget, grossProfitYen: gross, grossProfitRate: rate,
     findings, coverage, questionsForKoumu: strs(r.questionsForKoumu), missingInfo: strs(r.missingInfo),
+    specMatrix, optionChecks,
+    budgetRoom: { summary: str(br.summary), contingencyYen: num(br.contingencyYen), items: roomItems, plusYen: roomPlus, minusYen: roomMinus, netYen: net },
+    expectedGrossYen: expGross, expectedGrossRate: expRate,
   };
 }
 
@@ -541,7 +684,8 @@ $("run").addEventListener("click", async () => {
     const raw = await cap.sample.json(prompt, opts);
     const result = normalize(raw);
     const files = state.files.filter(f => f.status === "ready").map(f => ({ kind: f.kind, name: f.name, note: f.note || "" }));
-    const rec = { id: null, projectName: result.projectName, createdAt: Date.now(), createdBy: cap.me, files, memo, result, resolved: [] };
+    const options = state.options.map(o => ({ name: o.name, status: o.status }));
+    const rec = { id: null, projectName: result.projectName, createdAt: Date.now(), createdBy: cap.me, files, memo, options, result, resolved: [] };
     rec.id = await saveRecord(rec, log);
     state.current = rec;
     log("完了しました。");
@@ -560,7 +704,7 @@ $("stop").addEventListener("click", () => state.ctl?.abort());
 // ---------------------------------------------------------------- 履歴（db）
 function summaryOf(rec) {
   const f = rec.result.findings;
-  return { findingCount: f.length, highCount: f.filter(x => x.severity === "高").length, grossProfitRate: rec.result.grossProfitRate };
+  return { findingCount: f.length, highCount: f.filter(x => x.severity === "高").length, grossProfitRate: rec.result.grossProfitRate, expectedGrossRate: rec.result.expectedGrossRate ?? null };
 }
 async function saveRecord(rec, log) {
   if (!cap.db) { log("履歴は保存できませんでした（この表示では保存機能が使えません）。"); return null; }
@@ -623,7 +767,7 @@ async function renderHistory() {
       <div class="hstats">
         ${x.highCount ? `<span class="sev 高">高 ${x.highCount}</span>` : ""}
         <span class="tag ${res >= n && n ? "done" : "opt"}">対応済 ${res}/${n}</span>
-        ${rate != null ? `<span class="num" style="color:var(${rate < 20 ? "--hi" : "--muted"})">粗利 ${rate}%</span>` : ""}
+        ${rate != null ? `<span class="num" style="color:var(${rate < 20 ? "--hi" : "--muted"})">粗利 ${rate}%${x.expectedGrossRate != null ? ` → 見込み ${x.expectedGrossRate}%` : ""}</span>` : ""}
         ${del}
       </div>
       <div class="hmeta">${fmtDate(x.createdAt)}${who} ・ 資料${(x.files || []).length}点</div>
@@ -673,6 +817,13 @@ function showResult() {
   const canSave = !!rec.id && !!cap.db;
   const chips = [["all", "すべて " + r.findings.length], ["未対応", "未対応 " + (r.findings.length - resolved.size)], ...SEVERITIES.map(s => [s, `${s} ${count(s)}`])];
   const rateWarn = r.grossProfitRate != null && r.grossProfitRate < 20;
+  const room = r.budgetRoom && (r.budgetRoom.items?.length || r.budgetRoom.summary) ? r.budgetRoom : null;
+  const expWarn = r.expectedGrossRate != null && r.expectedGrossRate < 20;
+  const spec = r.specMatrix || [], optc = r.optionChecks || [];
+  const specCols = [["drawings", "設計図書"], ["finishes", "仕上げ表"], ["contract", "契約書明細"], ["archi", "ARCHITREND"], ["budget", "実行予算"], ["quotes", "業者見積"]]
+    .filter(([k]) => spec.some(x => x[k]));
+  const diffN = spec.filter(x => x.status === "相違").length;
+  const ngN = optc.filter(x => x.status === "不整合").length;
   v.className = ""; v.style.display = "grid"; v.style.gap = "20px";
   v.innerHTML = `
   <div class="panel">
@@ -688,8 +839,9 @@ function showResult() {
     <div class="kpis">
       <div class="kpi"><div class="k">契約金額（税抜）</div><div class="v">${yen(r.contractAmountYen)}</div></div>
       <div class="kpi"><div class="k">実行予算合計（税抜）</div><div class="v">${yen(r.budgetTotalYen)}</div></div>
-      <div class="kpi"><div class="k">粗利額</div><div class="v">${yen(r.grossProfitYen)}</div></div>
-      <div class="kpi ${rateWarn ? "warn" : ""}"><div class="k">粗利率${rateWarn ? "（20%未満）" : ""}</div><div class="v">${r.grossProfitRate == null ? "—" : r.grossProfitRate + "%"}</div></div>
+      <div class="kpi ${rateWarn ? "warn" : ""}"><div class="k">粗利（予算どおり）${rateWarn ? "・20%未満" : ""}</div><div class="v">${r.grossProfitRate == null ? "—" : r.grossProfitRate + "%"}</div><div class="s">${yen(r.grossProfitYen)}</div></div>
+      ${room ? `<div class="kpi"><div class="k">予算の余地（削減−不足）</div><div class="v">${signedYen(room.netYen)}</div><div class="s">削減 ${signedYen(room.plusYen)} ／ 不足 ${signedYen(room.minusYen)}</div></div>
+      <div class="kpi ${expWarn ? "warn" : r.expectedGrossRate != null ? "good" : ""}"><div class="k">見込み粗利（余地を反映）</div><div class="v">${r.expectedGrossRate == null ? "—" : r.expectedGrossRate + "%"}</div><div class="s">${yen(r.expectedGrossYen)}</div></div>` : ""}
     </div>
     <p class="note">金額はClaudeが資料から読み取った値です。必ず原本で確認してください。添付資料：${(rec.files || []).map(f => esc(KIND[f.kind]?.label + "「" + f.name + "」")).join("、")}</p>
   </div>
@@ -724,6 +876,34 @@ function showResult() {
     </div>
   </div>
 
+  ${spec.length ? `<div class="panel">
+    <div class="panel-head"><h2>書類間の照合（設計図書・仕上げ表・契約書明細・予算）</h2><span class="counts">相違 ${diffN}件 ／ ${spec.length}項目</span></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>項目</th><th>判定</th>${specCols.map(([, l]) => `<th>${l}</th>`).join("")}<th>コメント</th></tr></thead>
+      <tbody>${spec.map(x => `<tr><td><b>${esc(x.item)}</b></td><td class="st sp-${x.status}">${x.status}</td>${specCols.map(([k]) => `<td>${esc(x[k]) || '<span class="subtle">—</span>'}</td>`).join("")}<td>${esc(x.comment)}</td></tr>`).join("")}</tbody>
+    </table></div>
+  </div>` : ""}
+
+  ${optc.length ? `<div class="panel">
+    <div class="panel-head"><h2>オプション・別途の区分チェック</h2><span class="counts">不整合 ${ngN}件 ／ ${optc.length}項目</span></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>項目</th><th>判定</th><th>指定区分</th><th>契約書</th><th>実行予算</th><th>コメント</th></tr></thead>
+      <tbody>${optc.map(x => `<tr><td><b>${esc(x.name)}</b></td><td class="st op-${x.status}">${x.status}</td><td>${esc(x.selected)}</td><td>${esc(x.contract)}</td><td>${esc(x.budget)}</td><td>${esc(x.comment)}</td></tr>`).join("")}</tbody>
+    </table></div>
+  </div>` : ""}
+
+  ${room ? `<div class="panel">
+    <div class="panel-head"><h2>実行予算の余地</h2><span class="counts">予備費・調整費 ${yen(room.contingencyYen)}</span></div>
+    ${room.summary ? `<p class="overview">${esc(room.summary)}</p>` : ""}
+    <div class="table-wrap"><table>
+      <thead><tr><th>区分</th><th>工種</th><th>項目</th><th style="text-align:right">予算額</th><th style="text-align:right">妥当額</th><th style="text-align:right">余地</th><th>根拠</th></tr></thead>
+      <tbody>${room.items.map(x => `<tr><td class="st ${x.kind === "削減余地" ? "st-計上あり" : "st-計上なし"}">${x.kind}</td><td>${esc(x.category)}</td><td>${esc(x.item)}</td><td class="r num">${yen(x.budgetYen)}</td><td class="r num">${yen(x.proposedYen)}</td><td class="r num ${x.deltaYen > 0 ? "delta-plus" : x.deltaYen < 0 ? "delta-minus" : ""}">${signedYen(x.deltaYen)}</td><td>${esc(x.reason)}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <p class="note">余地＝予算額−妥当額。プラスは予算を減らせる見込み、マイナスは不足の見込みです。見込み粗利＝予算どおりの粗利＋余地の合計。</p>
+  </div>` : ""}
+
+  ${rec.options?.some(o => o.status !== "未確認") ? `<div class="panel"><h3>このチェックで指定した区分</h3><p class="note">${rec.options.filter(o => o.status !== "未確認").map(o => esc(o.name + "：" + o.status)).join("　")}</p></div>` : ""}
+
   <div class="panel">
     <h2>工種別の計上チェック</h2>
     <div class="table-wrap"><table>
@@ -737,6 +917,7 @@ function showResult() {
     <div class="panel"><h3>資料から読み取れなかった情報</h3>${listHtml(r.missingInfo)}</div>
   </div>`;
 }
+function signedYen(v) { return v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Math.round(v)).toLocaleString("ja-JP") + "円"; }
 function listHtml(a) { return a.length ? `<ol class="qs">${a.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : '<p class="empty">なし</p>'; }
 
 $("view-result").addEventListener("click", async e => {
@@ -768,7 +949,20 @@ async function saveCsv() {
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const head = ["対応", "重要度", "種別", "工種", "項目", "予算書", "図面・仕上表等", "根拠", "内容", "対応方針", "影響額(円)"];
   const rows = rec.result.findings.map((f, i) => [resolved.has(i) ? "済" : "", f.severity, f.type, f.category, f.item, f.budgetValue, f.referenceValue, f.source, f.detail, f.action, f.estimatedImpactYen ?? ""].map(q).join(","));
-  const data = "﻿" + [head.map(q).join(","), ...rows].join("\r\n");
+  const r = rec.result, lines = [head.map(q).join(","), ...rows];
+  if (r.specMatrix?.length) {
+    lines.push("", q("書類間の照合"), ["項目", "判定", "設計図書", "仕上げ表", "契約書明細", "ARCHITREND", "実行予算", "業者見積", "コメント"].map(q).join(","));
+    r.specMatrix.forEach(x => lines.push([x.item, x.status, x.drawings, x.finishes, x.contract, x.archi, x.budget, x.quotes, x.comment].map(q).join(",")));
+  }
+  if (r.optionChecks?.length) {
+    lines.push("", q("オプション・別途の区分"), ["項目", "判定", "指定区分", "契約書", "実行予算", "コメント"].map(q).join(","));
+    r.optionChecks.forEach(x => lines.push([x.name, x.status, x.selected, x.contract, x.budget, x.comment].map(q).join(",")));
+  }
+  if (r.budgetRoom?.items?.length) {
+    lines.push("", q("実行予算の余地"), ["区分", "工種", "項目", "予算額", "妥当額", "余地(予算−妥当)", "根拠"].map(q).join(","));
+    r.budgetRoom.items.forEach(x => lines.push([x.kind, x.category, x.item, x.budgetYen ?? "", x.proposedYen ?? "", x.deltaYen ?? "", x.reason].map(q).join(",")));
+  }
+  const data = "﻿" + lines.join("\r\n");
   try { await cap.downloads.save({ filename: `予算書チェック_${(rec.projectName || "結果").replace(/[\\/:*?"<>|]/g, "_")}.csv`, data }); }
   catch (e) { if (e?.code !== "cancelled" && e?.code !== "dismissed") alertBanner("CSVを保存できませんでした。"); }
 }
@@ -797,7 +991,7 @@ function route() {
 window.addEventListener("hashchange", () => { filter = "all"; route(); });
 
 // ---------------------------------------------------------------- 起動
-renderSlots(); route();
+renderSlots(); renderOptions(); route();
 updateRunStatus();
 if (!window.pdfjsLib || !window.XLSX) alertBanner("ファイル読込ライブラリを読み込めませんでした。ページを開き直してください。");
 
