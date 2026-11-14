@@ -1,0 +1,816 @@
+<title>実行予算チェッカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 青焼き図面の青をアクセントに、方眼紙のような薄い罫で区切る業務ツール。左＝入力、右＝結果の1カラム縦積み */
+:root {
+  --bg: #f5f7f9;
+  --surface: #ffffff;
+  --line: #d9e0e7;
+  --fg: #17212b;
+  --muted: #5b6875;
+  --accent: #1f4e8c;
+  --accent-soft: #e6eef8;
+  --hi: #b42318; --hi-bg: #fdecea;
+  --mid: #9a5b00; --mid-bg: #fdf3e1;
+  --lo: #4a5866; --lo-bg: #eef1f4;
+  --ok: #1d6b45; --ok-bg: #e5f4ec;
+  --f-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151b; --surface: #161e26; --line: #2a3542; --fg: #e3e9ef; --muted: #9aa8b6;
+  --accent: #7fb0f0; --accent-soft: #1a2a3d;
+  --hi: #ff8a7a; --hi-bg: #3a1d1a; --mid: #f0b85a; --mid-bg: #352812; --lo: #aab6c2; --lo-bg: #222c36;
+  --ok: #6fd3a0; --ok-bg: #15301f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #161e26; --line: #2a3542; --fg: #e3e9ef; --muted: #9aa8b6;
+  --accent: #7fb0f0; --accent-soft: #1a2a3d;
+  --hi: #ff8a7a; --hi-bg: #3a1d1a; --mid: #f0b85a; --mid-bg: #352812; --lo: #aab6c2; --lo-bg: #222c36;
+  --ok: #6fd3a0; --ok-bg: #15301f; color-scheme: dark }
+
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.35; }
+h1 { font-size: 26px; font-weight: 700; }
+h2 { font-size: 18px; font-weight: 700; }
+h3 { font-size: 15px; font-weight: 700; }
+.sub { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; border-bottom: 2px solid var(--accent); padding-bottom: 12px; }
+.brand-eyebrow { font-size: 12px; letter-spacing: .12em; color: var(--accent); font-weight: 700; }
+nav.tabs { display: flex; gap: 4px; }
+nav.tabs a { text-decoration: none; color: var(--muted); padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 14px; }
+nav.tabs a[aria-current="page"] { background: var(--accent); color: var(--surface); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+
+/* 資料スロット */
+.slots { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.slot { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: start; }
+.slot:first-child { border-top: 0; }
+.slot.drag { background: var(--accent-soft); }
+.slot-name { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.slot-hint { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.slot-files { grid-column: 1 / -1; display: grid; gap: 6px; }
+.file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; background: var(--bg); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+.file .fname { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.file .meta { color: var(--muted); font-size: 12px; }
+.file input { flex: 0 1 220px; min-width: 0; border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; background: var(--surface); font-size: 12.5px; }
+.tag { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+.tag.req { color: var(--hi); background: var(--hi-bg); }
+.tag.opt { color: var(--muted); background: var(--lo-bg); }
+.tag.done { color: var(--ok); background: var(--ok-bg); }
+.tag.err { color: var(--hi); background: var(--hi-bg); }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 12px; font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+a.btn { text-decoration: none; color: var(--fg); display: inline-block; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); padding: 10px 20px; font-size: 15px; }
+.btn.primary:hover { color: var(--surface); filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.danger { color: var(--hi); }
+.icon-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
+
+textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--surface); resize: vertical; }
+label.field { display: grid; gap: 4px; font-weight: 700; font-size: 13.5px; }
+
+.runbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.status { color: var(--muted); font-size: 13px; }
+.status.warn { color: var(--hi); }
+.progress { font-size: 13px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.note { font-size: 12.5px; color: var(--muted); }
+.banner { border: 1px solid var(--line); border-left: 4px solid var(--mid); background: var(--mid-bg); padding: 10px 14px; border-radius: 6px; font-size: 13.5px; }
+
+/* 結果 */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.kpi { padding: 12px 14px; border-left: 1px solid var(--line); }
+.kpi:first-child { border-left: 0; }
+.kpi .k { font-size: 12px; color: var(--muted); }
+.kpi .v { font-family: var(--f-num); font-size: 19px; font-variant-numeric: tabular-nums; }
+.kpi.warn { background: var(--hi-bg); }
+.kpi.warn .v { color: var(--hi); }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi:nth-child(3) { border-left: 0; } .kpi:nth-child(n+3) { border-top: 1px solid var(--line); } }
+
+.title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.title-row input { font-family: var(--f-display); font-size: 18px; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; min-width: 0; flex: 1 1 260px; background: var(--surface); }
+.overview { white-space: pre-wrap; margin: 0; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 12px; font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--surface); border-color: var(--fg); }
+
+.findings { display: grid; gap: 10px; }
+.finding { border: 1px solid var(--line); border-left-width: 5px; border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.finding.s-高 { border-left-color: var(--hi); }
+.finding.s-中 { border-left-color: var(--mid); }
+.finding.s-低 { border-left-color: var(--lo); }
+.finding.resolved { opacity: .55; }
+.f-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sev { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 4px; }
+.sev.高 { color: var(--hi); background: var(--hi-bg); }
+.sev.中 { color: var(--mid); background: var(--mid-bg); }
+.sev.低 { color: var(--lo); background: var(--lo-bg); }
+.ftype { font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 1px 8px; border-radius: 4px; font-weight: 700; }
+.fcat { font-size: 12.5px; color: var(--muted); }
+.fitem { font-weight: 700; }
+.impact { margin-left: auto; font-family: var(--f-num); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare > div { background: var(--bg); border-radius: 6px; padding: 6px 10px; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+.compare .lbl { display: block; font-size: 11.5px; color: var(--muted); letter-spacing: .04em; }
+@media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+.fdetail { margin: 0; font-size: 14px; }
+.faction { margin: 0; font-size: 14px; color: var(--accent); font-weight: 700; }
+.fsrc { font-size: 12px; color: var(--muted); }
+.done-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; cursor: pointer; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+td.r { text-align: right; white-space: nowrap; }
+td.st { white-space: nowrap; font-weight: 700; }
+.st-計上あり { color: var(--ok); }
+.st-計上なし { color: var(--hi); }
+.st-要確認 { color: var(--mid); }
+.st-対象外 { color: var(--muted); font-weight: 400; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+ol.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px; }
+
+/* 履歴 */
+.hist { display: grid; }
+.hrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px 4px; border-top: 1px solid var(--line); align-items: center; }
+.hrow:first-child { border-top: 0; }
+.hrow a { font-weight: 700; color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+.hrow a:hover { color: var(--accent); text-decoration: underline; }
+.hmeta { font-size: 12.5px; color: var(--muted); grid-column: 1; }
+.hstats { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: end; font-size: 12.5px; }
+@media (max-width: 560px) { .hrow { grid-template-columns: 1fr; } .hstats { grid-column: 1; grid-row: auto; justify-content: start; } }
+.empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
+.confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand-eyebrow">ハゼモト建設 工務部</div>
+      <h1>実行予算チェッカー</h1>
+      <p class="sub">実行予算書を、設計図書・工事請負契約書・仕上げ表（＋協力業者見積）と突き合わせ、計上漏れ・数量差・仕様違い・粗利をClaudeが点検します。</p>
+    </div>
+    <nav class="tabs" aria-label="画面切替">
+      <a href="#new" id="tab-new">新規チェック</a>
+      <a href="#history" id="tab-history">履歴</a>
+    </nav>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 新規チェック -->
+  <section id="view-new" class="panel" hidden>
+    <div class="panel-head">
+      <h2>資料をそろえる</h2>
+      <span class="note">PDF・Excel（.xlsx / .xls）・CSV・画像。各欄に複数ファイル可。ファイルは閲覧中のブラウザ内で読み取り、保存はしません。</span>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div hidden id="inputs"></div>
+    <label class="field" for="memo">補足メモ（任意）
+      <textarea id="memo" rows="3" placeholder="例：外構は別途工事。太陽光は施主支給。地盤改良は調査結果待ち。"></textarea>
+    </label>
+    <div class="runbar">
+      <button class="btn primary" id="run">チェック開始</button>
+      <button class="btn ghost" id="stop" hidden>中止</button>
+      <span class="status" id="runStatus"></span>
+    </div>
+    <div class="progress" id="progress" hidden></div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="view-result" hidden></section>
+
+  <!-- 履歴 -->
+  <section id="view-history" class="panel" hidden>
+    <div class="panel-head">
+      <h2>チェック履歴</h2>
+      <span class="note" id="histNote"></span>
+    </div>
+    <div class="hist" id="hist"><p class="empty">履歴を読み込んでいます…</p></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+// ---------------------------------------------------------------- 定数
+const SLOTS = [
+  { kind: "budget", label: "実行予算書", hint: "工務（安元さん）作成。Excelのままが一番正確に読めます", required: true },
+  { kind: "drawings", label: "設計図書", hint: "配置・平面・立面・矩計・設備図など（PDF）", required: true },
+  { kind: "contract", label: "工事請負契約書", hint: "見積内訳・特約・別途工事の記載があるもの", required: true },
+  { kind: "finishes", label: "仕上げ表", hint: "内外部仕上げ表・設備仕様書", required: true },
+  { kind: "quotes", label: "協力業者見積書", hint: "任意。あると単価・数量の差まで照合できます。業者名・工種を入れてください", required: false },
+];
+const KIND = Object.fromEntries(SLOTS.map(s => [s.kind, s]));
+const ORDER = ["budget", "contract", "finishes", "quotes", "drawings"];
+const WORK_CATEGORIES = [
+  "仮設工事", "解体・撤去工事", "地盤調査・地盤改良工事", "土工事", "基礎工事",
+  "木工事（構造材・プレカット）", "木工事（造作材・大工手間）", "屋根・板金工事", "防水工事", "外壁工事",
+  "断熱・気密工事", "サッシ・ガラス工事", "金属製建具・シャッター工事", "木製建具工事", "内装工事（クロス・床）",
+  "左官・タイル工事", "塗装工事", "住宅設備（キッチン・UB・洗面・トイレ）", "給排水衛生設備工事", "電気設備工事",
+  "空調・換気設備工事", "太陽光・蓄電池（ZEH）", "ガス・給湯設備工事", "外構・擁壁工事", "家具・カーテン・照明器具",
+  "設計・申請・検査費（確認申請・長期優良・BELS等）", "諸経費・保険・瑕疵担保・現場管理費",
+];
+const SEVERITIES = ["高", "中", "低"];
+const TYPES = ["計上漏れ", "数量差異", "仕様不一致", "単価・金額", "契約との不整合", "要確認"];
+const COVER = ["計上あり", "計上なし", "要確認", "対象外"];
+const MAX_FILE_MB = 40;
+const MAX_IMAGES_DEFAULT = 8;
+const SCAN_MIN = 10; // これ未満の文字数のPDFページはスキャン画像とみなす
+
+// ---------------------------------------------------------------- 状態
+const state = { files: [], running: false, ctl: null, current: null, history: [], historyLoaded: false };
+let cap = { sample: null, db: null, user: null, downloads: null, me: null, limits: null };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const yen = v => (v == null ? "—" : Math.round(v).toLocaleString("ja-JP") + "円");
+const fmtDate = ms => new Date(ms).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+const uid = () => Math.random().toString(36).slice(2, 10);
+const bytes = s => new TextEncoder().encode(s).length;
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------------------------------------------------------------- 資料スロット
+function renderSlots() {
+  $("slots").innerHTML = SLOTS.map(s => {
+    const fs = state.files.filter(f => f.kind === s.kind);
+    const ok = fs.some(f => f.status === "ready");
+    const badge = ok ? '<span class="tag done">添付済</span>' : s.required ? '<span class="tag req">必須</span>' : '<span class="tag opt">任意</span>';
+    return `<div class="slot" data-kind="${s.kind}">
+      <div class="slot-name">${esc(s.label)} ${badge}</div>
+      <div><button class="btn" data-pick="${s.kind}" ${state.running ? "disabled" : ""}>ファイルを追加</button></div>
+      <div class="slot-hint">${esc(s.hint)}（ここにドラッグ＆ドロップでも追加できます）</div>
+      ${fs.length ? `<div class="slot-files">${fs.map(fileRow).join("")}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+function fileRow(f) {
+  const st = f.status === "reading" ? '<span class="meta">読み取り中…</span>'
+    : f.status === "error" ? `<span class="tag err">${esc(f.error)}</span>`
+    : `<span class="meta">${esc(f.summary)}</span>`;
+  const note = f.kind === "quotes" ? `<input id="note-${f.id}" data-note="${f.id}" placeholder="業者名・工種（例：九州シンセイ 外構）" value="${esc(f.note)}">` : "";
+  return `<div class="file"><span class="fname">${esc(f.name)}</span>${st}${note}
+    <button class="icon-x" title="外す" aria-label="${esc(f.name)}を外す" data-remove="${f.id}" ${state.running ? "disabled" : ""}>×</button></div>`;
+}
+
+$("slots").addEventListener("click", e => {
+  const pick = e.target.closest("[data-pick]");
+  if (pick) $("in-" + pick.dataset.pick).click();
+  const rm = e.target.closest("[data-remove]");
+  if (rm) { state.files = state.files.filter(f => f.id !== rm.dataset.remove); renderSlots(); updateRunStatus(); }
+});
+$("inputs").innerHTML = SLOTS.map(s => `<input type="file" id="in-${s.kind}" multiple accept=".pdf,.xlsx,.xlsm,.xls,.csv,image/*">`).join("");
+$("inputs").addEventListener("change", e => {
+  if (e.target.type === "file") { addFiles(e.target.id.slice(3), e.target.files); e.target.value = ""; }
+});
+$("slots").addEventListener("input", e => {
+  const id = e.target.dataset.note;
+  if (id) { const f = state.files.find(x => x.id === id); if (f) f.note = e.target.value; }
+});
+for (const ev of ["dragover", "dragleave", "drop"]) {
+  $("slots").addEventListener(ev, e => {
+    const slot = e.target.closest(".slot"); if (!slot) return;
+    e.preventDefault();
+    slot.classList.toggle("drag", ev === "dragover");
+    if (ev === "drop" && !state.running) addFiles(slot.dataset.kind, e.dataTransfer.files);
+  });
+}
+
+async function addFiles(kind, list) {
+  for (const file of Array.from(list || [])) {
+    const f = { id: uid(), kind, name: file.name, note: "", status: "reading", file };
+    if (file.size > MAX_FILE_MB * 1024 * 1024) { f.status = "error"; f.error = `${MAX_FILE_MB}MBを超えています`; }
+    state.files.push(f);
+    renderSlots();
+    if (f.status === "reading") readFile(f).then(() => { renderSlots(); updateRunStatus(); });
+  }
+  updateRunStatus();
+}
+
+async function readFile(f) {
+  try {
+    const name = f.name.toLowerCase();
+    if (/\.(xlsx|xlsm|xls|csv)$/.test(name)) {
+      if (!window.XLSX) throw new Error("Excel読込ライブラリを読み込めません");
+      const wb = XLSX.read(await f.file.arrayBuffer(), { type: "array" });
+      f.text = wb.SheetNames.map(n => {
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false })
+          .split("\n").map(l => l.replace(/,+$/, "")).filter(l => l.trim()).join("\n");
+        return `=== シート「${n}」 ===\n${csv}`;
+      }).join("\n\n");
+      f.summary = `表データ ${wb.SheetNames.length}シート・${f.text.length.toLocaleString()}字`;
+    } else if (name.endsWith(".pdf") || f.file.type === "application/pdf") {
+      if (!window.pdfjsLib) throw new Error("PDF読込ライブラリを読み込めません");
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.file.arrayBuffer()), isEvalSupported: false }).promise;
+      f.pdf = pdf; f.pages = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const tc = await (await pdf.getPage(i)).getTextContent();
+        const t = tc.items.map(it => it.str + (it.hasEOL ? "\n" : " ")).join("").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+        f.pages.push({ n: i, text: t });
+      }
+      f.text = f.pages.map(p => `--- p.${p.n} ---\n${p.text}`).join("\n");
+      const scanned = f.pages.filter(p => p.text.length < SCAN_MIN).length;
+      f.summary = `PDF ${pdf.numPages}ページ` + (scanned ? `（うち${scanned}ページは文字が取れず画像で送ります）` : "");
+    } else if (f.file.type.startsWith("image/")) {
+      f.image = f.file; f.text = "";
+      f.summary = "画像";
+    } else {
+      throw new Error("PDF・Excel・CSV・画像のみ対応");
+    }
+    f.status = "ready";
+  } catch (err) {
+    f.status = "error"; f.error = err?.message || "読み取れませんでした";
+  }
+}
+
+function missingSlots() {
+  return SLOTS.filter(s => s.required && !state.files.some(f => f.kind === s.kind && f.status === "ready"));
+}
+function updateRunStatus() {
+  const miss = missingSlots();
+  const reading = state.files.some(f => f.status === "reading");
+  const el = $("runStatus");
+  if (state.running) return;
+  el.className = "status" + (miss.length ? " warn" : "");
+  el.textContent = reading ? "ファイルを読み取り中です…" : miss.length ? "未添付：" + miss.map(m => m.label).join("、") : "準備できました";
+  $("run").disabled = reading || !cap.sample;
+}
+
+// ---------------------------------------------------------------- プロンプト作成
+function allocate(sizes, budget) {
+  // 小さい資料はそのまま、大きい資料で残りを等分（水位方式）
+  const idx = sizes.map((s, i) => i).sort((a, b) => sizes[a] - sizes[b]);
+  const out = new Array(sizes.length).fill(0);
+  let rest = budget;
+  idx.forEach((i, k) => { const share = Math.floor(rest / (idx.length - k)); out[i] = Math.min(sizes[i], share); rest -= out[i]; });
+  return out;
+}
+function cutToBytes(text, maxBytes) {
+  if (bytes(text) <= maxBytes) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (bytes(text.slice(0, mid)) <= maxBytes - 60) lo = mid; else hi = mid - 1; }
+  return text.slice(0, lo) + "\n…（文字数の上限のため以下省略）";
+}
+
+function instructions() {
+  return `あなたはハゼモト建設株式会社（北九州市・木造注文住宅／HEAT20 G2・ZEH標準・耐震等級3・長期優良住宅）の積算・工事管理のベテランです。
+工務担当が作成した「実行予算書」を、設計図書・工事請負契約書・仕上げ表・協力業者見積書と突き合わせ、着工前に予算の漏れや誤りを潰してください。
+
+## チェック観点
+1. 計上漏れ：図面・仕上げ表・契約書（特記・オプション・追加工事）にあるのに予算書にない項目
+   例：仕上げ表の床材・クロス・設備機器、図面の造作家具・ニッチ・カップボード、外構、擁壁、地盤改良、太陽光、床下エアコン、カーテンレール、照明器具、申請・検査費、産廃処分費、仮設トイレ・足場・養生
+2. 数量差異：図面から拾える数量（延床・施工床面積、外壁面積、屋根面積、基礎周長、建具数、設備台数、コンセント・照明箇所数など）と予算書の数量の差。概ね±10%超、建具・設備は1つでも違えば指摘
+3. 仕様不一致：仕上げ表・契約書の仕様（メーカー・品番・グレード・色）と予算書・業者見積の仕様の違い
+4. 単価・金額：業者見積と予算の差、桁違い、数量×単価の計算誤り、相場から大きく外れた単価
+5. 契約との不整合：契約金額・工期・支払条件・特約・工事範囲（別途工事）と予算の関係
+6. 粗利：契約金額（税抜）と予算合計（税抜）。粗利率20%未満、または不自然に高い場合は指摘
+
+## ルール
+- 根拠は必ず「資料名＋ページ（p.番号）／シート名／図面番号」で示す。読み取れないことを断定しない（その場合 type は「要確認」）
+- 金額は円単位の数値（税抜）。不明は null
+- severity：高＝金額影響が大きい・施工上必須の漏れ／中＝確認が必要な差異／低＝表記ゆれ・軽微
+- findings は重要度の高い順に最大40件。細かすぎる指摘を大量に出すより、実害のあるものを確実に
+- coverage は次の27工種すべてを判定：${WORK_CATEGORIES.join("、")}
+- 業者見積が無い工種の単価は、北九州エリアの一般的な相場観でコメントする
+- PDFの文字は機械抽出のため表の列が崩れていることがある。前後関係から読み取ること
+- すべて日本語`;
+}
+
+function outputSpec() {
+  return `## 出力形式
+次のJSONオブジェクト1つだけを返してください（前後に文章を書かない）。
+{
+  "projectName": "工事名・邸名（不明なら空文字）",
+  "overview": "全体の総評（300字程度）",
+  "contractAmountYen": 契約金額の税抜（数値 or null),
+  "budgetTotalYen": 実行予算合計の税抜（数値 or null),
+  "findings": [{
+    "severity": "${SEVERITIES.join("|")}",
+    "type": "${TYPES.join("|")}",
+    "category": "工種",
+    "item": "項目名",
+    "budgetValue": "予算書の記載（数量・単価・金額）。無ければ「記載なし」",
+    "referenceValue": "図面・仕上げ表・契約書・見積書の値",
+    "source": "根拠の資料名とページ",
+    "detail": "何が問題か",
+    "action": "推奨する対応",
+    "estimatedImpactYen": 予算への影響額の概算（数値 or null)
+  }],
+  "coverage": [{ "category": "工種名", "status": "${COVER.join("|")}", "budgetAmountYen": 数値 or null, "comment": "短い説明" }],
+  "questionsForKoumu": ["工務（予算作成者）へ確認すべき事項"],
+  "missingInfo": ["判定に必要だが資料から読み取れなかった情報"]
+}`;
+}
+
+async function pickImages(log) {
+  const lim = cap.limits?.images;
+  if (!lim) return { blobs: [], labels: [] };
+  const max = Math.min(lim.maxCount || MAX_IMAGES_DEFAULT, 20);
+  const cands = [];
+  const ready = state.files.filter(f => f.status === "ready");
+  // 1) 画像ファイル 2) 文字が取れないPDFページ 3) 設計図書の先頭ページ（配置・平面など）
+  for (const k of ORDER) for (const f of ready.filter(x => x.kind === k && x.image)) cands.push({ f, label: `${KIND[f.kind].label}「${f.name}」` });
+  for (const k of ORDER) for (const f of ready.filter(x => x.kind === k && x.pdf)) for (const p of f.pages.filter(p => p.text.length < SCAN_MIN)) cands.push({ f, page: p.n, label: `${KIND[f.kind].label}「${f.name}」p.${p.n}（文字抽出不可）` });
+  for (const f of ready.filter(x => x.kind === "drawings" && x.pdf)) for (const p of f.pages.filter(p => p.text.length >= SCAN_MIN)) cands.push({ f, page: p.n, label: `設計図書「${f.name}」p.${p.n}` });
+  const chosen = cands.slice(0, max);
+  const blobs = [], labels = [];
+  for (const c of chosen) {
+    try {
+      if (c.page) {
+        log(`図面を画像化しています：${c.label}`);
+        const page = await c.f.pdf.getPage(c.page);
+        const v0 = page.getViewport({ scale: 1 });
+        const scale = 2000 / Math.max(v0.width, v0.height);
+        const vp = page.getViewport({ scale });
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+        const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        blobs.push(await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85)));
+      } else {
+        if (lim.mediaTypes && !lim.mediaTypes.includes(c.f.image.type)) continue;
+        blobs.push(c.f.image);
+      }
+      labels.push(c.label);
+    } catch { /* 画像化できないページは飛ばす */ }
+  }
+  return { blobs, labels };
+}
+
+function buildPrompt(memo, imageLabels) {
+  const docs = state.files.filter(f => f.status === "ready" && f.text)
+    .sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+  const head = instructions() + (memo ? `\n\n## 担当者からの補足\n${memo}` : "");
+  const imgPart = imageLabels.length ? `\n\n## 添付画像（この順で添付）\n${imageLabels.map((l, i) => `画像${i + 1}：${l}`).join("\n")}` : "";
+  const noQuote = state.files.some(f => f.kind === "quotes" && f.status === "ready") ? "" :
+    "\n\n※協力業者見積書は添付されていません。単価は相場観で判断し、見積取得を勧める工種があれば questionsForKoumu に含めてください。";
+  const tail = noQuote + imgPart + "\n\n" + outputSpec();
+  const max = cap.limits?.maxPromptBytes || 262144;
+  const budget = max - bytes(head) - bytes(tail) - 6000 - docs.length * 200;
+  const sizes = docs.map(d => bytes(d.text));
+  const alloc = allocate(sizes, Math.max(0, budget));
+  const cut = [];
+  const body = docs.map((d, i) => {
+    if (alloc[i] < sizes[i]) cut.push(d.name);
+    const note = d.note ? `（${d.note}）` : "";
+    return `【資料${i + 1}：${KIND[d.kind].label}${note}】ファイル名：${d.name}\n${cutToBytes(d.text, alloc[i])}`;
+  }).join("\n\n");
+  return { prompt: `${head}\n\n# 資料\n${body}${tail}`, cut };
+}
+
+// ---------------------------------------------------------------- 結果の整形
+function normalize(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const num = v => (typeof v === "number" && isFinite(v) ? v : null);
+  const contract = num(r.contractAmountYen), budget = num(r.budgetTotalYen);
+  const gross = contract != null && budget != null ? contract - budget : null;
+  const rate = gross != null && contract ? Math.round(gross / contract * 1000) / 10 : null;
+  const rank = { 高: 0, 中: 1, 低: 2 };
+  const findings = (Array.isArray(r.findings) ? r.findings : []).map(f => ({
+    severity: SEVERITIES.includes(f?.severity) ? f.severity : "中",
+    type: TYPES.includes(f?.type) ? f.type : "要確認",
+    category: String(f?.category ?? ""), item: String(f?.item ?? ""),
+    budgetValue: String(f?.budgetValue ?? ""), referenceValue: String(f?.referenceValue ?? ""),
+    source: String(f?.source ?? ""), detail: String(f?.detail ?? ""), action: String(f?.action ?? ""),
+    estimatedImpactYen: num(f?.estimatedImpactYen),
+  })).sort((a, b) => rank[a.severity] - rank[b.severity]);
+  const coverage = (Array.isArray(r.coverage) ? r.coverage : []).map(c => ({
+    category: String(c?.category ?? ""), status: COVER.includes(c?.status) ? c.status : "要確認",
+    budgetAmountYen: num(c?.budgetAmountYen), comment: String(c?.comment ?? ""),
+  }));
+  const strs = a => (Array.isArray(a) ? a.map(String).filter(Boolean) : []);
+  return {
+    projectName: String(r.projectName ?? ""), overview: String(r.overview ?? ""),
+    contractAmountYen: contract, budgetTotalYen: budget, grossProfitYen: gross, grossProfitRate: rate,
+    findings, coverage, questionsForKoumu: strs(r.questionsForKoumu), missingInfo: strs(r.missingInfo),
+  };
+}
+
+// ---------------------------------------------------------------- 実行
+const ERR = {
+  not_granted: "Claudeの利用が許可されませんでした。ページを開き直し、確認画面で「許可」を選んでください。",
+  sampling_disabled: "このアカウントではClaudeを呼び出せません。",
+  rate_limited: "利用上限に達しました。しばらく時間をおいてからもう一度実行してください。",
+  prompt_too_large: "資料の文字数が多すぎます。不要なページを除いたPDFで再度お試しください。",
+  image_rejected: "画像を送れませんでした。画像ファイルを外して再度お試しください。",
+  invalid_json: "Claudeの回答を読み取れませんでした。もう一度「チェック開始」を押してください。",
+  refused: "Claudeがこの内容への回答を控えました。資料を見直してください。",
+  session_expired: "ログインの有効期限が切れました。claude.aiに再度ログインしてください。",
+};
+
+$("run").addEventListener("click", async () => {
+  const miss = missingSlots();
+  if (miss.length) { $("runStatus").className = "status warn"; $("runStatus").textContent = "未添付：" + miss.map(m => m.label).join("、"); return; }
+  if (!cap.sample) return;
+  state.running = true; renderSlots();
+  $("run").disabled = true; $("stop").hidden = false;
+  const prog = $("progress"); prog.hidden = false; prog.textContent = "";
+  const log = m => { prog.textContent += m + "\n"; prog.scrollTop = prog.scrollHeight; };
+  const memo = $("memo").value.trim();
+  state.ctl = new AbortController();
+  try {
+    $("runStatus").className = "status"; $("runStatus").textContent = "準備中…";
+    const { blobs, labels } = await pickImages(log);
+    const { prompt, cut } = buildPrompt(memo, labels);
+    if (cut.length) log(`文字数の上限のため一部を省略：${cut.join("、")}`);
+    log(`Claudeに送信しました（資料${state.files.filter(f => f.status === "ready").length}点・画像${blobs.length}枚）。照合には1〜3分かかります。`);
+    $("runStatus").textContent = "Claudeが照合しています…";
+    const opts = { modelTier: "complex", signal: state.ctl.signal, cache: false, onText: ({ text }) => { $("runStatus").textContent = `回答を受信中…（${text.length.toLocaleString()}字）`; } };
+    if (blobs.length) opts.images = blobs;
+    const raw = await cap.sample.json(prompt, opts);
+    const result = normalize(raw);
+    const files = state.files.filter(f => f.status === "ready").map(f => ({ kind: f.kind, name: f.name, note: f.note || "" }));
+    const rec = { id: null, projectName: result.projectName, createdAt: Date.now(), createdBy: cap.me, files, memo, result, resolved: [] };
+    rec.id = await saveRecord(rec, log);
+    state.current = rec;
+    log("完了しました。");
+    location.hash = rec.id ? "check-" + rec.id : "result";
+    if (!rec.id) showResult();
+  } catch (e) {
+    if (e?.code === "cancelled") log("中止しました。");
+    else log("エラー：" + (ERR[e?.code] || e?.message || "チェックに失敗しました。もう一度お試しください。"));
+  } finally {
+    state.running = false; state.ctl = null;
+    $("stop").hidden = true; renderSlots(); updateRunStatus();
+  }
+});
+$("stop").addEventListener("click", () => state.ctl?.abort());
+
+// ---------------------------------------------------------------- 履歴（db）
+function summaryOf(rec) {
+  const f = rec.result.findings;
+  return { findingCount: f.length, highCount: f.filter(x => x.severity === "高").length, grossProfitRate: rec.result.grossProfitRate };
+}
+async function saveRecord(rec, log) {
+  if (!cap.db) { log("履歴は保存できませんでした（この表示では保存機能が使えません）。"); return null; }
+  try {
+    const ref = cap.db.collection("checks").doc();
+    const { id, ...body } = rec;
+    await ref.set({ ...body, ...summaryOf(rec) });
+    log("履歴に保存しました。");
+    return ref.id;
+  } catch (e) {
+    log("履歴の保存に失敗しました：" + (e?.code === "quota_exceeded" ? "保存容量の上限です。古い履歴を削除してください。" : e?.message || e?.code || ""));
+    return null;
+  }
+}
+
+let histTimer = null;
+function subscribeHistory() {
+  if (!cap.db) { $("hist").innerHTML = '<p class="empty">この表示では履歴機能を使えません。claude.ai にログインした状態で開いてください。</p>'; return; }
+  histTimer = setTimeout(() => { if (!state.historyLoaded) $("histNote").textContent = "履歴にまだ接続できません。通信状況を確認してください。"; }, 10000);
+  cap.db.collection("checks").orderBy("createdAt", "desc").limit(300).onSnapshot(snap => {
+    state.history = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!snap.metadata.fromCache) { state.historyLoaded = true; clearTimeout(histTimer); $("histNote").textContent = ""; }
+    renderHistory();
+    // 開いている履歴が他の人に更新・削除された場合に追従
+    const m = location.hash.match(/^#check-(.+)$/);
+    if (m && state.historyLoaded) {
+      const rec = state.history.find(h => h.id === m[1]);
+      if (!rec) { if (state.current?.id === m[1]) { state.current = null; location.hash = "history"; } }
+      else if (!pending.has(rec.id)) { state.current = rec; if (!$("view-result").hidden) showResult(); }
+    }
+  }, err => {
+    clearTimeout(histTimer);
+    $("hist").innerHTML = `<p class="empty">履歴を読み込めませんでした（${esc(err?.code || "")}）。</p>`;
+  });
+}
+
+let names = {};
+async function resolveNames(ids) {
+  if (!cap.user || !ids.length) return;
+  try { const ps = await cap.user.profiles(ids); for (const id of ids) names[id] = ps[id]?.name || ""; } catch { /* 名前なしで表示 */ }
+}
+
+let confirmDel = null;
+async function renderHistory() {
+  const h = state.history;
+  if (!h.length) {
+    $("hist").innerHTML = `<p class="empty">${state.historyLoaded ? "まだ履歴はありません。「新規チェック」から最初のチェックを実行してください。" : "履歴を読み込んでいます…"}</p>`;
+    return;
+  }
+  await resolveNames([...new Set(h.map(x => x.createdBy).filter(Boolean))]);
+  $("hist").innerHTML = h.map(x => {
+    const res = (x.resolved || []).length, n = x.findingCount ?? 0;
+    const rate = x.grossProfitRate;
+    const who = names[x.createdBy] ? ` ・ ${esc(names[x.createdBy])}` : "";
+    const del = confirmDel === x.id
+      ? `<span class="confirm">削除しますか？ <button class="btn danger" data-del-yes="${x.id}">削除する</button><button class="btn ghost" data-del-no>やめる</button></span>`
+      : `<button class="btn ghost" data-del="${x.id}" aria-label="削除">削除</button>`;
+    return `<div class="hrow">
+      <a href="#check-${x.id}">${esc(x.projectName || "（工事名なし）")}</a>
+      <div class="hstats">
+        ${x.highCount ? `<span class="sev 高">高 ${x.highCount}</span>` : ""}
+        <span class="tag ${res >= n && n ? "done" : "opt"}">対応済 ${res}/${n}</span>
+        ${rate != null ? `<span class="num" style="color:var(${rate < 20 ? "--hi" : "--muted"})">粗利 ${rate}%</span>` : ""}
+        ${del}
+      </div>
+      <div class="hmeta">${fmtDate(x.createdAt)}${who} ・ 資料${(x.files || []).length}点</div>
+    </div>`;
+  }).join("");
+}
+$("hist").addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.del) { confirmDel = t.dataset.del; renderHistory(); }
+  else if (t.dataset.delNo !== undefined) { confirmDel = null; renderHistory(); }
+  else if (t.dataset.delYes) {
+    t.disabled = true;
+    try { await cap.db.doc("checks/" + t.dataset.delYes).delete(); }
+    catch (err) { $("histNote").textContent = "削除できませんでした（" + (err?.code || "") + "）。編集権限があるか確認してください。"; }
+    confirmDel = null;
+  }
+});
+
+// 対応済み・工事名の保存（同じ文書への書き込みは1つずつ・まとめて）
+const pending = new Map();
+function queueUpdate(id, patch) {
+  const p = pending.get(id) || { patch: {}, timer: null, busy: false };
+  Object.assign(p.patch, patch);
+  clearTimeout(p.timer);
+  p.timer = setTimeout(() => flush(id), 600);
+  pending.set(id, p);
+}
+async function flush(id) {
+  const p = pending.get(id); if (!p || p.busy) return;
+  const patch = p.patch; p.patch = {}; p.busy = true;
+  try { await cap.db.doc("checks/" + id).update(patch); }
+  catch (e) { const s = $("saveState"); if (s) s.textContent = "保存できませんでした（" + (e?.code || "") + "）"; }
+  p.busy = false;
+  if (Object.keys(p.patch).length) flush(id); else pending.delete(id);
+  const s = $("saveState"); if (s && !pending.has(id)) s.textContent = "保存しました";
+}
+
+// ---------------------------------------------------------------- 結果表示
+let filter = "all";
+function showResult() {
+  const rec = state.current; const v = $("view-result");
+  if (!rec) { v.innerHTML = ""; return; }
+  const r = rec.result, resolved = new Set(rec.resolved || []);
+  const count = s => r.findings.filter(f => f.severity === s).length;
+  const shown = r.findings.map((f, i) => ({ f, i })).filter(({ f, i }) =>
+    filter === "all" ? true : filter === "未対応" ? !resolved.has(i) : f.severity === filter);
+  const canSave = !!rec.id && !!cap.db;
+  const chips = [["all", "すべて " + r.findings.length], ["未対応", "未対応 " + (r.findings.length - resolved.size)], ...SEVERITIES.map(s => [s, `${s} ${count(s)}`])];
+  const rateWarn = r.grossProfitRate != null && r.grossProfitRate < 20;
+  v.className = ""; v.style.display = "grid"; v.style.gap = "20px";
+  v.innerHTML = `
+  <div class="panel">
+    <div class="runbar">
+      <a class="btn" href="${rec.id ? "#history" : "#new"}">← ${rec.id ? "履歴に戻る" : "入力に戻る"}</a>
+      <span class="note">${fmtDate(rec.createdAt)} のチェック${names[rec.createdBy] ? " ・ " + esc(names[rec.createdBy]) : ""}</span>
+      ${canSave ? '<span class="note" id="saveState"></span>' : '<span class="tag err">履歴未保存</span>'}
+    </div>
+    <div class="title-row">
+      ${canSave ? `<input id="projName" aria-label="工事名" value="${esc(rec.projectName)}" placeholder="工事名・邸名を入力">` : `<h2>${esc(rec.projectName || "チェック結果")}</h2>`}
+    </div>
+    <p class="overview">${esc(r.overview)}</p>
+    <div class="kpis">
+      <div class="kpi"><div class="k">契約金額（税抜）</div><div class="v">${yen(r.contractAmountYen)}</div></div>
+      <div class="kpi"><div class="k">実行予算合計（税抜）</div><div class="v">${yen(r.budgetTotalYen)}</div></div>
+      <div class="kpi"><div class="k">粗利額</div><div class="v">${yen(r.grossProfitYen)}</div></div>
+      <div class="kpi ${rateWarn ? "warn" : ""}"><div class="k">粗利率${rateWarn ? "（20%未満）" : ""}</div><div class="v">${r.grossProfitRate == null ? "—" : r.grossProfitRate + "%"}</div></div>
+    </div>
+    <p class="note">金額はClaudeが資料から読み取った値です。必ず原本で確認してください。添付資料：${(rec.files || []).map(f => esc(KIND[f.kind]?.label + "「" + f.name + "」")).join("、")}</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>指摘事項 <span class="num" style="font-size:14px;color:var(--muted)">対応済 ${resolved.size}/${r.findings.length}</span></h2>
+      <div class="filters">
+        ${chips.map(([k, l]) => `<button class="chip" aria-pressed="${filter === k}" data-filter="${k}">${l}</button>`).join("")}
+        <button class="btn" id="csv" ${cap.downloads ? "" : "hidden"}>CSVで保存</button>
+      </div>
+    </div>
+    <div class="findings">
+      ${shown.length ? shown.map(({ f, i }) => `
+      <article class="finding s-${f.severity} ${resolved.has(i) ? "resolved" : ""}">
+        <div class="f-head">
+          <label class="done-toggle"><input type="checkbox" id="res-${i}" data-res="${i}" ${resolved.has(i) ? "checked" : ""} ${canSave ? "" : "disabled"}>対応済</label>
+          <span class="sev ${f.severity}">重要度 ${f.severity}</span>
+          <span class="ftype">${esc(f.type)}</span>
+          <span class="fcat">${esc(f.category)}</span>
+          <span class="fitem">${esc(f.item)}</span>
+          ${f.estimatedImpactYen != null ? `<span class="impact">影響 約${yen(f.estimatedImpactYen)}</span>` : ""}
+        </div>
+        <div class="compare">
+          <div><span class="lbl">予算書</span>${esc(f.budgetValue)}</div>
+          <div><span class="lbl">図面・仕上げ表・契約書・見積</span>${esc(f.referenceValue)}</div>
+        </div>
+        <p class="fdetail">${esc(f.detail)}</p>
+        <p class="faction">→ ${esc(f.action)}</p>
+        ${f.source ? `<div class="fsrc">根拠：${esc(f.source)}</div>` : ""}
+      </article>`).join("") : '<p class="empty">該当する指摘はありません。</p>'}
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>工種別の計上チェック</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>工種</th><th>判定</th><th style="text-align:right">予算額</th><th>コメント</th></tr></thead>
+      <tbody>${r.coverage.map(c => `<tr><td>${esc(c.category)}</td><td class="st st-${c.status}">${c.status}</td><td class="r num">${yen(c.budgetAmountYen)}</td><td>${esc(c.comment)}</td></tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+
+  <div class="two">
+    <div class="panel"><h3>工務（安元さん）への確認事項</h3>${listHtml(r.questionsForKoumu)}</div>
+    <div class="panel"><h3>資料から読み取れなかった情報</h3>${listHtml(r.missingInfo)}</div>
+  </div>`;
+}
+function listHtml(a) { return a.length ? `<ol class="qs">${a.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : '<p class="empty">なし</p>'; }
+
+$("view-result").addEventListener("click", async e => {
+  const chip = e.target.closest("[data-filter]");
+  if (chip) { filter = chip.dataset.filter; showResult(); return; }
+  if (e.target.id === "csv") saveCsv();
+});
+$("view-result").addEventListener("change", e => {
+  const i = e.target.dataset.res; const rec = state.current;
+  if (i === undefined || !rec?.id) return;
+  const set = new Set(rec.resolved || []);
+  e.target.checked ? set.add(+i) : set.delete(+i);
+  rec.resolved = [...set].sort((a, b) => a - b);
+  state.current = { ...rec };
+  queueUpdate(rec.id, { resolved: rec.resolved });
+  showResult();
+  const s = $("saveState"); if (s) s.textContent = "保存中…";
+});
+$("view-result").addEventListener("input", e => {
+  if (e.target.id !== "projName" || !state.current?.id) return;
+  state.current.projectName = e.target.value;
+  queueUpdate(state.current.id, { projectName: e.target.value.slice(0, 200) });
+  const s = $("saveState"); if (s) s.textContent = "保存中…";
+});
+
+async function saveCsv() {
+  const rec = state.current; if (!rec || !cap.downloads) return;
+  const resolved = new Set(rec.resolved || []);
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const head = ["対応", "重要度", "種別", "工種", "項目", "予算書", "図面・仕上表等", "根拠", "内容", "対応方針", "影響額(円)"];
+  const rows = rec.result.findings.map((f, i) => [resolved.has(i) ? "済" : "", f.severity, f.type, f.category, f.item, f.budgetValue, f.referenceValue, f.source, f.detail, f.action, f.estimatedImpactYen ?? ""].map(q).join(","));
+  const data = "﻿" + [head.map(q).join(","), ...rows].join("\r\n");
+  try { await cap.downloads.save({ filename: `予算書チェック_${(rec.projectName || "結果").replace(/[\\/:*?"<>|]/g, "_")}.csv`, data }); }
+  catch (e) { if (e?.code !== "cancelled" && e?.code !== "dismissed") alertBanner("CSVを保存できませんでした。"); }
+}
+
+// ---------------------------------------------------------------- 画面切替
+function alertBanner(msg) { const b = $("banner"); b.textContent = msg; b.hidden = !msg; }
+function route() {
+  const h = location.hash.replace(/^#/, "") || "new";
+  const m = h.match(/^check-(.+)$/);
+  let view = h === "history" ? "history" : (m || h === "result") ? "result" : "new";
+  if (m) {
+    const rec = state.history.find(x => x.id === m[1]) || (state.current?.id === m[1] ? state.current : null);
+    if (rec) state.current = rec;
+    else if (!state.historyLoaded && cap.db) { $("view-result").innerHTML = '<div class="panel"><p class="empty">読み込んでいます…</p></div>'; }
+    else { state.current = null; view = "history"; }
+  }
+  if (view === "result" && !state.current && !m) view = "new";
+  $("view-new").hidden = view !== "new";
+  $("view-history").hidden = view !== "history";
+  $("view-result").hidden = view !== "result";
+  $("tab-new").setAttribute("aria-current", view === "new" ? "page" : "false");
+  $("tab-history").setAttribute("aria-current", view === "history" || view === "result" ? "page" : "false");
+  if (view === "result" && state.current) { if (state.current.createdBy) resolveNames([state.current.createdBy]).then(showResult); showResult(); }
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", () => { filter = "all"; route(); });
+
+// ---------------------------------------------------------------- 起動
+renderSlots(); route();
+updateRunStatus();
+if (!window.pdfjsLib || !window.XLSX) alertBanner("ファイル読込ライブラリを読み込めませんでした。ページを開き直してください。");
+
+(async () => {
+  const c = window.claude;
+  if (!c?.use) { alertBanner("このページは claude.ai 上で開いたときに使えます。"); $("hist").innerHTML = '<p class="empty">claude.ai 上で開くと履歴を表示できます。</p>'; return; }
+  const [sample, db, user, downloads] = await Promise.all(["sample", "db", "user", "downloads"].map(n => c.use(n).catch(() => null)));
+  cap = { ...cap, sample, db, user, downloads };
+  if (sample) cap.limits = await sample.limits().catch(() => null);
+  if (user) cap.me = await user.id().catch(() => null);
+  if (!sample) alertBanner("この表示ではClaudeを呼び出せないため、チェックを実行できません。claude.ai にログインして開いてください。");
+  updateRunStatus();
+  subscribeHistory();
+  route();
+})();
+</script>
