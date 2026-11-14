@@ -16,6 +16,7 @@ import { getSystemPrompt } from "../shared/companyProfiles";
 import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import * as chatworkService from "./chatwork-service";
+import { runBudgetCheck } from "./budget-check";
 import { exchangeCodeForTokens, listGbpAccounts, listGbpLocations, getGbpAuthUrl, createGbpPost, refreshAccessToken } from "./gbp";
 export const appRouter = router({
   system: systemRouter,
@@ -3825,6 +3826,46 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
   }),
 
   // Chatwork 大工チーム 週次ランキング
+  // 予算書チェック（実行予算書 × 設計図書・契約書・仕上げ表・業者見積）
+  budgetCheck: router({
+    upload: protectedProcedure
+      .input(z.object({
+        fileName: z.string().max(255),
+        mimeType: z.string(),
+        base64: z.string().max(40 * 1024 * 1024),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!(input.mimeType === "application/pdf" || input.mimeType.startsWith("image/"))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "PDFまたは画像ファイルを指定してください" });
+        }
+        const buffer = Buffer.from(input.base64.replace(/^data:[^;]+;base64,/, ""), "base64");
+        const safe = input.fileName.replace(/[^\w.\-]/g, "_");
+        const key = `budget-check/${ctx.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        return { url };
+      }),
+
+    run: protectedProcedure
+      .input(z.object({
+        memo: z.string().max(5000).optional(),
+        docs: z.array(z.object({
+          kind: z.enum(["budget", "drawings", "contract", "finishes", "quotes"]),
+          fileName: z.string(),
+          url: z.string().url().optional(),
+          mimeType: z.string().optional(),
+          text: z.string().optional(),
+          note: z.string().max(200).optional(),
+        })).min(1).max(30),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          return await runBudgetCheck(input.docs, input.memo);
+        } catch (e: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "チェックに失敗しました" });
+        }
+      }),
+  }),
+
   chatworkRanking: router({
     status: protectedProcedure.query(async () => ({
       configured: chatworkService.isChatworkConfigured(),

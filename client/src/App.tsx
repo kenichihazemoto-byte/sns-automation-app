@@ -37,6 +37,7 @@ import GoogleAlbumSettings from "./pages/GoogleAlbumSettings";
 import WorkflowGuide from "./pages/WorkflowGuide";
 import SimilarWebAnalytics from "./pages/SimilarWebAnalytics";
 import ChatworkRanking from "./pages/ChatworkRanking";
+import BudgetCheck from "./pages/BudgetCheck";
 function Router() {
   return (
     <Switch>
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/workflow-guide" component={WorkflowGuide} />
       <Route path="/similarweb" component={SimilarWebAnalytics} />
       <Route path="/chatwork-ranking" component={ChatworkRanking} />
+      <Route path="/budget-check" component={BudgetCheck} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
