@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, mediumtext, timestamp, varchar, boolean, uniqueIndex, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -758,3 +758,30 @@ export const chatworkRankingPosts = mysqlTable("chatwork_ranking_posts", {
 }));
 
 export type ChatworkRankingPost = typeof chatworkRankingPosts.$inferSelect;
+
+/**
+ * 予算書チェックの履歴
+ */
+export const budgetChecks = mysqlTable("budget_checks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** 工事名・邸名（AI読み取り値。あとから編集可） */
+  projectName: varchar("projectName", { length: 255 }).notNull().default(""),
+  /** 添付資料 [{kind, fileName, note}] の JSON */
+  files: text("files").notNull(),
+  memo: text("memo"),
+  /** BudgetCheckResult の JSON */
+  result: mediumtext("result").notNull(),
+  findingCount: int("findingCount").notNull().default(0),
+  highCount: int("highCount").notNull().default(0),
+  /** 粗利率×10（例 23.5% → 235）。不明は null */
+  grossProfitRate10: int("grossProfitRate10"),
+  /** 対応済みにした指摘のインデックス配列 JSON */
+  resolved: text("resolved"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  userCreatedIdx: index("budget_checks_user_created_idx").on(t.userId, t.createdAt),
+}));
+
+export type BudgetCheckRecord = typeof budgetChecks.$inferSelect;

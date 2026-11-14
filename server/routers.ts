@@ -17,6 +17,7 @@ import { notionSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import * as chatworkService from "./chatwork-service";
 import { runBudgetCheck } from "./budget-check";
+import * as budgetHistory from "./budget-check-history";
 import { exchangeCodeForTokens, listGbpAccounts, listGbpLocations, getGbpAuthUrl, createGbpPost, refreshAccessToken } from "./gbp";
 export const appRouter = router({
   system: systemRouter,
@@ -3857,12 +3858,56 @@ Webコンサルタント永友一郎氏のメソッドに基づき、以下の�
           note: z.string().max(200).optional(),
         })).min(1).max(30),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        let result;
         try {
-          return await runBudgetCheck(input.docs, input.memo);
+          result = await runBudgetCheck(input.docs, input.memo);
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "チェックに失敗しました" });
         }
+        // 履歴に保存（保存に失敗してもチェック結果は返す）
+        let historyId: number | null = null;
+        try {
+          historyId = await budgetHistory.saveBudgetCheck(
+            ctx.user.id,
+            input.docs.map(d => ({ kind: d.kind, fileName: d.fileName, ...(d.note ? { note: d.note } : {}) })),
+            input.memo,
+            result,
+          );
+        } catch (e) {
+          console.error("[budgetCheck] 履歴の保存に失敗:", e);
+        }
+        return { ...result, historyId };
+      }),
+
+    history: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(200).optional() }).optional())
+      .query(({ ctx, input }) => budgetHistory.listBudgetChecks(ctx.user, input?.limit)),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const r = await budgetHistory.getBudgetCheck(ctx.user, input.id);
+        if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "履歴が見つかりません" });
+        return r;
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        projectName: z.string().max(255).optional(),
+        resolved: z.array(z.number().int().min(0)).max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await budgetHistory.updateBudgetCheck(ctx.user, input.id, input);
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await budgetHistory.deleteBudgetCheck(ctx.user, input.id);
+        return { success: true };
       }),
   }),
 

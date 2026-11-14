@@ -86,3 +86,22 @@ describe("parseLLMJson", () => {
     expect(parseLLMJson('結果です {"a":2} 以上')).toEqual({ a: 2 });
   });
 });
+
+import { parseResolved, summarize } from "../budget-check-history";
+
+describe("履歴の要約", () => {
+  it("件数・高の件数・粗利率（×10）をまとめる", () => {
+    const r = normalizeResult({
+      projectName: "○○邸 新築工事",
+      contractAmountYen: 30_000_000,
+      budgetTotalYen: 23_000_000,
+      findings: [{ severity: "高" }, { severity: "高" }, { severity: "低" }],
+    });
+    expect(summarize(r)).toEqual({ projectName: "○○邸 新築工事", findingCount: 3, highCount: 2, grossProfitRate10: 233 });
+  });
+  it("対応済みインデックスの壊れたデータは無視する", () => {
+    expect(parseResolved("[0,2,-1,1.5,\"x\"]")).toEqual([0, 2]);
+    expect(parseResolved("壊れた")).toEqual([]);
+    expect(parseResolved(null)).toEqual([]);
+  });
+});
