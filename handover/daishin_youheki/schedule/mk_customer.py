@@ -17,7 +17,7 @@ for r in range(7, src.max_row + 1):
         sec = v[2:]; continue
     s, e = src.cell(r, 9).value, src.cell(r, 13).value
     if v and isinstance(s, dt.datetime):
-        rows.append((sec, v, s.date(), e.date()))
+        rows.append((sec, v.strip("　 "), s.date(), e.date()))
 
 def span(pred):
     sel = [(s, e) for sec, n, s, e in rows if pred(sec, n)]
@@ -27,12 +27,11 @@ has = lambda *ks: (lambda sec, n: any(k in n for k in ks))
 insec = lambda *ks: (lambda sec, n: any(k in (sec or "") for k in ks))
 G = [
     ("擁壁・造成工事", None, None, True),
-    ("準備工事（境界確認・既存ブロック撤去）", *span(insec("準備")), False),
+    ("準備工事（実施済）", *span(insec("準備")), False),
+    ("既存ブロック撤去・掘削・残土搬出", *span(insec("解体・掘削")), False),
     ("地盤改良工事", *span(has("柱状改良")), False),
-    ("掘削・残土搬出", *span(insec("根切り")), False),
-    ("擁壁工事（底盤）", *span(insec("底盤")), False),
-    ("擁壁工事（立上り）", *span(insec("立上り")), False),
-    ("埋戻し", *span(lambda sec, n: "埋戻し・外部" in (sec or "") and "給排水" not in n), False),
+    ("擁壁工事（基礎・コンクリート打設）", *span(insec("砕石・捨てコン", "型枠", "鉄筋", "生コン")), False),
+    ("埋戻し", *span(insec("埋戻し")), False),
     ("建物工事", None, None, True),
     ("外部給排水工事", *span(has("外部給排水")), False),
     ("基礎工事", *span(has("基礎工事")), False),
@@ -53,7 +52,7 @@ F = lambda sz=10, b=False, c="FF000000": Font(name=FONT, size=sz, bold=b, color=
 CEN = Alignment(horizontal="center", vertical="center"); LFT = Alignment(horizontal="left", vertical="center")
 
 # 週単位（月曜始まり）のガント
-W0 = dt.date(2026, 11, 16)
+W0 = dt.date(2026, 11, 9)
 W0 -= dt.timedelta(W0.weekday())
 weeks = []
 d = W0
@@ -101,9 +100,10 @@ for name, s, e, head in G:
     r += 1
 r += 1
 ws.cell(r, 2, f"完成予定　{LAST.month}月{LAST.day}日（予定）").font = F(12, True, "FFB00000")
-ws.cell(r + 1, 2, "※地盤改良工事（11/30～12/17）は確定日程です。それ以外は予定です。").font = F(9)
+ws.cell(r + 1, 2, "※準備工事（11/11～11/13）は実施済、地盤改良工事（11/30～12/17）は確定日程です。それ以外は予定です。").font = F(9)
 ws.cell(r + 2, 2, "※擁壁工事は、敷地北西の電柱・電線を避けるため西側の擁壁位置を敷地内側へ移す計画としています。").font = F(9)
 ws.cell(r + 3, 2, "※年末年始（12/29～1/4）は工事をお休みします。").font = F(9)
+ws.cell(r + 4, 2, "※建物工事の日程は、擁壁工事の進み具合に合わせて調整いたします。").font = F(9)
 ws.freeze_panes = ws.cell(hr + 2, C0)
 ws.page_setup.orientation = "landscape"; ws.page_setup.paperSize = ws.PAPERSIZE_A4
 ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 1; ws.sheet_properties.pageSetUpPr.fitToPage = True
