@@ -64,7 +64,7 @@ NEW = [
     ("土工事", "裏込め砕石", "m³", round(Q["裏込め砕石 W300（単粒度）"], 2), 10000, "予算書「予算外の見込み」の単価"),
     ("土工事", "電柱側 土留め（軽量鋼矢板 約6m）", "式", 1, 250000, "仮定値。打込み・引抜き・損料（S-06）"),
     ("解体工事", "既存ブロック解体（基礎共）約45m", "式", 1, 500000, "予算書推定 300,000～700,000 の中央"),
-    ("解体工事", "アスファルト撤去・As殻処分", "m²", 166, 1500, "掘削範囲166m²。単価は仮定値"),
+    ("解体工事", "土間コンクリート撤去・コンガラ処分", "m²", 166, 2800, "現場写真（11/12～13）で舗装は土間コンクリート。斫り＋コンガラ（約20m³、ほぐし約30m³）処分。単価は仮定値"),
     ("コンクリート工事", "前面ふかしコン Fc18（材料）", "m³", round(Q["前面ふかしコン 無筋 Fc18"], 2), 22500, "予算書の捨てコン単価（Fc18）。打設費は打設費の行に含む"),
     ("コンクリート工事", "止水コンクリート", "式", 1, 55000, "予算書「予算外の見込み」"),
     ("型枠工事", "前面ふかし・補強梁 型枠", "m²", round(12 + 6.2, 1), 4500, "ふかし外枠12m²（予算書）＋補強梁6.2m²（S-05）"),
@@ -75,12 +75,12 @@ NEW = [
 
 wb = openpyxl.Workbook(); ws = wb.active; ws.title = "比較表"
 cols = [("工種", 13), ("品名・規格", 30), ("単位", 6), ("見積数量", 9), ("改3-1数量", 9), ("数量差", 9),
-        ("見積単価", 10), ("予算単価", 10), ("見積額", 12), ("改3-1 見積額", 12), ("見積の増減", 12),
+        ("見積単価", 10), ("予算単価", 10), ("（参考）見積額", 12), ("（参考）改3-1を見積単価で", 12), ("（参考）見積単価換算の差", 12),
         ("予算額", 12), ("改3-1 原価", 12), ("原価の増減", 12), ("区分", 8), ("根拠・備考", 60)]
 for i, (h, w) in enumerate(cols, 1):
     ws.column_dimensions[CL(i)].width = w
 ws["A1"] = "大信薬局（可也病院 調剤薬局建築予定地）擁壁工事　数量・金額 比較表"; ws["A1"].font = F(14, True)
-ws["A2"] = ("比較：見積書 No.900328-00（2026/10/20、税抜18,409,091）／予算書＝予算・発注管理表（11/3版）／改3-1＝擁壁施工図 改3-1 の数量計算（11/14）。"
+ws["A2"] = ("受注金額は変更しない（お客様への請求は据え置き）。比較：見積書 No.900328-00（2026/10/20、税抜18,409,091）／予算書＝予算・発注管理表（11/3版）／改3-1＝擁壁施工図 改3-1 の数量計算（11/14）。"
             "社内限定・原価入り（お客様提出不可）")
 ws["A2"].font = F(9, c="FF555555")
 ws["A3"] = f"青字＝入力値。見積に無い追加項目の売価は「原価 ÷ {MARGIN:.2f}」（既存見積の利益率約30%に合わせた仮定）。"; ws["A3"].font = F(9, c="FF555555")
@@ -88,7 +88,7 @@ hr = 5
 for i, (h, _) in enumerate(cols, 1):
     x = ws.cell(hr, i, h); x.font = F(9, True); x.fill = HEAD; x.border = B; x.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 ws.row_dimensions[hr].height = 28
-ws.cell(hr - 1, 9, "売価（お客様への見積）").font = F(9, True); ws.cell(hr - 1, 12, "原価（予算）").font = F(9, True)
+ws.cell(hr - 1, 9, "参考：見積単価で換算（お客様への請求は変更しない）").font = F(9, True, "FF777777"); ws.cell(hr - 1, 12, "原価（予算）").font = F(9, True)
 
 r = hr + 1
 first = r
@@ -146,23 +146,18 @@ for c in (9, 10, 11, 12, 13, 14):
     x = ws.cell(r, c, f"={CL(c)}{r_a}+{CL(c)}{r_b}"); x.number_format = "#,##0;[Red]-#,##0"; x.font = F(11, True); x.border = B
 r += 2
 
-# サマリー（見積全体への影響）
-ws.cell(r, 2, "見積全体への影響（税抜）").font = F(12, True); r += 1
+# サマリー（受注金額は固定）
+ws.cell(r, 2, "原価の増減（受注金額は変更しない）").font = F(12, True); r += 1
 S0 = r
 items = [
-    ("現在の見積（10/20版）", "=18409091", "見積書の税抜金額"),
-    ("擁壁地盤改良工事（見積7,500,000）", "=0", "改良業者の再見積待ちのため、ここでは増減0。下の「未確定」を参照"),
-    ("A. 数量差による見積の増減", f"=K{r_a}", "見積単価で精算した場合"),
-    ("B. 追加項目の見積額", f"=K{r_b}", f"原価÷{MARGIN:.2f}"),
-    ("増減 合計（A＋B）", f"=K{r_ab}", ""),
-    ("改3-1 反映後の見積（見込み）", f"=C{S0}+C{S0+4}", "現場管理費・一般管理費は据え置き"),
-    ("原価の増減（A＋B）", f"=N{r_ab}", "予算単価で計算"),
-    ("粗利の増減", f"=C{S0+4}-C{S0+6}", "見積の増減 − 原価の増減"),
+    ("A. 見積にある項目の数量差（原価）", f"=N{r_a}", "予算単価で計算"),
+    ("B. 見積に無い追加項目（原価・推定）", f"=N{r_b}", "現場状況（割栗石・手間増）は「着地見込み」シートで別に加算"),
+    ("原価の増減 合計（A＋B）", f"=N{r_ab}", "→「着地見込み」シートへ"),
 ]
-for i, (a, f, n) in enumerate(items):
-    ws.cell(r, 2, a).font = F(10, i in (4, 5, 7)); x = ws.cell(r, 3, f); x.number_format = "#,##0;[Red]-#,##0"; x.font = F(10, i in (4, 5, 7))
+for i, (a_, f_, n_) in enumerate(items):
+    ws.cell(r, 2, a_).font = F(10, i == 2); x = ws.cell(r, 3, f_); x.number_format = "#,##0;[Red]-#,##0"; x.font = F(10, i == 2)
     ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=5)
-    ws.cell(r, 6, n).font = F(9, c="FF555555")
+    ws.cell(r, 6, n_).font = F(9, c="FF555555")
     for c in (2, 3): ws.cell(r, c).border = B
     r += 1
 r += 1
@@ -178,6 +173,75 @@ for a, n in [
     ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=16)
     r += 1
 ws.freeze_panes = "C6"
+DELTA = f"'比較表'!N{r_ab}"
+L = wb.create_sheet("着地見込み")
+for c_, w_ in zip("ABCDEFG", (3, 46, 14, 14, 14, 4, 80)):
+    L.column_dimensions[c_].width = w_
+L["B1"] = "利益の着地見込み（受注金額 固定・社内限定）"; L["B1"].font = F(14, True)
+L["B2"] = "金額はすべて税抜・推定。青字は入力値。マイナスは赤字（利益の減少）。"; L["B2"].font = F(9, c="FF555555")
+def hdr_(rr, cols_):
+    for i_, h_ in enumerate(cols_):
+        if h_:
+            x_ = L.cell(rr, 2 + i_, h_); x_.font = F(9, True); x_.fill = HEAD; x_.border = B; x_.alignment = Alignment(horizontal="center", wrap_text=True)
+def line(rr, label, vals, note="", bold=False, inp=False, fill=None):
+    L.cell(rr, 2, label).font = F(10, bold); L.cell(rr, 2).border = B
+    for i_, v_ in enumerate(vals):
+        x_ = L.cell(rr, 3 + i_, v_); x_.number_format = "#,##0;[Red]-#,##0"; x_.font = F(10, bold, INP if inp else "FF000000"); x_.border = B
+        if fill: x_.fill = fill
+    L.cell(rr, 7, note).font = F(9); L.cell(rr, 7).alignment = Alignment(wrap_text=True, vertical="center")
+    L.row_dimensions[rr].height = 30 if len(note) > 45 else 18
+rr = 4
+hdr_(rr, ("項目", "楽観", "標準", "悲観", "", "根拠・考え方")); rr += 1
+R0 = rr
+line(rr, "受注金額（見積 No.900328-00 税抜）", [18409091] * 3, "お客様への提出金額は変更しない"); rr += 1
+line(rr, "予算原価（予算発注管理表 11/3）", [14659510] * 3, "管理費565,000を含む。地盤改良はサムシング6,750,000で予算化"); rr += 1
+line(rr, "予算どおりの利益", [f"={c}{R0}-{c}{R0+1}" for c in "CDE"], "約20.4%", bold=True); rr += 2
+hdr_(rr, ("① 改3-1 の数量変更・追加（比較表）", "楽観", "標準", "悲観")); rr += 1
+R1 = rr
+line(rr, "原価の増減（比較表 A＋B）", [f"={DELTA}*0.85", f"={DELTA}", f"={DELTA}*1.15"], "比較表の推定。業者見積で±15%程度ぶれる想定"); rr += 2
+hdr_(rr, ("② 現場状況（大工チーム写真 11/12～13）", "楽観", "標準", "悲観")); rr += 1
+R2 = rr
+for lab_, v_, n_ in [
+    ("割栗石・岩塊の分別・処分", [450000, 900000, 1500000], "北・東の縁に大きな割栗石が厚く入っている。掘削土のうち岩 30／60／100m³（地山）×ほぐし1.5×処分@10,000と仮定。埋戻しに使えない"),
+    ("岩の分だけ不足する埋戻し土の購入", [0, 320000, 533000], "岩を処分した分の埋戻し土を購入（@4,000/m³ ほぐし）。楽観は岩を帯状部の盛土に場内利用"),
+    ("掘削の手間増（小型機・岩）", [160000, 240000, 400000], "写真の重機はミニバックホウ＋2～3tダンプ。2／3／5日の延長×8万円/日"),
+    ("土間コン撤去の上乗せ（厚い・鉄筋入りの場合）", [0, 0, 150000], "比較表は土間コン撤去 @2,800/m²で計上済み"),
+    ("改良工事の障害（レキ・ガラによる金額変更）", [0, 200000, 500000], "亜細亜の条件「レキ・ガラは金額変更」。割栗石が改良範囲に残ると増額の可能性"),
+]:
+    line(rr, lab_, v_, n_, inp=True); rr += 1
+line(rr, "② 小計", [f"=SUM({c}{R2}:{c}{rr-1})" for c in "CDE"], bold=True); R2s = rr; rr += 2
+hdr_(rr, ("対策前の着地", "楽観", "標準", "悲観")); rr += 1
+RA = rr
+line(rr, "原価の増加 合計（①＋②）", [f"={c}{R1}+{c}{R2s}" for c in "CDE"], bold=True); rr += 1
+line(rr, "利益（対策前）", [f"={c}{R0+2}-{c}{RA}" for c in "CDE"], "マイナス＝赤字", bold=True, fill=PatternFill("solid", fgColor="FFFDE3E3")); RAp = rr; rr += 1
+line(rr, "利益率（対策前）", [f"={c}{RAp}/{c}{R0}" for c in "CDE"])
+for c in "CDE": L[f"{c}{rr}"].number_format = "0.0%;[Red]-0.0%"
+rr += 2
+hdr_(rr, ("③ 赤字を避けるための対策（原価の削減）", "楽観", "標準", "悲観")); rr += 1
+R3 = rr
+for lab_, v_, n_ in [
+    ("地盤改良：本数減を減額交渉", [-900000, -700000, -500000], "見積238本の前提 → 杭伏図220本、さらに電線下 約25本を打設しない（約43本減）。1本あたり変動費の6割を減額と仮定。改良業者と書面で確認"),
+    ("ヤード運搬：自社ダンプ＋一部を場内仮置き", [-900000, -700000, -400000], "比較表は外部4tダンプ1台日4万円×36台日。自社ダンプ（山口さん）を使い、底盤打設後は場内の空きに一部仮置きして往復を減らす"),
+    ("改良発生土：場内処理（埋戻しに混合）", [-600000, -400000, 0], "亜細亜は場内処理が条件。品質確認のうえ埋戻しに使えれば場外処分が不要"),
+    ("割栗石：帯状部（旧西面～新西面）の盛土に場内利用", [-450000, -300000, 0], "擁壁の外側で構造に影響しない範囲。電柱周り1.0mは除く。②の処分費が減る"),
+    ("既存ブロック解体：自社施工分を実費に置き換え", [-300000, -200000, -100000], "比較表は外注50万円で計上。写真では自社で解体済み。実費（処分費＋手間）に置き換え"),
+]:
+    line(rr, lab_, v_, n_, inp=True); rr += 1
+line(rr, "③ 小計", [f"=SUM({c}{R3}:{c}{rr-1})" for c in "CDE"], bold=True); R3s = rr; rr += 2
+hdr_(rr, ("対策後の着地", "楽観", "標準", "悲観")); rr += 1
+line(rr, "利益（対策後）", [f"={c}{RAp}-{c}{R3s}" for c in "CDE"], bold=True, fill=PatternFill("solid", fgColor="FFE2F0D9")); RB_ = rr; rr += 1
+line(rr, "利益率（対策後）", [f"={c}{RB_}/{c}{R0}" for c in "CDE"])
+for c in "CDE": L[f"{c}{rr}"].number_format = "0.0%;[Red]-0.0%"
+rr += 2
+L.cell(rr, 2, "読み方").font = F(11, True); rr += 1
+for t_ in ["・受注金額が変わらないため、増えた原価はそのまま利益を減らす。対策前は3つのシナリオすべてで赤字。",
+           "・赤字を避けるには③の対策が必要。特に地盤改良の本数減の減額と、ヤード運搬の自社化が大きい。",
+           "・割栗石の量が最大の不確定要素。掘削初日に岩の量（何m³出るか）を記録し、標準・悲観のどちらに近いか判断する。",
+           "・電柱回避（西面3m移動）と電線下の補強は当初見積の前提外の変更。追加協議の余地があることは記録に残しておく。"]:
+    L.cell(rr, 2, t_).font = F(10); L.merge_cells(start_row=rr, start_column=2, end_row=rr, end_column=7); rr += 1
+L.page_setup.orientation = "landscape"; L.page_setup.fitToWidth = 1; L.page_setup.fitToHeight = 0; L.sheet_properties.pageSetUpPr.fitToPage = True
+wb.move_sheet("着地見込み", offset=-1)
+wb.active = 0
 ws.page_setup.orientation = "landscape"; ws.page_setup.paperSize = ws.PAPERSIZE_A3
 ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0; ws.sheet_properties.pageSetUpPr.fitToPage = True
 wb.save(OUT)
