@@ -125,6 +125,14 @@ details.opt-wrap { display: grid; gap: 12px; }
 td.delta-plus { color: var(--ok); }
 td.delta-minus { color: var(--hi); }
 .subtle { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wchip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 8px; font-size: 13px; cursor: pointer; background: var(--surface); }
+.wchip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.wchip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.redtext { color: var(--hi); font-weight: 700; }
+.pr-OK { color: var(--ok); }
+.pr-見積なし, .pr-予算なし, .pr-予算・見積なし { color: var(--hi); }
+.pr-要確認 { color: var(--mid); }
 
 .title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .title-row input { font-family: var(--f-display); font-size: 18px; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; min-width: 0; flex: 1 1 260px; background: var(--surface); }
@@ -213,6 +221,15 @@ ol.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px
     </div>
     <div class="slots" id="slots"></div>
     <div hidden id="inputs"></div>
+    <details class="opt-wrap" id="watchWrap" open>
+      <summary>発注漏れ注意品 <span class="counts" id="watchCount"></span></summary>
+      <p class="note">仕上げ表の<b style="color:var(--hi)">赤文字</b>（オプション指定）は自動で拾います。それに加えて、発注が遅れやすい品目をここで指定してください。各品目が「実行予算」と「どの協力業者の見積」に入っているか、納期の目安とあわせて確認します。</p>
+      <div class="chips" id="watch"></div>
+      <div class="addopt">
+        <input id="newWatch" placeholder="品目を追加（例：玄関ベンチ、マグネットボード）" aria-label="追加する品目名">
+        <button class="btn" id="addWatch">追加</button>
+      </div>
+    </details>
     <details class="opt-wrap" id="optWrap" open>
       <summary>オプション・別途工事の区分 <span class="counts" id="optCount"></span></summary>
       <p class="note">分かっている項目だけ選んでください。「未確認」のままの項目はClaudeが契約書・図面から判定します。選んだ区分と予算書・契約書が食い違っていれば指摘します。</p>
@@ -280,6 +297,12 @@ const DEFAULT_OPTIONS = [
   "照明器具", "カーテン・ブラインド", "造作家具・カップボード", "食洗機", "シャッター・雨戸", "網戸",
   "TVアンテナ・LAN配線", "インターホン・防犯カメラ", "確認申請・長期優良・BELS等の申請", "地鎮祭・上棟式", "登記・火災保険・ローン諸費用",
 ];
+const DEFAULT_WATCH = [
+  "カーポート・サイクルポート", "宅配ボックス・ポスト・機能門柱", "表札", "フェンス・門扉", "物置", "テラス屋根・ウッドデッキ",
+  "飾り棚・ニッチ棚", "棚受けブラケット・可動棚", "ホスクリーン（室内物干し）", "床下収納", "手すり",
+  "タオル掛け・ペーパーホルダー等のアクセサリー", "ピクチャーレール", "カーテンレール", "点検口", "照明器具（施主支給を含む）",
+];
+const PROC_STATUS = ["OK", "見積なし", "予算なし", "予算・見積なし", "要確認"];
 const SPEC_STATUS = ["一致", "相違", "要確認"];
 const ROOM_KIND = ["削減余地", "不足リスク"];
 const COVER = ["計上あり", "計上なし", "要確認", "対象外"];
@@ -288,7 +311,7 @@ const MAX_IMAGES_DEFAULT = 8;
 const SCAN_MIN = 10; // これ未満の文字数のPDFページはスキャン画像とみなす
 
 // ---------------------------------------------------------------- 状態
-const state = { files: [], running: false, ctl: null, current: null, history: [], historyLoaded: false, options: DEFAULT_OPTIONS.map(name => ({ name, status: "未確認" })) };
+const state = { files: [], running: false, ctl: null, current: null, history: [], historyLoaded: false, options: DEFAULT_OPTIONS.map(name => ({ name, status: "未確認" })), watch: DEFAULT_WATCH.map(name => ({ name, on: true })) };
 let cap = { sample: null, db: null, user: null, downloads: null, me: null, limits: null };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -362,30 +385,185 @@ async function addFiles(kind, list) {
   updateRunStatus();
 }
 
+// ---- 赤文字の検出（仕上げ表のオプション指定）
+const RED_KINDS = ["finishes"];
+const RED_MAX_PAGES = 40;
+// ---- Excel の赤文字抽出（styles.xml のフォント色・共有文字列のリッチテキスト）
+function xmlText(s) {
+  return s.replace(/<[^>]+>/g, "").replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+}
+function isRedColor(tag) {
+  if (!tag) return false;
+  const rgb = tag.match(/rgb="([0-9A-Fa-f]{6,8})"/);
+  if (rgb) {
+    const h = rgb[1].slice(-6), r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return r >= 0x99 && r - g >= 0x60 && r - b >= 0x60;
+  }
+  const idx = tag.match(/indexed="(\d+)"/);
+  return !!idx && ["2", "10", "53", "60"].includes(idx[1]);
+}
+function xlsxRedText(wb) {
+  const files = wb.files || {};
+  const read = p => {
+    const key = [p, "/" + p].find(k => files[k]);
+    if (!key) return "";
+    const c = files[key].content;
+    return new TextDecoder().decode(c instanceof Uint8Array ? c : new Uint8Array(c));
+  };
+  const styles = read("xl/styles.xml");
+  if (!styles) return [];
+  const fonts = (styles.match(/<fonts[^>]*>([\s\S]*?)<\/fonts>/)?.[1] || "").match(/<font>[\s\S]*?<\/font>|<font\/>|<font [\s\S]*?<\/font>/g) || [];
+  const redFont = fonts.map(f => isRedColor(f.match(/<color[^>]*\/>/)?.[0]));
+  const xfs = (styles.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] || "").match(/<xf [^>]*?(\/>|>)/g) || [];
+  const redXf = xfs.map(x => redFont[+(x.match(/fontId="(\d+)"/)?.[1] ?? 0)] || false);
+  // 共有文字列：赤い run の文字だけ
+  const rich = frag => {
+    const runs = frag.match(/<r>[\s\S]*?<\/r>/g);
+    const all = (frag.match(/<t[^>]*>[\s\S]*?<\/t>/g) || []).map(xmlText).join("");
+    if (!runs) return { all, red: "" };
+    const red = runs.filter(r => isRedColor(r.match(/<rPr>[\s\S]*?<\/rPr>/)?.[0]?.match(/<color[^>]*\/>/)?.[0])).map(r => xmlText(r.match(/<t[^>]*>([\s\S]*?)<\/t>/)?.[1] || "")).join("");
+    return { all, red };
+  };
+  const sst = (read("xl/sharedStrings.xml").match(/<si>[\s\S]*?<\/si>/g) || []).map(rich);
+  const rels = read("xl/_rels/workbook.xml.rels");
+  const relMap = Object.fromEntries((rels.match(/<Relationship [^>]*>/g) || []).map(r => [r.match(/Id="([^"]+)"/)?.[1], r.match(/Target="([^"]+)"/)?.[1]]));
+  const out = [];
+  for (const sh of read("xl/workbook.xml").match(/<sheet [^>]*>/g) || []) {
+    const name = xmlText(sh.match(/name="([^"]*)"/)?.[1] || "");
+    let target = relMap[sh.match(/r:id="([^"]+)"/)?.[1]] || "";
+    target = target.replace(/^\//, ""); if (!target.startsWith("xl/")) target = "xl/" + target;
+    const xml = read(target);
+    for (const c of xml.match(/<c [^>]*?(?:\/>|>[\s\S]*?<\/c>)/g) || []) {
+      const ref = c.match(/ r="([A-Z]+\d+)"/)?.[1];
+      const s = +(c.match(/ s="(\d+)"/)?.[1] ?? 0), t = c.match(/ t="([^"]+)"/)?.[1];
+      const v = c.match(/<v>([\s\S]*?)<\/v>/)?.[1];
+      let text = "";
+      if (t === "s" && v != null) { const e = sst[+v]; if (!e) continue; text = redXf[s] ? e.all : e.red; }
+      else if (t === "inlineStr") { const e = rich(c.match(/<is>([\s\S]*?)<\/is>/)?.[1] || ""); text = redXf[s] ? e.all : e.red; }
+      else if (redXf[s]) text = xmlText(v || "");
+      text = text.trim();
+      if (ref && text) out.push({ where: `シート「${name}」${ref}`, text });
+    }
+  }
+  return out;
+}
+
+// PDF：ページを描画し、文字1つずつの範囲の色を調べて赤い文字かどうかを判定する
+async function pdfRedFlags(page, items) {
+  const vp = page.getViewport({ scale: 2 });
+  const cv = document.createElement("canvas");
+  cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const W = cv.width, H = cv.height, px = ctx.getImageData(0, 0, W, H).data;
+  const wide = ch => /[^\x00-\x7f\uff61-\uff9f]/.test(ch);
+  return items.map(it => {
+    const chars = Array.from(it.str || "");
+    if (!chars.length || !it.str.trim()) return null;
+    const tx = pdfjsLib.Util.transform(vp.transform, it.transform);
+    if (Math.abs(tx[1]) > Math.abs(tx[0])) return null; // 縦書き・回転は対象外
+    const fh = Math.hypot(tx[2], tx[3]) || 10;
+    const left = tx[4], width = it.width * vp.scale;
+    const y0 = Math.max(0, Math.floor(tx[5] - fh * 0.85)), y1 = Math.min(H - 1, Math.ceil(tx[5]));
+    if (width <= 0 || y1 <= y0) return null;
+    const wts = chars.map(c => (wide(c) ? 1 : 0.55)), tot = wts.reduce((a, b) => a + b, 0);
+    let acc = 0;
+    const flags = chars.map((c, k) => {
+      const xa = Math.max(0, Math.floor(left + width * acc / tot)); acc += wts[k];
+      const xb = Math.min(W - 1, Math.ceil(left + width * acc / tot));
+      if (!c.trim() || xb <= xa) return null;
+      const step = Math.max(1, Math.floor(Math.min(xb - xa, y1 - y0) / 8));
+      let ink = 0, red = 0;
+      for (let y = y0; y <= y1; y += step) for (let x = xa; x <= xb; x += step) {
+        const q = (y * W + x) * 4, r = px[q], g = px[q + 1], b = px[q + 2];
+        if (r + g + b > 660 && Math.max(r, g, b) - Math.min(r, g, b) < 40) continue; // 白地
+        ink++;
+        if (r > 140 && r - g > 60 && r - b > 60) red++;
+      }
+      return ink < 2 ? null : red / ink > 0.45;
+    });
+    // 空白など色の取れない文字は、前後が両方赤なら赤とみなす
+    return flags.map((f, k) => {
+      if (f !== null) return f;
+      const prev = flags.slice(0, k).reverse().find(x => x !== null), next = flags.slice(k + 1).find(x => x !== null);
+      return prev === true && next === true;
+    });
+  });
+}
+// テキストを行に組み立て、赤い文字を【赤】…【/赤】で囲む
+function pageText(items, flags) {
+  const lines = []; let cur = [];
+  items.forEach((it, i) => {
+    const f = flags?.[i];
+    Array.from(it.str || "").forEach((ch, k) => cur.push({ ch, red: !!(f && f[k]) }));
+    cur.push({ ch: " ", red: false, sep: true, next: true });
+    if (it.hasEOL) { lines.push(cur); cur = []; }
+  });
+  if (cur.length) lines.push(cur);
+  const red = [];
+  const text = lines.map(chs => {
+    // 項目の区切りの空白は、前後が赤なら赤に含める
+    chs.forEach((c, k) => {
+      if (c.ch.trim()) return;
+      let a = k - 1, b = k + 1;
+      while (a >= 0 && !chs[a].ch.trim()) a--;
+      while (b < chs.length && !chs[b].ch.trim()) b++;
+      c.red = !!(chs[a]?.red && chs[b]?.red);
+    });
+    let out = "", buf = "", inRed = false;
+    const lineRed = [];
+    for (const c of chs) {
+      if (c.red && !inRed) { out += "【赤】"; inRed = true; }
+      if (!c.red && inRed) { out += "【/赤】"; inRed = false; if (buf.trim()) lineRed.push(buf.trim()); buf = ""; }
+      out += c.ch; if (c.red) buf += c.ch;
+    }
+    if (inRed) { out += "【/赤】"; if (buf.trim()) lineRed.push(buf.trim()); }
+    const plain = chs.map(c => c.ch).join("").replace(/\s+/g, " ").trim();
+    lineRed.forEach(t => red.push({ text: t.replace(/\s+/g, " "), line: plain.slice(0, 120) }));
+    return out.replace(/[ \t]+/g, " ").replace(/ 【\/赤】/g, "【/赤】").replace(/【赤】 /g, " 【赤】").trim();
+  }).filter(Boolean).join("\n");
+  return { text, red };
+}
+
 async function readFile(f) {
   try {
     const name = f.name.toLowerCase();
     if (/\.(xlsx|xlsm|xls|csv)$/.test(name)) {
       if (!window.XLSX) throw new Error("Excel読込ライブラリを読み込めません");
-      const wb = XLSX.read(await f.file.arrayBuffer(), { type: "array" });
+      const wb = XLSX.read(await f.file.arrayBuffer(), { type: "array", bookFiles: RED_KINDS.includes(f.kind) });
       f.text = wb.SheetNames.map(n => {
         const csv = XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false })
           .split("\n").map(l => l.replace(/,+$/, "")).filter(l => l.trim()).join("\n");
         return `=== シート「${n}」 ===\n${csv}`;
       }).join("\n\n");
       f.summary = `表データ ${wb.SheetNames.length}シート・${f.text.length.toLocaleString()}字`;
+      if (RED_KINDS.includes(f.kind)) {
+        try { f.red = xlsxRedText(wb); } catch { f.red = []; }
+        if (f.red.length) f.text += "\n\n=== 赤文字のセル（オプション指定） ===\n" + f.red.map(r => `- ${r.where}：${r.text}`).join("\n");
+        f.summary += `・赤文字 ${f.red.length}箇所`;
+      }
     } else if (name.endsWith(".pdf") || f.file.type === "application/pdf") {
       if (!window.pdfjsLib) throw new Error("PDF読込ライブラリを読み込めません");
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.file.arrayBuffer()), isEvalSupported: false }).promise;
       f.pdf = pdf; f.pages = [];
+      const findRed = RED_KINDS.includes(f.kind);
+      f.red = findRed ? [] : undefined;
       for (let i = 1; i <= pdf.numPages; i++) {
-        const tc = await (await pdf.getPage(i)).getTextContent();
-        const t = tc.items.map(it => it.str + (it.hasEOL ? "\n" : " ")).join("").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
-        f.pages.push({ n: i, text: t });
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        let flags = null;
+        if (findRed && i <= RED_MAX_PAGES) { try { flags = await pdfRedFlags(page, tc.items); } catch { flags = null; } }
+        const { text, red } = pageText(tc.items, flags);
+        f.pages.push({ n: i, text });
+        if (red.length) f.red.push(...red.map(r => ({ where: `p.${i}`, text: r.text, context: r.line })));
       }
       f.text = f.pages.map(p => `--- p.${p.n} ---\n${p.text}`).join("\n");
       const scanned = f.pages.filter(p => p.text.length < SCAN_MIN).length;
-      f.summary = `PDF ${pdf.numPages}ページ` + (scanned ? `（うち${scanned}ページは文字が取れず画像で送ります）` : "");
+      f.summary = `PDF ${pdf.numPages}ページ` + (findRed ? `・赤文字 ${f.red.length}箇所` : "") + (scanned ? `（うち${scanned}ページは文字が取れず画像で送ります）` : "");
+      if (findRed && f.red.length) f.text += "\n\n=== 赤文字の箇所（オプション指定） ===\n" + f.red.map(r => `- ${r.where}：${r.text}（行：${r.context}）`).join("\n");
     } else if (f.file.type.startsWith("image/")) {
       f.image = f.file; f.text = "";
       f.summary = "画像";
@@ -397,6 +575,21 @@ async function readFile(f) {
     f.status = "error"; f.error = err?.message || "読み取れませんでした";
   }
 }
+
+// 発注漏れ注意品
+function renderWatch() {
+  $("watch").innerHTML = state.watch.map((w, i) => `<label class="wchip"><input type="checkbox" id="watch-${i}" data-watch="${i}" ${w.on ? "checked" : ""}>${esc(w.name)}${w.custom ? ` <button class="icon-x" data-delwatch="${i}" aria-label="${esc(w.name)}を削除">×</button>` : ""}</label>`).join("");
+  $("watchCount").textContent = `（${state.watch.filter(w => w.on).length}品目を確認）`;
+}
+$("watch").addEventListener("change", e => { const i = e.target.dataset.watch; if (i !== undefined) { state.watch[+i].on = e.target.checked; renderWatch(); } });
+$("watch").addEventListener("click", e => { const b = e.target.closest("[data-delwatch]"); if (b) { e.preventDefault(); state.watch.splice(+b.dataset.delwatch, 1); renderWatch(); } });
+function addWatch() {
+  const v = $("newWatch").value.trim();
+  if (v && !state.watch.some(w => w.name === v)) state.watch.push({ name: v, on: true, custom: true });
+  $("newWatch").value = ""; renderWatch();
+}
+$("addWatch").addEventListener("click", addWatch);
+$("newWatch").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addWatch(); } });
 
 // オプション・別途の区分
 function renderOptions() {
@@ -476,6 +669,9 @@ function instructions() {
 9. ARCHITREND ONE予算書がある場合：CADの拾い数量・金額と実行予算の差を工種ごとに比べ、数量差異・計上漏れを指摘
 10. 協力業者見積が複数ある場合：業者ごとに、見積の範囲・数量・金額を実行予算の該当工種と比べる。同じ工種に複数の見積があれば比較する
 11. 実行予算の余地：見積より高く積んでいる・数量過大・重複計上・予備費の過多など「削減余地」と、見積より安い・数量不足・漏れなど「不足リスク」を budgetRoom に金額付きで挙げる。計上漏れも不足リスクとして含める
+12. 発注漏れ注意品（procurementChecks）：仕上げ表の赤文字（【赤】…【/赤】で囲んだ箇所と「赤文字の箇所」一覧＝オプション指定）すべてと、担当者が指定した「発注漏れ注意品」のうち資料に出てくるものについて、
+   実行予算に計上されているか、どの協力業者の見積（業者名）に含まれているか、契約書での扱いを確認する。予算にも見積にも無いものは特に重点的に指摘する。
+   エクステリア製品（カーポート・宅配ボックス・機能門柱・フェンス等）や造作・金物類は発注・納期が遅れやすいので、一般的な納期の目安と発注すべき時期（例：上棟前、外構着工の○週前）を書く
 
 ## ルール
 - 根拠は必ず「資料名＋ページ（p.番号）／シート名／図面番号」で示す。読み取れないことを断定しない（その場合 type は「要確認」）
@@ -519,6 +715,11 @@ function outputSpec() {
     "name": "項目名（指定された全項目）", "selected": "担当者の指定区分（未確認ならClaudeの推定を『推定：〜』と書く）",
     "contract": "契約書での扱い", "budget": "実行予算での扱い（計上額など）",
     "status": "整合|不整合|要確認", "comment": "短い説明"
+  }],
+  "procurementChecks": [{
+    "item": "品目", "origin": "仕上げ表赤字|注意品目|両方", "spec": "仕様・品番・数量", "source": "仕上げ表のページ・セル",
+    "budget": "実行予算での計上（工種・金額）。無ければ「なし」", "quote": "含まれている見積の業者名。無ければ「なし」",
+    "leadTime": "納期の目安と発注時期", "status": "${PROC_STATUS.join("|")}", "action": "対応"
   }],
   "budgetRoom": {
     "summary": "実行予算の余地についての総評（200字程度）",
@@ -577,7 +778,11 @@ function buildPrompt(memo, imageLabels) {
   const quotes = state.files.filter(f => f.kind === "quotes" && f.status === "ready");
   const vendorText = quotes.length ? "\n\n## 協力業者見積の一覧\n" + quotes.map((q, i) => `- 見積${i + 1}：${q.note || "業者名・工種未入力"}（${q.name}）`).join("\n") : "";
   const archiText = state.files.some(f => f.kind === "archi" && f.status === "ready") ? "" : "\n\n※ARCHITREND ONE予算書は添付されていません（specMatrix の archi は空文字）。";
-  const head = instructions() + (memo ? `\n\n## 担当者からの補足\n${memo}` : "") + optText + vendorText + archiText;
+  const reds = state.files.filter(f => f.status === "ready" && f.red?.length);
+  const redText = reds.length ? "\n\n## 仕上げ表の赤文字（オプション指定）一覧\n" + reds.map(f => f.red.map(r => `- 「${f.name}」${r.where}：${r.text}`).join("\n")).join("\n")
+    : (state.files.some(f => f.kind === "finishes" && f.status === "ready") ? "\n\n※仕上げ表から赤文字は検出されませんでした（色が取れない形式の可能性あり）。仕上げ表中の「オプション」「OP」等の記載から判断してください。" : "");
+  const watchText = "\n\n## 発注漏れ注意品（担当者の指定）\n" + state.watch.filter(w => w.on).map(w => `- ${w.name}`).join("\n");
+  const head = instructions() + (memo ? `\n\n## 担当者からの補足\n${memo}` : "") + optText + vendorText + archiText + redText + watchText;
   const imgPart = imageLabels.length ? `\n\n## 添付画像（この順で添付）\n${imageLabels.map((l, i) => `画像${i + 1}：${l}`).join("\n")}` : "";
   const noQuote = state.files.some(f => f.kind === "quotes" && f.status === "ready") ? "" :
     "\n\n※協力業者見積書は添付されていません。単価は相場観で判断し、見積取得を勧める工種があれば questionsForKoumu に含めてください。";
@@ -626,6 +831,10 @@ function normalize(raw) {
     name: str(x?.name), selected: str(x?.selected), contract: str(x?.contract), budget: str(x?.budget),
     status: ["整合", "不整合", "要確認"].includes(x?.status) ? x.status : "要確認", comment: str(x?.comment),
   }));
+  const procurementChecks = (Array.isArray(r.procurementChecks) ? r.procurementChecks : []).map(x => ({
+    item: str(x?.item), origin: str(x?.origin), spec: str(x?.spec), source: str(x?.source), budget: str(x?.budget),
+    quote: str(x?.quote), leadTime: str(x?.leadTime), status: PROC_STATUS.includes(x?.status) ? x.status : "要確認", action: str(x?.action),
+  })).sort((a, b) => (a.status === "OK") - (b.status === "OK"));
   const br = r.budgetRoom && typeof r.budgetRoom === "object" ? r.budgetRoom : {};
   const roomItems = (Array.isArray(br.items) ? br.items : []).map(x => {
     const b = num(x?.budgetYen), p = num(x?.proposedYen);
@@ -644,7 +853,7 @@ function normalize(raw) {
     projectName: String(r.projectName ?? ""), overview: String(r.overview ?? ""),
     contractAmountYen: contract, budgetTotalYen: budget, grossProfitYen: gross, grossProfitRate: rate,
     findings, coverage, questionsForKoumu: strs(r.questionsForKoumu), missingInfo: strs(r.missingInfo),
-    specMatrix, optionChecks,
+    specMatrix, optionChecks, procurementChecks,
     budgetRoom: { summary: str(br.summary), contingencyYen: num(br.contingencyYen), items: roomItems, plusYen: roomPlus, minusYen: roomMinus, netYen: net },
     expectedGrossYen: expGross, expectedGrossRate: expRate,
   };
@@ -685,7 +894,9 @@ $("run").addEventListener("click", async () => {
     const result = normalize(raw);
     const files = state.files.filter(f => f.status === "ready").map(f => ({ kind: f.kind, name: f.name, note: f.note || "" }));
     const options = state.options.map(o => ({ name: o.name, status: o.status }));
-    const rec = { id: null, projectName: result.projectName, createdAt: Date.now(), createdBy: cap.me, files, memo, options, result, resolved: [] };
+    const watch = state.watch.filter(w => w.on).map(w => w.name);
+    const redFound = state.files.filter(f => f.red?.length).reduce((a, f) => a + f.red.length, 0);
+    const rec = { id: null, projectName: result.projectName, createdAt: Date.now(), createdBy: cap.me, files, memo, options, watch, redFound, result, resolved: [] };
     rec.id = await saveRecord(rec, log);
     state.current = rec;
     log("完了しました。");
@@ -704,7 +915,7 @@ $("stop").addEventListener("click", () => state.ctl?.abort());
 // ---------------------------------------------------------------- 履歴（db）
 function summaryOf(rec) {
   const f = rec.result.findings;
-  return { findingCount: f.length, highCount: f.filter(x => x.severity === "高").length, grossProfitRate: rec.result.grossProfitRate, expectedGrossRate: rec.result.expectedGrossRate ?? null };
+  return { findingCount: f.length, highCount: f.filter(x => x.severity === "高").length, grossProfitRate: rec.result.grossProfitRate, expectedGrossRate: rec.result.expectedGrossRate ?? null, procurementNg: (rec.result.procurementChecks || []).filter(x => x.status !== "OK").length };
 }
 async function saveRecord(rec, log) {
   if (!cap.db) { log("履歴は保存できませんでした（この表示では保存機能が使えません）。"); return null; }
@@ -767,6 +978,7 @@ async function renderHistory() {
       <div class="hstats">
         ${x.highCount ? `<span class="sev 高">高 ${x.highCount}</span>` : ""}
         <span class="tag ${res >= n && n ? "done" : "opt"}">対応済 ${res}/${n}</span>
+        ${x.procurementNg ? `<span class="sev 中">発注注意 ${x.procurementNg}</span>` : ""}
         ${rate != null ? `<span class="num" style="color:var(${rate < 20 ? "--hi" : "--muted"})">粗利 ${rate}%${x.expectedGrossRate != null ? ` → 見込み ${x.expectedGrossRate}%` : ""}</span>` : ""}
         ${del}
       </div>
@@ -823,6 +1035,7 @@ function showResult() {
   const specCols = [["drawings", "設計図書"], ["finishes", "仕上げ表"], ["contract", "契約書明細"], ["archi", "ARCHITREND"], ["budget", "実行予算"], ["quotes", "業者見積"]]
     .filter(([k]) => spec.some(x => x[k]));
   const diffN = spec.filter(x => x.status === "相違").length;
+  const proc = r.procurementChecks || [], procNg = proc.filter(x => x.status !== "OK").length;
   const ngN = optc.filter(x => x.status === "不整合").length;
   v.className = ""; v.style.display = "grid"; v.style.gap = "20px";
   v.innerHTML = `
@@ -875,6 +1088,15 @@ function showResult() {
       </article>`).join("") : '<p class="empty">該当する指摘はありません。</p>'}
     </div>
   </div>
+
+  ${proc.length ? `<div class="panel">
+    <div class="panel-head"><h2>発注漏れ注意品（仕上げ表の赤文字・注意品目）</h2><span class="counts">要対応 ${procNg}件 ／ ${proc.length}品目${rec.redFound != null ? `・赤文字 ${rec.redFound}箇所を検出` : ""}</span></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>品目</th><th>判定</th><th>出所</th><th>仕様</th><th>実行予算</th><th>協力業者見積</th><th>納期・発注時期</th><th>対応</th></tr></thead>
+      <tbody>${proc.map(x => `<tr><td><b class="${/赤/.test(x.origin) ? "redtext" : ""}">${esc(x.item)}</b>${x.source ? `<div class="fsrc">${esc(x.source)}</div>` : ""}</td><td class="st pr-${x.status}">${x.status}</td><td>${esc(x.origin)}</td><td>${esc(x.spec)}</td><td>${esc(x.budget)}</td><td>${esc(x.quote)}</td><td>${esc(x.leadTime)}</td><td>${esc(x.action)}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <p class="note">赤字の品目名は仕上げ表で赤文字（オプション）だったものです。</p>
+  </div>` : ""}
 
   ${spec.length ? `<div class="panel">
     <div class="panel-head"><h2>書類間の照合（設計図書・仕上げ表・契約書明細・予算）</h2><span class="counts">相違 ${diffN}件 ／ ${spec.length}項目</span></div>
@@ -950,6 +1172,10 @@ async function saveCsv() {
   const head = ["対応", "重要度", "種別", "工種", "項目", "予算書", "図面・仕上表等", "根拠", "内容", "対応方針", "影響額(円)"];
   const rows = rec.result.findings.map((f, i) => [resolved.has(i) ? "済" : "", f.severity, f.type, f.category, f.item, f.budgetValue, f.referenceValue, f.source, f.detail, f.action, f.estimatedImpactYen ?? ""].map(q).join(","));
   const r = rec.result, lines = [head.map(q).join(","), ...rows];
+  if (r.procurementChecks?.length) {
+    lines.push("", q("発注漏れ注意品"), ["品目", "判定", "出所", "仕様", "仕上げ表の位置", "実行予算", "協力業者見積", "納期・発注時期", "対応"].map(q).join(","));
+    r.procurementChecks.forEach(x => lines.push([x.item, x.status, x.origin, x.spec, x.source, x.budget, x.quote, x.leadTime, x.action].map(q).join(",")));
+  }
   if (r.specMatrix?.length) {
     lines.push("", q("書類間の照合"), ["項目", "判定", "設計図書", "仕上げ表", "契約書明細", "ARCHITREND", "実行予算", "業者見積", "コメント"].map(q).join(","));
     r.specMatrix.forEach(x => lines.push([x.item, x.status, x.drawings, x.finishes, x.contract, x.archi, x.budget, x.quotes, x.comment].map(q).join(",")));
@@ -991,7 +1217,7 @@ function route() {
 window.addEventListener("hashchange", () => { filter = "all"; route(); });
 
 // ---------------------------------------------------------------- 起動
-renderSlots(); renderOptions(); route();
+renderSlots(); renderWatch(); renderOptions(); route();
 updateRunStatus();
 if (!window.pdfjsLib || !window.XLSX) alertBanner("ファイル読込ライブラリを読み込めませんでした。ページを開き直してください。");
 
